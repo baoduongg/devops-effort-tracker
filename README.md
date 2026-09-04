@@ -62,7 +62,9 @@ To seed the database with sample data, run:
 pnpm run seed
 ```
 
-(See Task 10 for implementation details.)
+### Firestore Indexes
+
+The personal timeline query (`tasks` filtered by `memberId`, ordered by `startDate`) requires a composite index. On first run, Firestore will throw a "query requires an index" error with a direct link to create it in the console — click the link and wait for the index to show as "Enabled" before retrying.
 
 ## Build and Deployment
 

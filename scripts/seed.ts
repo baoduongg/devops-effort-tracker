@@ -1,20 +1,46 @@
-import "dotenv/config";
-import { initializeApp } from "firebase/app";
-import { getFirestore, collection, doc, setDoc, Timestamp } from "firebase/firestore";
+import { config } from "dotenv";
+import axios from "axios";
 
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
+config({ path: ".env.local" });
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+const baseUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents`;
+
+// The Firebase JS SDK's Node Firestore client uses a gRPC transport that is
+// unreliable on some Node versions; the REST API is a stable alternative for
+// a one-off seed script and avoids that transport entirely.
+type FirestoreValue =
+  | { stringValue: string }
+  | { integerValue: string }
+  | { booleanValue: boolean }
+  | { nullValue: null }
+  | { timestampValue: string }
+  | { arrayValue: { values: FirestoreValue[] } };
+
+function toFirestoreValue(value: unknown): FirestoreValue {
+  if (value === null) return { nullValue: null };
+  if (typeof value === "string") return { stringValue: value };
+  if (typeof value === "number") return { integerValue: String(value) };
+  if (typeof value === "boolean") return { booleanValue: value };
+  if (value instanceof Date) return { timestampValue: value.toISOString() };
+  if (Array.isArray(value)) {
+    return { arrayValue: { values: value.map(toFirestoreValue) } };
+  }
+  throw new Error(`Unsupported value type: ${JSON.stringify(value)}`);
+}
+
+async function writeDoc(collectionId: string, docId: string, data: Record<string, unknown>): Promise<void> {
+  const fields: Record<string, FirestoreValue> = {};
+  for (const [key, value] of Object.entries(data)) {
+    fields[key] = toFirestoreValue(value);
+  }
+  await axios.patch(`${baseUrl}/${collectionId}/${docId}?key=${apiKey}`, { fields });
+}
 
 async function seed(): Promise<void> {
+  const now = new Date();
+
   const projects = [
     { id: "proj-atlas", name: "Atlas Migration", description: "Migrate legacy infra to Atlas cloud platform", color: "#6366f1" },
     { id: "proj-phoenix", name: "Phoenix CI/CD", description: "Rebuild CI/CD pipeline with faster caching", color: "#f59e0b" },
@@ -22,11 +48,11 @@ async function seed(): Promise<void> {
   ];
 
   for (const p of projects) {
-    await setDoc(doc(db, "projects", p.id), {
+    await writeDoc("projects", p.id, {
       name: p.name,
       description: p.description,
       color: p.color,
-      createdAt: Timestamp.now(),
+      createdAt: now,
     });
   }
 
@@ -37,7 +63,7 @@ async function seed(): Promise<void> {
   ];
 
   for (const m of members) {
-    await setDoc(doc(db, "members", m.id), {
+    await writeDoc("members", m.id, {
       name: m.name,
       email: m.email,
       photoURL: m.photoURL,
@@ -45,33 +71,33 @@ async function seed(): Promise<void> {
       status: m.status,
       currentTaskId: m.currentTaskId,
       effortPercent: m.effortPercent,
-      updatedAt: Timestamp.now(),
+      updatedAt: now,
     });
   }
 
-  const now = Date.now();
+  const nowMs = now.getTime();
   const day = 24 * 60 * 60 * 1000;
   const tasks = [
-    { id: "task-atlas-1", memberId: "member-linh", projectId: "proj-atlas", title: "Migrate staging cluster to Atlas", description: "Move staging Kubernetes workloads to the new Atlas cluster", effortPercent: 60, status: "in_progress", startDate: new Date(now - 3 * day), endDate: new Date(now + 4 * day), source: "manual" },
-    { id: "task-atlas-2", memberId: "member-linh", projectId: "proj-atlas", title: "Write Terraform modules for Atlas networking", description: "VPC, subnets, and security groups as reusable modules", effortPercent: 20, status: "planned", startDate: new Date(now + 5 * day), endDate: new Date(now + 10 * day), source: "manual" },
-    { id: "task-phoenix-1", memberId: "member-huy", projectId: "proj-phoenix", title: "Rebuild pipeline caching layer", description: "Introduce remote build cache to cut CI time in half", effortPercent: 70, status: "in_progress", startDate: new Date(now - 5 * day), endDate: new Date(now + 2 * day), source: "manual" },
-    { id: "task-phoenix-2", memberId: "member-huy", projectId: "proj-phoenix", title: "On-call rotation setup", description: "Configure PagerDuty rotation for pipeline incidents", effortPercent: 40, status: "in_progress", startDate: new Date(now - 1 * day), endDate: new Date(now + 6 * day), source: "manual" },
-    { id: "task-sentinel-1", memberId: "member-mai", projectId: "proj-sentinel", title: "Evaluate Grafana Cloud vs self-hosted", description: "Cost and maintenance comparison for the observability stack decision", effortPercent: 20, status: "done", startDate: new Date(now - 10 * day), endDate: new Date(now - 2 * day), source: "manual" },
+    { id: "task-atlas-1", memberId: "member-linh", projectId: "proj-atlas", title: "Migrate staging cluster to Atlas", description: "Move staging Kubernetes workloads to the new Atlas cluster", effortPercent: 60, status: "in_progress", startDate: new Date(nowMs - 3 * day), endDate: new Date(nowMs + 4 * day), source: "manual" },
+    { id: "task-atlas-2", memberId: "member-linh", projectId: "proj-atlas", title: "Write Terraform modules for Atlas networking", description: "VPC, subnets, and security groups as reusable modules", effortPercent: 20, status: "planned", startDate: new Date(nowMs + 5 * day), endDate: new Date(nowMs + 10 * day), source: "manual" },
+    { id: "task-phoenix-1", memberId: "member-huy", projectId: "proj-phoenix", title: "Rebuild pipeline caching layer", description: "Introduce remote build cache to cut CI time in half", effortPercent: 70, status: "in_progress", startDate: new Date(nowMs - 5 * day), endDate: new Date(nowMs + 2 * day), source: "manual" },
+    { id: "task-phoenix-2", memberId: "member-huy", projectId: "proj-phoenix", title: "On-call rotation setup", description: "Configure PagerDuty rotation for pipeline incidents", effortPercent: 40, status: "in_progress", startDate: new Date(nowMs - 1 * day), endDate: new Date(nowMs + 6 * day), source: "manual" },
+    { id: "task-sentinel-1", memberId: "member-mai", projectId: "proj-sentinel", title: "Evaluate Grafana Cloud vs self-hosted", description: "Cost and maintenance comparison for the observability stack decision", effortPercent: 20, status: "done", startDate: new Date(nowMs - 10 * day), endDate: new Date(nowMs - 2 * day), source: "manual" },
   ];
 
   for (const t of tasks) {
-    await setDoc(doc(db, "tasks", t.id), {
+    await writeDoc("tasks", t.id, {
       memberId: t.memberId,
       projectId: t.projectId,
       title: t.title,
       description: t.description,
       effortPercent: t.effortPercent,
       status: t.status,
-      startDate: Timestamp.fromDate(t.startDate),
-      endDate: t.endDate ? Timestamp.fromDate(t.endDate) : null,
+      startDate: t.startDate,
+      endDate: t.endDate,
       source: t.source,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now(),
+      createdAt: now,
+      updatedAt: now,
     });
   }
 
@@ -82,14 +108,14 @@ async function seed(): Promise<void> {
   ];
 
   for (const n of notifications) {
-    await setDoc(doc(db, "notifications", n.id), {
+    await writeDoc("notifications", n.id, {
       type: n.type,
       title: n.title,
       message: n.message,
       severity: n.severity,
       relatedProjectId: n.relatedProjectId,
       read: n.read,
-      createdAt: Timestamp.now(),
+      createdAt: now,
     });
   }
 
@@ -101,13 +127,13 @@ async function seed(): Promise<void> {
   ];
 
   for (const u of users) {
-    await setDoc(doc(db, "users", u.id), {
+    await writeDoc("users", u.id, {
       email: u.email,
       displayName: u.displayName,
       photoURL: u.photoURL,
       role: u.role,
       memberId: u.memberId,
-      createdAt: Timestamp.now(),
+      createdAt: now,
     });
   }
 
