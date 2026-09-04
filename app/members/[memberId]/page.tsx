@@ -18,18 +18,24 @@ export default function MemberDetailPage(): React.JSX.Element {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load(): Promise<void> {
-      const [m, t, p] = await Promise.all([
-        getMember(params.memberId),
-        getTasksByMember(params.memberId),
-        getProjects(),
-      ]);
-      setMember(m);
-      setTasks(t);
-      setProjects(p);
-      setLoading(false);
+      try {
+        const [m, t, p] = await Promise.all([
+          getMember(params.memberId),
+          getTasksByMember(params.memberId),
+          getProjects(),
+        ]);
+        setMember(m);
+        setTasks(t);
+        setProjects(p);
+      } catch (error) {
+        setLoadError(error instanceof Error ? error.message : "Failed to load member data.");
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, [params.memberId]);
@@ -40,6 +46,7 @@ export default function MemberDetailPage(): React.JSX.Element {
   }
 
   if (loading) return <p className="text-muted-foreground">Loading…</p>;
+  if (loadError) return <p className="text-destructive">Failed to load: {loadError}</p>;
   if (!member) return <p className="text-muted-foreground">Member not found.</p>;
 
   return (
