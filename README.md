@@ -50,6 +50,10 @@ Required environment variables:
 
 All `NEXT_PUBLIC_*` variables are safe to expose and are restricted by Firebase security rules. Server-only variables (like `NVIDIA_API_KEY`) must never be prefixed with `NEXT_PUBLIC_`.
 
+### Authentication
+
+Enable Google sign-in in Firebase Console → Authentication → Sign-in method → Google, and add `localhost` to authorized domains for local dev.
+
 ### Seeding Data
 
 To seed the database with sample data, run:
