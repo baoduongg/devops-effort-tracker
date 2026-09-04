@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callNvidiaText, callNvidiaVision } from "@/services/nvidia.service";
+import { callGeminiText, callGeminiVision } from "@/services/gemini.service";
 import { formattedEntrySchema } from "@/lib/schemas";
 import { createChatLog } from "@/services/chatLogs.service";
 
@@ -22,19 +22,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const raw = imageUrl
-      ? await callNvidiaVision(`${SYSTEM_PROMPT}\n\nUser note: ${text ?? ""}`, imageUrl)
-      : await callNvidiaText([
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: text ?? "" },
-        ]);
+      ? await callGeminiVision(`${SYSTEM_PROMPT}\n\nUser note: ${text ?? ""}`, imageUrl)
+      : await callGeminiText(SYSTEM_PROMPT, text ?? "");
 
     let parsed = formattedEntrySchema.safeParse(extractJson(raw));
 
     if (!parsed.success) {
-      const retryRaw = await callNvidiaText([
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Your previous response was invalid JSON or missing fields. Original input: ${text ?? "(image)"}. Return ONLY the JSON object.` },
-      ]);
+      const retryRaw = await callGeminiText(
+        SYSTEM_PROMPT,
+        `Your previous response was invalid JSON or missing fields. Original input: ${text ?? "(image)"}. Return ONLY the JSON object.`
+      );
       parsed = formattedEntrySchema.safeParse(extractJson(retryRaw));
     }
 

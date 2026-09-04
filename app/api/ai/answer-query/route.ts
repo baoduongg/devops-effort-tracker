@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callNvidiaText } from "@/services/nvidia.service";
+import { callGeminiText } from "@/services/gemini.service";
 import { buildGroundingSnapshot } from "@/services/grounding.service";
 import { createChatLog } from "@/services/chatLogs.service";
 
@@ -15,10 +15,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const snapshot = await buildGroundingSnapshot();
-    const answer = await callNvidiaText([
-      { role: "system", content: `${SYSTEM_PROMPT}\n\nDATA:\n${JSON.stringify(snapshot)}` },
-      { role: "user", content: question },
-    ]);
+    const answer = await callGeminiText(`${SYSTEM_PROMPT}\n\nDATA:\n${JSON.stringify(snapshot)}`, question);
 
     await createChatLog({
       memberId: "leader",
