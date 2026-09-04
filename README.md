@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DevOps Effort Tracker
+
+A Next.js 15 application for tracking effort allocation across projects, managing team capacity, and enabling AI-assisted planning through Firebase and NVIDIA NIM APIs.
+
+## Project Purpose
+
+DevOps Effort Tracker helps leaders and DevOps engineers:
+- Track and visualize team member workload and effort allocation across projects
+- Monitor project timelines and resource constraints
+- Create and manage tasks with AI assistance (via chat interface)
+- Receive notifications for budget overages and capacity issues
 
 ## Getting Started
 
-First, run the development server:
+### Installation
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Running the Development Server
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the app.
 
-## Learn More
+### Environment Variables
 
-To learn more about Next.js, take a look at the following resources:
+Create a `.env.local` file by copying `.env.local.example` and filling in your credentials:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+cp .env.local.example .env.local
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Required environment variables:
 
-## Deploy on Vercel
+| Variable | Description | Where to Get |
+|----------|-------------|--------------|
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase project API key | Firebase Console → Project Settings → API keys |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase authentication domain | Firebase Console → Project Settings (format: `your-project.firebaseapp.com`) |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID | Firebase Console → Project Settings |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Cloud Storage bucket name | Firebase Console → Project Settings (format: `your-project.appspot.com`) |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID | Firebase Console → Project Settings |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase app ID | Firebase Console → Project Settings |
+| `NVIDIA_API_KEY` | NVIDIA NIM API key for LLM access | [NVIDIA Build](https://build.nvidia.com) → API keys (server-side only, never expose) |
+| `NVIDIA_TEXT_MODEL` | NVIDIA text model ID | Default: `meta/llama-3.1-405b-instruct` |
+| `NVIDIA_VISION_MODEL` | NVIDIA vision model ID | Default: `meta/llama-3.2-90b-vision-instruct` |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+All `NEXT_PUBLIC_*` variables are safe to expose and are restricted by Firebase security rules. Server-only variables (like `NVIDIA_API_KEY`) must never be prefixed with `NEXT_PUBLIC_`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Seeding Data
+
+To seed the database with sample data, run:
+
+```bash
+pnpm run seed
+```
+
+(See Task 10 for implementation details.)
+
+## Build and Deployment
+
+Build the production-optimized app:
+
+```bash
+pnpm build
+```
+
+Start the production server:
+
+```bash
+pnpm start
+```
