@@ -1,4 +1,4 @@
-import { collection, getDocs, addDoc, query, where, orderBy, Timestamp } from "firebase/firestore";
+import { collection, getDocs, addDoc, query, where, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Task, TaskInput } from "@/types/task";
 
@@ -22,7 +22,9 @@ function toTask(id: string, data: Record<string, unknown>): Task {
 }
 
 export async function getTasksByMember(memberId: string): Promise<Task[]> {
-  const q = query(tasksCol, where("memberId", "==", memberId), orderBy("startDate", "asc"));
+  // No orderBy here: a single where() needs no composite index, and TimelineView
+  // already sorts by startDate before rendering.
+  const q = query(tasksCol, where("memberId", "==", memberId));
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => toTask(d.id, d.data()));
 }
