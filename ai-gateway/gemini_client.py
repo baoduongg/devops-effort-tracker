@@ -2,7 +2,6 @@ import tempfile
 from pathlib import Path
 
 from gemini_webapi import GeminiClient
-from gemini_webapi.exceptions import APIError, AuthError, GeminiError
 
 _client: GeminiClient | None = None
 
@@ -16,7 +15,7 @@ async def start_client() -> None:
     _client = GeminiClient()
     try:
         await _client.init(timeout=30, auto_refresh=True)
-    except (AuthError, GeminiError, APIError) as exc:
+    except Exception as exc:
         raise GeminiGatewayError(
             f"Failed to authenticate with Gemini: {exc}. "
             "Make sure this machine has a browser logged into "
@@ -33,7 +32,7 @@ def get_client() -> GeminiClient:
 async def generate_text(prompt: str) -> str:
     try:
         response = await get_client().generate_content(prompt)
-    except (AuthError, GeminiError, APIError) as exc:
+    except Exception as exc:
         raise GeminiGatewayError(f"Gemini request failed: {exc}") from exc
     return response.text
 
@@ -46,7 +45,7 @@ async def generate_with_image(prompt: str, image_bytes: bytes, filename: str) ->
 
     try:
         response = await get_client().generate_content(prompt, files=[tmp_path])
-    except (AuthError, GeminiError, APIError) as exc:
+    except Exception as exc:
         raise GeminiGatewayError(f"Gemini request failed: {exc}") from exc
     finally:
         tmp_path.unlink(missing_ok=True)
