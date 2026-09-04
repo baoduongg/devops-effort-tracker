@@ -1,0 +1,10 @@
+// DEV-ONLY PERMISSIVE RULESET — DO NOT USE IN PRODUCTION.
+// Tighten before any real deployment: restrict uploads by auth uid and file size/type.
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if true;
+    }
+  }
+}
