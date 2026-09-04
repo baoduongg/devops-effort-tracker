@@ -33,13 +33,23 @@ currently logged into a Google account with access to gemini.google.com.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # edit AI_GATEWAY_PORT / GEMINI_BROWSER if needed
+cp .env.example .env  # edit AI_GATEWAY_PORT if needed
 uvicorn main:app --port 8001
 ```
 
-Visit `http://localhost:8001/health` to confirm it's running. The first
-request that actually calls Gemini will trigger cookie auto-detection; if
-it fails, log into gemini.google.com in your browser and retry.
+Authentication is attempted eagerly at startup (not lazily on first
+request): the server reads Google session cookies from your local browser
+and calls Gemini's init endpoint before it starts accepting traffic.
+
+Visit `http://localhost:8001/health` to confirm it's running — this
+always responds once the process is up, regardless of whether Gemini
+auth succeeded. If startup auth fails (e.g. no browser is logged into
+gemini.google.com, or the session cookies expired), the server still
+starts and `/health` still responds, but `/format-entry` and
+`/answer-query` will return `502` until you log into gemini.google.com
+in your browser and **restart** the service — cookies are read fresh
+from the browser on every startup, so a restart is what re-triggers
+authentication (there's no lazy retry on a later request).
 
 ## Endpoints
 

@@ -20,7 +20,7 @@ class GatewayResponse(BaseModel):
 async def format_entry(body: FormatEntryRequest) -> GatewayResponse:
     try:
         if body.imageUrl:
-            async with httpx.AsyncClient(timeout=30) as http_client:
+            async with httpx.AsyncClient(timeout=10) as http_client:
                 image_response = await http_client.get(body.imageUrl)
                 image_response.raise_for_status()
             filename = body.imageUrl.rsplit("/", 1)[-1] or "image.png"
