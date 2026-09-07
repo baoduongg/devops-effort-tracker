@@ -1,4 +1,6 @@
 allowBuilds:
+  '@astryxdesign/cli': true
+  '@astryxdesign/core': true
   '@firebase/util': true
   esbuild: true
   protobufjs: true

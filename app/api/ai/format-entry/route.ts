@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callGeminiText, callGeminiVision } from "@/services/gemini.service";
+import { callNvidiaText, callNvidiaVision } from "@/services/nvidia.service";
 import { formattedEntrySchema } from "@/lib/schemas";
 import { createChatLog } from "@/services/chatLogs.service";
 
@@ -22,13 +22,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   try {
     const raw = imageUrl
-      ? await callGeminiVision(`${SYSTEM_PROMPT}\n\nUser note: ${text ?? ""}`, imageUrl)
-      : await callGeminiText(SYSTEM_PROMPT, text ?? "");
+      ? await callNvidiaVision(`${SYSTEM_PROMPT}\n\nUser note: ${text ?? ""}`, imageUrl)
+      : await callNvidiaText(SYSTEM_PROMPT, text ?? "");
 
     let parsed = formattedEntrySchema.safeParse(extractJson(raw));
 
     if (!parsed.success) {
-      const retryRaw = await callGeminiText(
+      const retryRaw = await callNvidiaText(
         SYSTEM_PROMPT,
         `Your previous response was invalid JSON or missing fields. Original input: ${text ?? "(image)"}. Return ONLY the JSON object.`
       );
@@ -51,6 +51,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ chatLogId, entry: parsed.data });
   } catch (error) {
     console.error("format-entry error:", error);
-    return NextResponse.json({ error: "Failed to reach AI service" }, { status: 502 });
+    return NextResponse.json({ error: "Failed to reach NVIDIA AI service" }, { status: 502 });
   }
 }

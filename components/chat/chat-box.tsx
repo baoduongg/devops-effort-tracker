@@ -1,59 +1,122 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
-import { Button } from "@/components/ui/button";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { VStack, HStack } from "@astryxdesign/core/Stack";
+import { ChatComposer, ChatComposerInput, ChatComposerDrawer } from "@astryxdesign/core/Chat";
+import { Spinner } from "@astryxdesign/core/Spinner";
+import { Text } from "@astryxdesign/core/Text";
+import { Icon } from "@astryxdesign/core/Icon";
+import { TriangleAlert } from "lucide-react";
 import { ModeToggle } from "@/components/chat/mode-toggle";
-import { ImagePasteInput } from "@/components/chat/image-paste-input";
-import { EntryPreviewDialog } from "@/components/chat/entry-preview-dialog";
+import { ChatThread } from "@/components/chat/chat-thread";
 import { useChatStore } from "@/store/chat.store";
 import { useAuthStore } from "@/store/auth.store";
+import { storage } from "@/lib/firebase";
 import { createTask } from "@/services/tasks.service";
 import { getProjectByName, createProject } from "@/services/projects.service";
 import { updateMember } from "@/services/members.service";
-import { confirmChatLog } from "@/services/chatLogs.service";
+import { confirmChatLog, getChatLogsByMember, chatLogsToMessages } from "@/services/chatLogs.service";
 import type { FormattedEntry } from "@/types/chat";
 
 export function ChatBox(): React.JSX.Element {
   const mode = useChatStore((state) => state.mode);
-  const pendingEntry = useChatStore((state) => state.pendingEntry);
-  const pendingChatLogId = useChatStore((state) => state.pendingChatLogId);
-  const setPendingEntry = useChatStore((state) => state.setPendingEntry);
-  const clearPending = useChatStore((state) => state.clearPending);
+  const messages = useChatStore((state) => state.messagesByMode[mode]);
+  const setMessages = useChatStore((state) => state.setMessages);
+  const appendMessage = useChatStore((state) => state.appendMessage);
+  const updateEntryConfirmed = useChatStore((state) => state.updateEntryConfirmed);
   const user = useAuthStore((state) => state.user);
 
   const [text, setText] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [answer, setAnswer] = useState<string | null>(null);
+  const uidRef = useRef("");
+
+  useEffect(() => {
+    let ignore = false;
+    const memberId = mode === "devops" ? user?.memberId : "leader";
+    if (!memberId) {
+      return;
+    }
+
+    Promise.resolve().then(() => {
+      if (!ignore) setLoadingHistory(true);
+    });
+
+    getChatLogsByMember(memberId, mode)
+      .then((logs) => {
+        if (!ignore) {
+          setMessages(mode, chatLogsToMessages(logs));
+        }
+      })
+      .catch((err) => {
+        if (!ignore) {
+          console.error("Failed to load chat history:", err);
+          setError("Couldn't load chat history. Try refreshing the page.");
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setLoadingHistory(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [mode, user?.memberId, setMessages]);
+
+  async function handleUploadImage(file: File): Promise<void> {
+    if (!uidRef.current) {
+      uidRef.current = `${Date.now()}`;
+    }
+    setUploadingImage(true);
+    const storageRef = ref(storage, `chatImages/${uidRef.current}/${Date.now()}.png`);
+    await uploadBytes(storageRef, file);
+    const url = await getDownloadURL(storageRef);
+    setImageUrl(url);
+    setUploadingImage(false);
+  }
 
   async function handleSubmit(): Promise<void> {
     if (!user?.memberId && mode === "devops") {
       setError("Your account isn't linked to a member profile yet.");
       return;
     }
-    setLoading(true);
+    if (!text && !imageUrl) return;
+    const submittedText = text;
+    const submittedImageUrl = imageUrl;
     setError(null);
-    setAnswer(null);
+    setText("");
+    setImageUrl(null);
+    appendMessage(mode, { role: "user", id: `local-${Date.now()}`, text: submittedText || null, imageUrl: submittedImageUrl });
+    setThinking(true);
     try {
       if (mode === "devops") {
-        const { data } = await axios.post("/api/ai/format-entry", { text, imageUrl, memberId: user!.memberId });
-        setPendingEntry(data.entry, data.chatLogId);
+        const { data } = await axios.post("/api/ai/format-entry", {
+          text: submittedText,
+          imageUrl: submittedImageUrl,
+          memberId: user!.memberId,
+        });
+        appendMessage(mode, { role: "ai-entry", id: `local-ai-${Date.now()}`, chatLogId: data.chatLogId, entry: data.entry, confirmed: false });
       } else {
-        const { data } = await axios.post("/api/ai/answer-query", { question: text });
-        setAnswer(data.answer);
+        const { data } = await axios.post("/api/ai/answer-query", { question: submittedText });
+        appendMessage(mode, { role: "ai-answer", id: `local-ai-${Date.now()}`, text: data.answer });
       }
-      setText("");
-      setImageUrl(null);
     } catch {
-      setError("Something went wrong reaching the AI service. Your input is preserved — try again.");
+      setError("Something went wrong reaching the AI service. Your input is preserved, try again.");
+      setText(submittedText);
+      setImageUrl(submittedImageUrl);
     } finally {
-      setLoading(false);
+      setThinking(false);
     }
   }
 
-  async function handleConfirm(entry: FormattedEntry): Promise<void> {
+  async function handleConfirmEntry(chatLogId: string, entry: FormattedEntry): Promise<void> {
     let project = await getProjectByName(entry.projectName);
     if (!project) {
       const id = await createProject({ name: entry.projectName, description: "", color: "#6366f1" });
@@ -75,27 +138,54 @@ export function ChatBox(): React.JSX.Element {
       effortPercent: entry.effortPercent,
       status: entry.effortPercent > 100 ? "overloaded" : entry.effortPercent > 60 ? "busy" : "available",
     });
-    if (pendingChatLogId) await confirmChatLog(pendingChatLogId);
-    clearPending();
+    await confirmChatLog(chatLogId);
+    updateEntryConfirmed(mode, chatLogId, true);
   }
 
   return (
-    <div className="space-y-4">
+    <VStack gap={3} height="100%">
       <ModeToggle />
-      <ImagePasteInput text={text} onTextChange={setText} onImageUploaded={setImageUrl} />
-      <Button onClick={handleSubmit} disabled={loading || (!text && !imageUrl)}>
-        {loading ? "Thinking…" : mode === "devops" ? "Format entry" : "Ask"}
-      </Button>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      {answer && <p className="rounded-md border bg-muted p-3 text-sm">{answer}</p>}
-      {pendingEntry && (
-        <EntryPreviewDialog
-          entry={pendingEntry}
-          open={!!pendingEntry}
-          onConfirm={handleConfirm}
-          onCancel={() => clearPending()}
-        />
+      <VStack gap={3} height="100%" isScrollable>
+        <ChatThread mode={mode} messages={messages} loading={loadingHistory} thinking={thinking} onConfirmEntry={handleConfirmEntry} />
+      </VStack>
+      {error && (
+        <HStack gap={2}>
+          <Icon icon={TriangleAlert} color="error" />
+          <Text color="accent">{error}</Text>
+        </HStack>
       )}
-    </div>
+      <ChatComposer
+        onSubmit={handleSubmit}
+        isDisabled={thinking}
+        drawer={
+          (uploadingImage || imageUrl) && (
+            <ChatComposerDrawer>
+              {uploadingImage ? (
+                <HStack gap={2} vAlign="center">
+                  <Spinner size="sm" label="Uploading image" />
+                  <Text type="supporting">Uploading image…</Text>
+                </HStack>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={imageUrl!} alt="Pasted screenshot" style={{ maxHeight: 128, borderRadius: 8 }} />
+              )}
+            </ChatComposerDrawer>
+          )
+        }
+        input={
+          <ChatComposerInput
+            label="Message"
+            placeholder="Paste text or an image (Cmd/Ctrl+V)…"
+            value={text}
+            onChange={setText}
+            onSubmit={handleSubmit}
+            onFiles={(files) => {
+              const image = files.find((f) => f.type.startsWith("image/"));
+              if (image) handleUploadImage(image);
+            }}
+          />
+        }
+      />
+    </VStack>
   );
 }

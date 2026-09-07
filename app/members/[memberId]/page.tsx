@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
+import { VStack, HStack } from "@astryxdesign/core/Stack";
+import { Grid } from "@astryxdesign/core/Grid";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
+import { Button } from "@astryxdesign/core/Button";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { MemberForm } from "@/components/members/member-form";
 import { TimelineView } from "@/components/timeline/timeline-view";
 import { getMember, updateMember } from "@/services/members.service";
@@ -45,20 +52,40 @@ export default function MemberDetailPage(): React.JSX.Element {
     router.push("/members");
   }
 
-  if (loading) return <p className="text-muted-foreground">Loading…</p>;
-  if (loadError) return <p className="text-destructive">Failed to load: {loadError}</p>;
-  if (!member) return <p className="text-muted-foreground">Member not found.</p>;
+  if (loading) {
+    return (
+      <Grid columns={2} gap={8}>
+        <VStack gap={5}>
+          <Skeleton height={36} width="50%" />
+          <Skeleton height={36} />
+          <Skeleton height={36} />
+        </VStack>
+        <VStack gap={3}>
+          <Skeleton height={24} width="33%" />
+          <Skeleton height={64} />
+          <Skeleton height={64} />
+        </VStack>
+      </Grid>
+    );
+  }
+  if (loadError) return <Text color="accent">Failed to load: {loadError}</Text>;
+  if (!member) return <Text type="supporting">Member not found.</Text>;
 
   return (
-    <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-      <div className="space-y-6">
-        <h1 className="text-2xl font-semibold">Edit {member.name}</h1>
-        <MemberForm initialValues={member} onSubmit={handleSubmit} submitLabel="Save Changes" />
-      </div>
-      <div className="space-y-6">
-        <h2 className="text-xl font-semibold">Timeline</h2>
-        <TimelineView tasks={tasks} projects={projects} />
-      </div>
-    </div>
+    <VStack gap={6}>
+      <HStack>
+        <Button label="Back to members" icon={<ArrowLeft size={16} strokeWidth={2} />} variant="ghost" href="/members" />
+      </HStack>
+      <Grid columns={{ minWidth: 360, max: 2 }} gap={8}>
+        <VStack gap={6}>
+          <Heading level={1}>Edit {member.name}</Heading>
+          <MemberForm initialValues={member} onSubmit={handleSubmit} submitLabel="Save Changes" />
+        </VStack>
+        <VStack gap={6}>
+          <Heading level={2}>Timeline</Heading>
+          <TimelineView tasks={tasks} projects={projects} />
+        </VStack>
+      </Grid>
+    </VStack>
   );
 }

@@ -19,3 +19,8 @@ export interface ChatLog {
   confirmed: boolean;
   createdAt: string;
 }
+
+export type ChatMessage =
+  | { role: "user"; id: string; text: string | null; imageUrl: string | null }
+  | { role: "ai-answer"; id: string; text: string }
+  | { role: "ai-entry"; id: string; chatLogId: string; entry: FormattedEntry; confirmed: boolean };

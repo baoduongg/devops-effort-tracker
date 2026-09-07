@@ -1,4 +1,14 @@
-import { collection, getDocs, addDoc, query, where, Timestamp } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  updateDoc,
+  doc,
+  query,
+  where,
+  onSnapshot,
+  Timestamp,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Task, TaskInput } from "@/types/task";
 
@@ -22,10 +32,13 @@ function toTask(id: string, data: Record<string, unknown>): Task {
 }
 
 export async function getTasksByMember(memberId: string): Promise<Task[]> {
-  // No orderBy here: a single where() needs no composite index, and TimelineView
-  // already sorts by startDate before rendering.
   const q = query(tasksCol, where("memberId", "==", memberId));
   const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => toTask(d.id, d.data()));
+}
+
+export async function getAllTasks(): Promise<Task[]> {
+  const snapshot = await getDocs(tasksCol);
   return snapshot.docs.map((d) => toTask(d.id, d.data()));
 }
 
@@ -33,6 +46,12 @@ export async function getAllActiveTasks(): Promise<Task[]> {
   const q = query(tasksCol, where("status", "in", ["planned", "in_progress"]));
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => toTask(d.id, d.data()));
+}
+
+export function subscribeAllTasks(callback: (tasks: Task[]) => void): () => void {
+  return onSnapshot(tasksCol, (snapshot) => {
+    callback(snapshot.docs.map((d) => toTask(d.id, d.data())));
+  });
 }
 
 export async function createTask(input: TaskInput): Promise<string> {
@@ -45,3 +64,18 @@ export async function createTask(input: TaskInput): Promise<string> {
   });
   return ref.id;
 }
+
+export async function updateTask(id: string, input: Partial<TaskInput>): Promise<void> {
+  const payload: Record<string, unknown> = {
+    ...input,
+    updatedAt: Timestamp.now(),
+  };
+  if (input.startDate) {
+    payload.startDate = Timestamp.fromDate(new Date(input.startDate));
+  }
+  if (input.endDate !== undefined) {
+    payload.endDate = input.endDate ? Timestamp.fromDate(new Date(input.endDate)) : null;
+  }
+  await updateDoc(doc(db, "tasks", id), payload);
+}
+

@@ -1,6 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { VStack } from "@astryxdesign/core/Stack";
+import { Heading } from "@astryxdesign/core/Heading";
+import { Text } from "@astryxdesign/core/Text";
 import { MemberForm } from "@/components/members/member-form";
 import { createMember } from "@/services/members.service";
 import type { MemberInput } from "@/types/member";
@@ -14,9 +17,12 @@ export default function NewMemberPage(): React.JSX.Element {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">New Member</h1>
+    <VStack gap={8}>
+      <VStack gap={1}>
+        <Heading level={1}>New Member</Heading>
+        <Text type="supporting">Add a new profile to the team.</Text>
+      </VStack>
       <MemberForm onSubmit={handleSubmit} submitLabel="Create Member" />
-    </div>
+    </VStack>
   );
 }

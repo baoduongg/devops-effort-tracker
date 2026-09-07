@@ -1,4 +1,8 @@
-import { Badge } from "@/components/ui/badge";
+import { ListItem } from "@astryxdesign/core/List";
+import { Token } from "@astryxdesign/core/Token";
+import { Text } from "@astryxdesign/core/Text";
+import { VStack } from "@astryxdesign/core/Stack";
+import { isOverdue, daysOverdue } from "@/lib/overdue";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Project } from "@/types/project";
 
@@ -14,22 +18,30 @@ const statusLabels: Record<TaskStatus, string> = {
 };
 
 export function TimelineItem({ task, project }: TimelineItemProps): React.JSX.Element {
+  const overdue = isOverdue(task);
+  const overdueDays = task.endDate ? daysOverdue(task.endDate) : 0;
   return (
-    <div className="relative border-l-2 pl-4 pb-6">
-      <div
-        className="absolute -left-[5px] top-1 h-2 w-2 rounded-full"
-        style={{ backgroundColor: project?.color ?? "#6b7280" }}
-      />
-      <div className="flex items-center gap-2">
-        <p className="font-medium">{task.title}</p>
-        <Badge variant="outline">{statusLabels[task.status]}</Badge>
-      </div>
-      <p className="text-sm text-muted-foreground">{project?.name ?? "Unknown project"}</p>
-      <p className="text-sm">{task.description}</p>
-      <p className="text-xs text-muted-foreground">
-        {new Date(task.startDate).toLocaleDateString()}
-        {task.endDate ? ` – ${new Date(task.endDate).toLocaleDateString()}` : ""} · {task.effortPercent}% effort
-      </p>
-    </div>
+    <ListItem
+      label={task.title}
+      endContent={
+        overdue ? (
+          <Token label="Overdue" color={overdueDays > 7 ? "red" : "orange"} size="sm" />
+        ) : (
+          <Token label={statusLabels[task.status]} />
+        )
+      }
+      description={
+        <VStack gap={0.5}>
+          <Text type="supporting">{project?.name ?? "Unknown project"}</Text>
+          {task.description && <Text type="supporting">{task.description}</Text>}
+          <Text type="supporting">
+            {new Date(task.startDate).toLocaleDateString()}
+            {task.endDate ? ` - ${new Date(task.endDate).toLocaleDateString()}` : ""}
+            {" · "}
+            {task.effortPercent}% effort
+          </Text>
+        </VStack>
+      }
+    />
   );
 }

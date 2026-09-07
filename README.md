@@ -1,6 +1,6 @@
 # DevOps Effort Tracker
 
-A Next.js 15 application for tracking effort allocation across projects, managing team capacity, and enabling AI-assisted planning through Firebase and a Gemini-powered AI gateway.
+A Next.js 15 application for tracking effort allocation across projects, managing team capacity, and enabling AI-assisted planning through Firebase and the NVIDIA build.nvidia.com API.
 
 ## Project Purpose
 
@@ -44,7 +44,7 @@ Required environment variables:
 | `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Cloud Storage bucket name | Firebase Console → Project Settings (format: `your-project.appspot.com`) |
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID | Firebase Console → Project Settings |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase app ID | Firebase Console → Project Settings |
-| `AI_GATEWAY_URL` | Base URL of the local ai-gateway Python service | Default: `http://localhost:8001` (see `ai-gateway/README.md` to run it) |
+| `NVIDIA_API_KEY` | API key for build.nvidia.com | https://build.nvidia.com → API Keys |
 
 All `NEXT_PUBLIC_*` variables are safe to expose and are restricted by Firebase security rules. Server-only variables (like `NVIDIA_API_KEY`) must never be prefixed with `NEXT_PUBLIC_`.
 
@@ -64,27 +64,14 @@ pnpm run seed
 
 The personal timeline query (`tasks` filtered by `memberId`, ordered by `startDate`) requires a composite index. On first run, Firestore will throw a "query requires an index" error with a direct link to create it in the console — click the link and wait for the index to show as "Enabled" before retrying.
 
-### AI Gateway (Python)
+### AI Features (NVIDIA build.nvidia.com)
 
-AI features (chat-based entry logging and leader Q&A) are powered by a
-separate Python FastAPI service in `ai-gateway/` that wraps
-[gemini_webapi](https://github.com/HanaokaYuzu/Gemini-API), an **unofficial**
-client for the Gemini web app. See `ai-gateway/README.md` for setup and
-important risk notes before relying on this in any production-like
-environment.
-
-Quick start:
-
-```bash
-cd ai-gateway
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --port 8001
-```
-
-The Next.js app must be able to reach this service at `AI_GATEWAY_URL`
-(default `http://localhost:8001`) for `/chat` and leader Q&A features to work.
+AI features (chat-based entry logging and leader Q&A) call NVIDIA's
+OpenAI-compatible API directly from `services/nvidia.service.ts` — no
+separate process is required. Get an API key at
+[build.nvidia.com](https://build.nvidia.com) and set `NVIDIA_API_KEY` in
+`.env.local`. Text prompts use `meta/llama-3.3-70b-instruct`; pasted-image
+prompts use the vision model `meta/llama-3.2-90b-vision-instruct`.
 
 ## Build and Deployment
 

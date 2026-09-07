@@ -1,6 +1,7 @@
 "use client";
 
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { NotebookPen, Search } from "lucide-react";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { useChatStore } from "@/store/chat.store";
 import type { ChatMode } from "@/types/chat";
 
@@ -9,11 +10,9 @@ export function ModeToggle(): React.JSX.Element {
   const setMode = useChatStore((state) => state.setMode);
 
   return (
-    <Tabs value={mode} onValueChange={(v) => setMode(v as ChatMode)}>
-      <TabsList>
-        <TabsTrigger value="devops">DevOps: Log/Plan</TabsTrigger>
-        <TabsTrigger value="leader">Leader: Ask</TabsTrigger>
-      </TabsList>
-    </Tabs>
+    <SegmentedControl label="Chat mode" value={mode} onChange={(v) => setMode(v as ChatMode)} layout="fill">
+      <SegmentedControlItem value="devops" label="Log / Plan" icon={<NotebookPen size={14} strokeWidth={2} />} />
+      <SegmentedControlItem value="leader" label="Ask" icon={<Search size={14} strokeWidth={2} />} />
+    </SegmentedControl>
   );
 }

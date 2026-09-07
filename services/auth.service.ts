@@ -1,4 +1,5 @@
 import {
+  signInAnonymously,
   signInWithPopup,
   signOut,
   type User,
@@ -21,6 +22,10 @@ function toAppUser(uid: string, data: Record<string, unknown>): AppUser {
 
 export async function signInWithGoogle(): Promise<void> {
   await signInWithPopup(auth, googleProvider);
+}
+
+export async function signInAnon(): Promise<void> {
+  await signInAnonymously(auth);
 }
 
 export async function signOutUser(): Promise<void> {

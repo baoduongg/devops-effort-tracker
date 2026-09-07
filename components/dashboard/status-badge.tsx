@@ -1,11 +1,11 @@
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { Token } from "@astryxdesign/core/Token";
+import { StatusDot } from "@astryxdesign/core/StatusDot";
 import type { MemberStatus } from "@/types/member";
 
-const statusStyles: Record<MemberStatus, string> = {
-  available: "bg-green-100 text-green-800 hover:bg-green-100",
-  busy: "bg-amber-100 text-amber-800 hover:bg-amber-100",
-  overloaded: "bg-red-100 text-red-800 hover:bg-red-100",
+const statusVariant: Record<MemberStatus, "success" | "warning" | "error"> = {
+  available: "success",
+  busy: "warning",
+  overloaded: "error",
 };
 
 const statusLabels: Record<MemberStatus, string> = {
@@ -15,5 +15,10 @@ const statusLabels: Record<MemberStatus, string> = {
 };
 
 export function StatusBadge({ status }: { status: MemberStatus }): React.JSX.Element {
-  return <Badge className={cn(statusStyles[status])}>{statusLabels[status]}</Badge>;
+  return (
+    <Token
+      label={statusLabels[status]}
+      icon={<StatusDot variant={statusVariant[status]} label={statusLabels[status]} />}
+    />
+  );
 }

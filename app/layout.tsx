@@ -1,17 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
+import { Theme } from "@astryxdesign/core/theme";
+import { LinkProvider } from "@astryxdesign/core/Link";
 import "./globals.css";
+import "./theme.css";
+import { devopsTrackerTheme } from "./devops-tracker";
 import { AppShell } from "@/components/layout/app-shell";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "DevOps Effort Tracker",
@@ -24,11 +18,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <AppShell>{children}</AppShell>
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <Theme theme={devopsTrackerTheme}>
+          <LinkProvider component={Link}>
+            <AppShell>{children}</AppShell>
+          </LinkProvider>
+        </Theme>
       </body>
     </html>
   );

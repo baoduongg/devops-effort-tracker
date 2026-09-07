@@ -1,3 +1,7 @@
+import { History } from "lucide-react";
+import { List } from "@astryxdesign/core/List";
+import { EmptyState } from "@astryxdesign/core/EmptyState";
+import { Icon } from "@astryxdesign/core/Icon";
 import { TimelineItem } from "@/components/timeline/timeline-item";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -9,7 +13,7 @@ interface TimelineViewProps {
 
 export function TimelineView({ tasks, projects }: TimelineViewProps): React.JSX.Element {
   if (tasks.length === 0) {
-    return <p className="text-muted-foreground">No tasks yet.</p>;
+    return <EmptyState icon={<Icon icon={History} size="lg" />} title="No tasks yet" isCompact />;
   }
 
   const sorted = [...tasks].sort(
@@ -17,10 +21,10 @@ export function TimelineView({ tasks, projects }: TimelineViewProps): React.JSX.
   );
 
   return (
-    <div>
+    <List hasDividers>
       {sorted.map((task) => (
         <TimelineItem key={task.id} task={task} project={projects.find((p) => p.id === task.projectId) ?? null} />
       ))}
-    </div>
+    </List>
   );
 }
