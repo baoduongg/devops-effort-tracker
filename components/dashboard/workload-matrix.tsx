@@ -89,8 +89,9 @@ export function WorkloadMatrix({ members, tasks, projects }: WorkloadMatrixProps
               <HStack gap={4} vAlign="center">
                 <Avatar name={member.name} src={member.photoURL ?? undefined} size="md" tooltip={false} />
                 <StackItem size="fill">
-                  <VStack gap={0.5}>
+                  <VStack gap={1}>
                     <HStack gap={2} vAlign="center">
+
                       <Link href={`/members/${member.id}`} className="hover:underline">
                         <Text weight="semibold" size="base">
                           {member.name}

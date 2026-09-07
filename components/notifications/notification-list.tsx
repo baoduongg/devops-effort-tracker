@@ -1,5 +1,6 @@
+"use client";
+
 import { BellOff } from "lucide-react";
-import { List } from "@astryxdesign/core/List";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { NotificationItem } from "@/components/notifications/notification-item";
@@ -10,16 +11,16 @@ export function NotificationList({ notifications }: { notifications: Notificatio
     return (
       <EmptyState
         icon={<Icon icon={BellOff} size="lg" />}
-        title="You're all caught up"
-        description="No notifications right now."
+        title="Không có thông báo mới"
+        description="Mọi thứ đang hoạt động ổn định và đúng tiến độ."
       />
     );
   }
   return (
-    <List hasDividers>
+    <div className="flex flex-col gap-2.5">
       {notifications.map((n) => (
         <NotificationItem key={n.id} notification={n} />
       ))}
-    </List>
+    </div>
   );
 }

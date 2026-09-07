@@ -9,6 +9,7 @@ export interface Member {
   status: MemberStatus;
   currentTaskId: string | null;
   effortPercent: number;
+  role?: "leader" | "devops";
   updatedAt: string;
 }
 

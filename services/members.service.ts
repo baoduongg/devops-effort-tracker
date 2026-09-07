@@ -4,7 +4,7 @@ import {
   getDocs,
   getDoc,
   addDoc,
-  updateDoc,
+  setDoc,
   deleteDoc,
   onSnapshot,
   Timestamp,
@@ -12,19 +12,22 @@ import {
 import { db } from "@/lib/firebase";
 import type { Member, MemberInput } from "@/types/member";
 
+import { toIsoString } from "@/lib/date";
+
 const membersCol = collection(db, "members");
 
 function toMember(id: string, data: Record<string, unknown>): Member {
   return {
     id,
-    name: data.name as string,
-    email: data.email as string,
+    name: (data.name as string) ?? "Member",
+    email: (data.email as string) ?? "",
     photoURL: (data.photoURL as string | null) ?? null,
     skills: (data.skills as string[]) ?? [],
-    status: data.status as Member["status"],
+    status: (data.status as Member["status"]) ?? "available",
     currentTaskId: (data.currentTaskId as string | null) ?? null,
     effortPercent: (data.effortPercent as number) ?? 0,
-    updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() ?? new Date().toISOString(),
+    role: (data.role as Member["role"]) ?? undefined,
+    updatedAt: toIsoString(data.updatedAt),
   };
 }
 
@@ -45,7 +48,7 @@ export async function createMember(input: MemberInput): Promise<string> {
 }
 
 export async function updateMember(id: string, input: Partial<MemberInput>): Promise<void> {
-  await updateDoc(doc(db, "members", id), { ...input, updatedAt: Timestamp.now() });
+  await setDoc(doc(db, "members", id), { ...input, updatedAt: Timestamp.now() }, { merge: true });
 }
 
 export async function deleteMember(id: string): Promise<void> {

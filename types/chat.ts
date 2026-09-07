@@ -4,10 +4,16 @@ export interface FormattedEntry {
   title: string;
   projectName: string;
   effortPercent: number;
+  assigneeName?: string | null;
   startDate: string;
   endDate: string | null;
   status: "planned" | "in_progress" | "done";
 }
+
+export type AiResponsePayload =
+  | FormattedEntry
+  | { answer: string }
+  | { answer?: string; entry: FormattedEntry };
 
 export interface ChatLog {
   id: string;
@@ -15,7 +21,7 @@ export interface ChatLog {
   mode: ChatMode;
   rawInput: string | null;
   imageUrl: string | null;
-  aiResponse: FormattedEntry | { answer: string };
+  aiResponse: AiResponsePayload;
   confirmed: boolean;
   createdAt: string;
 }

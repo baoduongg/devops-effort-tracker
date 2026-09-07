@@ -5,6 +5,7 @@ export const formattedEntrySchema = z.object({
   title: z.string().min(1),
   projectName: z.string().min(1),
   effortPercent: z.number().min(0).max(200),
+  assigneeName: z.string().nullable().optional(),
   startDate: z.string().min(1),
   endDate: z.string().nullable(),
   status: z.enum(["planned", "in_progress", "done"]),

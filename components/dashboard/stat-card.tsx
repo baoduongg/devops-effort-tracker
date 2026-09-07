@@ -23,8 +23,9 @@ export function StatCard({ label, value, icon, tone = "primary" }: StatCardProps
     <Card>
       <HStack gap={4} vAlign="center">
         <Icon icon={icon} size="lg" color={toneColor[tone]} />
-        <VStack gap={0.5}>
+        <VStack gap={1}>
           <Text type="display-3" hasTabularNumbers weight="semibold">
+
             {value}
           </Text>
           <Text type="supporting">{label}</Text>

@@ -1,6 +1,7 @@
 import { collection, doc, addDoc, updateDoc, query, where, orderBy, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { ChatLog, ChatMessage, ChatMode } from "@/types/chat";
+import { toIsoString } from "@/lib/date";
+import type { ChatLog, ChatMessage, ChatMode, FormattedEntry, AiResponsePayload } from "@/types/chat";
 
 const chatLogsCol = collection(db, "chatLogs");
 
@@ -17,7 +18,7 @@ export async function getChatLogsByMember(memberId: string, mode: ChatMode): Pro
       imageUrl: data.imageUrl,
       aiResponse: data.aiResponse,
       confirmed: data.confirmed,
-      createdAt: (data.createdAt as Timestamp).toDate().toISOString(),
+      createdAt: toIsoString(data.createdAt),
     } satisfies ChatLog;
   });
 }
@@ -27,7 +28,7 @@ interface CreateChatLogInput {
   mode: ChatMode;
   rawInput: string | null;
   imageUrl: string | null;
-  aiResponse: ChatLog["aiResponse"];
+  aiResponse: AiResponsePayload;
   confirmed: boolean;
 }
 
@@ -48,10 +49,43 @@ export function chatLogsToMessages(logs: ChatLog[]): ChatMessage[] {
       text: log.rawInput,
       imageUrl: log.imageUrl,
     };
-    const aiMessage: ChatMessage =
-      "answer" in log.aiResponse
-        ? { role: "ai-answer", id: `${log.id}-ai`, text: log.aiResponse.answer }
-        : { role: "ai-entry", id: `${log.id}-ai`, chatLogId: log.id, entry: log.aiResponse, confirmed: log.confirmed };
-    return [userMessage, aiMessage];
+
+    const messages: ChatMessage[] = [userMessage];
+    const resp = log.aiResponse as Record<string, unknown>;
+
+    if (resp && typeof resp === "object") {
+      if ("entry" in resp && resp.entry) {
+        if ("answer" in resp && typeof resp.answer === "string" && resp.answer) {
+          messages.push({
+            role: "ai-answer",
+            id: `${log.id}-ai-answer`,
+            text: resp.answer,
+          });
+        }
+        messages.push({
+          role: "ai-entry",
+          id: `${log.id}-ai-entry`,
+          chatLogId: log.id,
+          entry: resp.entry as FormattedEntry,
+          confirmed: log.confirmed,
+        });
+      } else if ("answer" in resp && typeof resp.answer === "string") {
+        messages.push({
+          role: "ai-answer",
+          id: `${log.id}-ai`,
+          text: resp.answer,
+        });
+      } else if ("title" in resp && "projectName" in resp) {
+        messages.push({
+          role: "ai-entry",
+          id: `${log.id}-ai`,
+          chatLogId: log.id,
+          entry: resp as unknown as FormattedEntry,
+          confirmed: log.confirmed,
+        });
+      }
+    }
+
+    return messages;
   });
 }

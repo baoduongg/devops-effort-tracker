@@ -16,6 +16,7 @@ function cleanAiText(text: string): string {
   return text
     .replace(/'''(?:python|text)\?[^\n]*[\s\S]*?'''/g, "")
     .replace(/```(?:python|text)\?[^\n]*[\s\S]*?```/g, "")
+    .replace(/```json[\s\S]*?```/g, "")
     .trim();
 }
 
@@ -37,8 +38,10 @@ export function MessageBubble({ message, onConfirmEntry }: MessageBubbleProps): 
   return (
     <ChatMessage sender="assistant" avatar={<NavIcon icon={<Sparkles size={14} strokeWidth={2} />} />}>
       {message.role === "ai-answer" ? (
-        <ChatMessageBubble variant="ghost">
-          <Markdown density="compact" autolink="gfm">{cleanAiText(message.text || "")}</Markdown>
+        <ChatMessageBubble variant="ghost" className="w-full text-sm leading-relaxed">
+          <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-neutral-200">
+            <Markdown density="compact" autolink="gfm">{cleanAiText(message.text || "")}</Markdown>
+          </div>
         </ChatMessageBubble>
       ) : (
         <ChatMessageBubble variant="ghost" width="100%">

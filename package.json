@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "clear": "tsx scripts/clear.ts",
+    "reset": "tsx scripts/clear.ts && tsx scripts/seed.ts"
   },
   "dependencies": {
     "@astryxdesign/core": "^0.5.3",

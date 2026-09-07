@@ -31,8 +31,9 @@ export function TimelineItem({ task, project }: TimelineItemProps): React.JSX.El
         )
       }
       description={
-        <VStack gap={0.5}>
+        <VStack gap={1}>
           <Text type="supporting">{project?.name ?? "Unknown project"}</Text>
+
           {task.description && <Text type="supporting">{task.description}</Text>}
           <Text type="supporting">
             {new Date(task.startDate).toLocaleDateString()}

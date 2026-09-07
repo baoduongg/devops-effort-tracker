@@ -10,6 +10,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { toIsoString } from "@/lib/date";
 import type { Task, TaskInput } from "@/types/task";
 
 const tasksCol = collection(db, "tasks");
@@ -17,17 +18,17 @@ const tasksCol = collection(db, "tasks");
 function toTask(id: string, data: Record<string, unknown>): Task {
   return {
     id,
-    memberId: data.memberId as string,
-    projectId: data.projectId as string,
-    title: data.title as string,
+    memberId: (data.memberId as string) ?? "",
+    projectId: (data.projectId as string) ?? "",
+    title: (data.title as string) ?? "",
     description: (data.description as string) ?? "",
     effortPercent: (data.effortPercent as number) ?? 0,
-    status: data.status as Task["status"],
-    startDate: (data.startDate as Timestamp).toDate().toISOString(),
-    endDate: data.endDate ? (data.endDate as Timestamp).toDate().toISOString() : null,
-    source: data.source as Task["source"],
-    createdAt: (data.createdAt as Timestamp)?.toDate().toISOString() ?? new Date().toISOString(),
-    updatedAt: (data.updatedAt as Timestamp)?.toDate().toISOString() ?? new Date().toISOString(),
+    status: (data.status as Task["status"]) ?? "in_progress",
+    startDate: toIsoString(data.startDate),
+    endDate: data.endDate ? toIsoString(data.endDate) : null,
+    source: (data.source as Task["source"]) ?? "manual",
+    createdAt: toIsoString(data.createdAt),
+    updatedAt: toIsoString(data.updatedAt),
   };
 }
 

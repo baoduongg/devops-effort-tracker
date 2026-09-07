@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { ClickableCard } from "@astryxdesign/core/ClickableCard";
 import { HStack, VStack, StackItem } from "@astryxdesign/core/Stack";
 import { Avatar } from "@astryxdesign/core/Avatar";
@@ -51,8 +50,9 @@ export function MemberCard({
         <HStack gap={3} vAlign="center">
           <Avatar name={member.name} src={member.photoURL ?? undefined} size="md" tooltip={false} />
           <StackItem size="fill">
-            <VStack gap={0.5}>
+            <VStack gap={1}>
               <Text weight="semibold" maxLines={1}>
+
                 {member.name}
               </Text>
               <Text type="supporting" maxLines={1}>
@@ -106,8 +106,9 @@ export function MemberCard({
             })}
           </div>
         ) : (
-          <VStack gap={0.5} className="min-h-[56px]">
+          <VStack gap={1} className="min-h-[56px]">
             <Text weight="medium" maxLines={1}>
+
               {currentTaskTitle ?? "No active task"}
             </Text>
             <Text type="supporting" maxLines={1}>
