@@ -13,15 +13,15 @@ export function AppShell({ children }: { children: React.ReactNode }): React.JSX
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const loading = useAuthStore((state) => state.loading);
-  const isAuthPage = pathname === "/login";
+  const isPublicPage = pathname === "/login" || pathname === "/landing";
 
   useEffect(() => {
-    if (!isAuthPage && !loading && !user) {
+    if (!isPublicPage && !loading && !user) {
       router.replace("/login");
     }
-  }, [isAuthPage, loading, user, router]);
+  }, [isPublicPage, loading, user, router]);
 
-  if (isAuthPage) {
+  if (isPublicPage) {
     return <>{children}</>;
   }
 

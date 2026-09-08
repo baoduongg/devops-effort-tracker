@@ -96,7 +96,7 @@ export default function ProjectsPage(): React.JSX.Element {
   const totalEffortAcrossProjects = useMemo(() => {
     return tasks
       .filter((t) => t.status === "in_progress")
-      .reduce((sum, t) => sum + t.effortPercent, 0);
+      .reduce((sum, t) => sum + (t.effortPercent ?? 0), 0);
   }, [tasks]);
 
   const activeTasksCount = useMemo(() => {
@@ -257,12 +257,12 @@ export default function ProjectsPage(): React.JSX.Element {
             const plannedTasks = projectTasks.filter((t) => t.status === "planned");
             const doneTasks = projectTasks.filter((t) => t.status === "done");
 
-            const totalEffort = inProgressTasks.reduce((sum, t) => sum + t.effortPercent, 0);
+            const totalEffort = inProgressTasks.reduce((sum, t) => sum + (t.effortPercent ?? 0), 0);
 
             // Group effort by member
             const memberEffortMap = new Map<string, number>();
             inProgressTasks.forEach((t) => {
-              memberEffortMap.set(t.memberId, (memberEffortMap.get(t.memberId) ?? 0) + t.effortPercent);
+              memberEffortMap.set(t.memberId, (memberEffortMap.get(t.memberId) ?? 0) + (t.effortPercent ?? 0));
             });
 
             const assignedMembers = Array.from(memberEffortMap.entries()).map(([memberId, effort]) => ({

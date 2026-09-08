@@ -124,7 +124,7 @@ export default function MemberDetailPage(): React.JSX.Element {
   const overdueTasks = useMemo(() => tasks.filter(isOverdue), [tasks]);
 
   const computedEffort = useMemo(() => {
-    return inProgressTasks.reduce((sum, t) => sum + t.effortPercent, 0);
+    return inProgressTasks.reduce((sum, t) => sum + (t.effortPercent ?? 0), 0);
   }, [inProgressTasks]);
 
   const bandwidth = useMemo(() => {

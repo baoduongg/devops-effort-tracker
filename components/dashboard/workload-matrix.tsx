@@ -79,7 +79,7 @@ export function WorkloadMatrix({ members, tasks, projects }: WorkloadMatrixProps
           .slice(0, 3);
 
         // Dynamically compute effort from active tasks
-        const computedEffort = inProgressTasks.reduce((sum, t) => sum + t.effortPercent, 0);
+        const computedEffort = inProgressTasks.reduce((sum, t) => sum + (t.effortPercent ?? 0), 0);
         const effortInfo = getEffortStatus(computedEffort);
 
         return (
@@ -142,11 +142,11 @@ export function WorkloadMatrix({ members, tasks, projects }: WorkloadMatrixProps
                 {inProgressTasks.map((task) => {
                   const project = projectMap.get(task.projectId);
                   const color = project?.color ?? "#3b82f6";
-                  const widthPercent = Math.min(task.effortPercent, 100);
+                  const widthPercent = Math.min(task.effortPercent ?? 0, 100);
                   return (
                     <div
                       key={task.id}
-                      title={`${task.title} (${project?.name ?? "Project"}): ${task.effortPercent}%`}
+                      title={`${task.title} (${project?.name ?? "Project"}): ${task.effortPercent ?? 0}%`}
                       style={{
                         width: `${widthPercent}%`,
                         backgroundColor: color,

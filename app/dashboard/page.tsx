@@ -95,7 +95,7 @@ export default function DashboardPage(): React.JSX.Element {
   const memberEffortMap = useMemo(() => {
     const map = new Map<string, number>();
     inProgressTasks.forEach((t) => {
-      map.set(t.memberId, (map.get(t.memberId) ?? 0) + t.effortPercent);
+      map.set(t.memberId, (map.get(t.memberId) ?? 0) + (t.effortPercent ?? 0));
     });
     return map;
   }, [inProgressTasks]);

@@ -160,7 +160,7 @@ export function MemberList({
 
       const effort =
         mTasks.length > 0
-          ? inProgress.reduce((sum, t) => sum + t.effortPercent, 0)
+          ? inProgress.reduce((sum, t) => sum + (t.effortPercent ?? 0), 0)
           : member.effortPercent || 0;
 
       const activeCount = inProgress.length;

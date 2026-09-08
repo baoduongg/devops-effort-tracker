@@ -15,6 +15,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { Icon } from "@astryxdesign/core/Icon";
 import type { FormattedEntry } from "@/types/chat";
 import { formatEffortDuration, EFFORT_DURATION_PRESETS } from "@/lib/effort";
+import { isUnknownProjectName } from "@/lib/intent";
 
 interface EntryCardProps {
   entry: FormattedEntry;
@@ -301,7 +302,7 @@ export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): Reac
             size="sm"
             variant="primary"
             onClick={handleConfirm}
-            isDisabled={submitting || !edited.title || !edited.projectName}
+            isDisabled={submitting || !edited.title || isUnknownProjectName(edited.projectName)}
           />
         </HStack>
       </VStack>

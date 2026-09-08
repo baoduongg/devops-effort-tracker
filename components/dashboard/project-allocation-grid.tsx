@@ -25,12 +25,12 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
         const projectTasks = tasks.filter((t) => t.projectId === project.id);
         const activeTasks = projectTasks.filter((t) => t.status !== "done");
 
-        const totalEffort = activeTasks.reduce((sum, t) => sum + t.effortPercent, 0);
+        const totalEffort = activeTasks.reduce((sum, t) => sum + (t.effortPercent ?? 0), 0);
 
         // Find unique members contributing to this project and their subtotal effort
         const memberEffortMap = new Map<string, number>();
         activeTasks.forEach((t) => {
-          memberEffortMap.set(t.memberId, (memberEffortMap.get(t.memberId) ?? 0) + t.effortPercent);
+          memberEffortMap.set(t.memberId, (memberEffortMap.get(t.memberId) ?? 0) + (t.effortPercent ?? 0));
         });
 
         const assignedMembers = Array.from(memberEffortMap.entries()).map(([memberId, effort]) => ({

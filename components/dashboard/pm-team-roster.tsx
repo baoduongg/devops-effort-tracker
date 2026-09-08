@@ -92,7 +92,7 @@ export function PMTeamRoster({ members, tasks, projects }: PMTeamRosterProps): R
         const memberTasks = tasks.filter((t) => t.memberId === member.id);
         const inProgressTasks = memberTasks.filter((t) => t.status === "in_progress");
         const plannedTasks = memberTasks.filter((t) => t.status === "planned");
-        const computedEffort = inProgressTasks.reduce((sum, t) => sum + t.effortPercent, 0);
+        const computedEffort = inProgressTasks.reduce((sum, t) => sum + (t.effortPercent ?? 0), 0);
         const bandwidth = getMemberBandwidthInfo(computedEffort, inProgressTasks.length);
         const isLeader = member.role === "leader";
 

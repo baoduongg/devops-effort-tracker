@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import axios from "axios";
+import { notifyTaskAssigned } from "@/lib/notify";
 import { VStack, HStack, StackItem } from "@astryxdesign/core/Stack";
 import { ChatComposer, ChatComposerInput, ChatComposerDrawer, ChatSendButton } from "@astryxdesign/core/Chat";
 import { Spinner } from "@astryxdesign/core/Spinner";
@@ -317,24 +318,29 @@ export function ChatBox(): React.JSX.Element {
         const { entry, chatLogId, message } = res.data;
         if (message) {
           appendMessage("devops", {
-            id: generateMessageId("ai-notice"),
+            id: generateMessageId(entry ? "ai-notice" : "ai-answer"),
             role: "ai-answer",
             text: message,
           });
         }
-        appendMessage("devops", {
-          id: generateMessageId("ai-entry"),
-          role: "ai-entry",
-          entry,
-          chatLogId,
-          confirmed: false,
-        });
+        if (entry) {
+          appendMessage("devops", {
+            id: generateMessageId("ai-entry"),
+            role: "ai-entry",
+            entry,
+            chatLogId,
+            confirmed: false,
+          });
+        }
       } else {
         const res = await axios.post("/api/ai/answer-query", {
           question: currentText,
           query: currentText,
           memberId: user?.memberId || user?.uid || (mode === "devops" ? "" : "leader"),
           mode,
+          // F-08 scoping must key off the REAL logged-in role, not the tab (mode) currently
+          // open — "Ask" always uses mode="leader" regardless of role (ISSUE-07).
+          userRole: user?.role,
         });
         const { answer, entry, chatLogId } = res.data;
         if (entry) {
@@ -459,6 +465,9 @@ export function ChatBox(): React.JSX.Element {
       }
       updateEntryConfirmed(mode, chatLogId, true);
     }
+
+    const assignedMemberName = allMembers.find((m) => m.id === targetMemberId)?.name || entry.assigneeName || "N/A";
+    notifyTaskAssigned(assignedMemberName, entry.title, project.name);
   }
 
   const suggestions = mode === "devops" ? DEVOPS_PROMPT_SUGGESTIONS : LEADER_PROMPT_SUGGESTIONS;

@@ -65,7 +65,7 @@ export function DevOpsWorkspace({
   const overdueTasks = useMemo(() => myTasks.filter(isOverdue), [myTasks]);
 
   const totalEffort = useMemo(() => {
-    return inProgressTasks.reduce((sum, t) => sum + t.effortPercent, 0);
+    return inProgressTasks.reduce((sum, t) => sum + (t.effortPercent ?? 0), 0);
   }, [inProgressTasks]);
 
   const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
@@ -82,7 +82,7 @@ export function DevOpsWorkspace({
       if (memberId) {
         const updatedTasks = myTasks.map((t) => (t.id === task.id ? { ...t, status: nextStatus } : t));
         const activeTasks = updatedTasks.filter((t) => t.status === "in_progress");
-        const newTotalEffort = activeTasks.reduce((sum, t) => sum + t.effortPercent, 0);
+        const newTotalEffort = activeTasks.reduce((sum, t) => sum + (t.effortPercent ?? 0), 0);
         const newStatus: MemberStatus =
           activeTasks.length === 0 || newTotalEffort === 0
             ? "available"

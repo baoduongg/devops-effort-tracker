@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callNvidiaText } from "@/services/nvidia.service";
-import { buildGroundingSnapshot, GroundingSnapshot } from "@/services/grounding.service";
+import { buildGroundingSnapshot, scopeSnapshotToMember, GroundingSnapshot } from "@/services/grounding.service";
 import { createChatLog } from "@/services/chatLogs.service";
 import { extractTaskEntryFromInput } from "@/services/task-extractor.service";
 import { getMembers, findMemberByName } from "@/services/members.service";
-import { isTaskCreationIntent } from "@/lib/intent";
+import { getProjects } from "@/services/projects.service";
+import { isTaskCreationIntent, hasUnfilledPlaceholder, isRealProjectName, findUnfilledPlaceholderFields } from "@/lib/intent";
+import { formatEffortDuration } from "@/lib/effort";
 import type { Member } from "@/types/member";
 
 const SYSTEM_PROMPT = `Bạn là Trợ lý AI Quản lý Nguồn lực & Điều phối Nhân sự DevOps (DevOps Effort & Resource Assistant).
@@ -115,15 +117,20 @@ function renderMemberList(members: Member[], snapshotMembers?: GroundingSnapshot
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const body = await request.json();
-  const { question, query, memberId, mode } = body as {
+  const { question, query, memberId, mode, userRole } = body as {
     question?: string;
     query?: string;
     memberId?: string;
     mode?: "leader" | "devops";
+    userRole?: "leader" | "devops";
   };
   const userQuery = (question ?? query ?? "").trim();
   const currentMode = mode || "leader";
-  const currentMemberId = memberId || (currentMode === "devops" ? "" : "leader");
+  // F-08 must scope by the user's REAL logged-in role, not by which chat tab ("Log / Plan" vs
+  // "Ask") is currently open — the "Ask" tab always sends mode="leader" regardless of role
+  // (ISSUE-07). `userRole` reflects the actual role; fall back to `mode` for old clients.
+  const effectiveRole = userRole || currentMode;
+  const currentMemberId = memberId || (effectiveRole === "devops" ? "" : "leader");
 
   if (!userQuery) {
     return NextResponse.json({ error: "question is required" }, { status: 400 });
@@ -132,9 +139,56 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     // 1. Check if user is asking to create / assign / plan a task
     if (isTaskCreationIntent(userQuery)) {
+      // F-06 checkpoint 1: block before extraction if the raw input still has an unfilled
+      // template placeholder like "[Tên công việc]".
+      if (hasUnfilledPlaceholder(userQuery)) {
+        const answer = `⚠️ **Nội dung vẫn còn chỗ trống chưa điền**\n\nBạn đang gửi nguyên mẫu lệnh nhưng chưa thay các phần trong dấu ngoặc vuông \`[...]\` bằng thông tin cụ thể. Vui lòng điền đầy đủ: tên công việc, tên nhân sự phụ trách, tên dự án (và thời lượng nếu có), rồi gửi lại.`;
+
+        const chatLogId = await createChatLog({
+          memberId: currentMemberId || "leader",
+          mode: currentMode,
+          rawInput: userQuery,
+          imageUrl: null,
+          aiResponse: { answer },
+          confirmed: true,
+        });
+
+        return NextResponse.json({ answer, chatLogId });
+      }
+
       const result = await extractTaskEntryFromInput(userQuery);
       if (result && result.entry) {
         const { entry, notificationMessage } = result;
+
+        // F-06 checkpoint 2: block if the model echoed back an unfilled placeholder in any field.
+        const placeholderFields = findUnfilledPlaceholderFields(entry);
+
+        if (placeholderFields.length > 0) {
+          const answer = `⚠️ **Còn thiếu thông tin cụ thể**\n\nBạn chưa điền: **${placeholderFields.join(", ")}**. Vui lòng bổ sung thông tin cụ thể rồi gửi lại.`;
+
+          const chatLogId = await createChatLog({
+            memberId: currentMemberId || "leader",
+            mode: currentMode,
+            rawInput: userQuery,
+            imageUrl: null,
+            aiResponse: { answer },
+            confirmed: true,
+          });
+
+          return NextResponse.json({ answer, chatLogId });
+        }
+
+        // F-07: project must match a real project in the system, not a fabricated "unknown"
+        // value — ask instead of defaulting (ISSUE-06).
+        const realProjects = await getProjects();
+        if (!isRealProjectName(entry.projectName, realProjects.map((p) => p.name))) {
+          const assigneeNote = entry.assigneeName ? `cho **${entry.assigneeName}**` : "";
+          const effortNote = entry.effortMinutes ? `, thời gian **${formatEffortDuration(entry.effortMinutes)}**` : "";
+          const answer = `Đã ghi nhận: giao **${entry.title}** ${assigneeNote}${effortNote}. Bạn cho biết task này thuộc **dự án nào**?`;
+
+          return NextResponse.json({ answer });
+        }
+
         const assigneeText = entry.assigneeName ? `cho **${entry.assigneeName}**` : "";
         const projectText = entry.projectName ? `thuộc dự án **${entry.projectName}**` : "";
         const effortText = entry.effortPercent ? ` (${entry.effortPercent}% Effort)` : "";
@@ -197,8 +251,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // 4. Standard Q&A flow with grounding
+    // F-08: for a user whose REAL role is "devops", never expose other members' data — scope
+    // the snapshot down to the current member for every question, not just /report, and
+    // regardless of which chat tab (mode) they used to ask (ISSUE-07).
+    let scopedSnapshot = snapshot;
+    if (effectiveRole === "devops") {
+      const validMember = currentMemberId && allMembers.some((m) => m.id === currentMemberId);
+      if (!validMember) {
+        const answer = `⚠️ Không xác định được người dùng hiện tại, nên không thể hiển thị dữ liệu. Vui lòng chọn lại thành viên của bạn ở chế độ DevOps rồi thử lại.`;
+
+        const chatLogId = await createChatLog({
+          memberId: currentMemberId || "unknown",
+          mode: currentMode,
+          rawInput: userQuery,
+          imageUrl: null,
+          aiResponse: { answer },
+          confirmed: true,
+        });
+
+        return NextResponse.json({ answer, chatLogId });
+      }
+      scopedSnapshot = scopeSnapshotToMember(snapshot, currentMemberId);
+    }
+
     const answer = await callNvidiaText(
-      `${SYSTEM_PROMPT}\n\nDỮ LIỆU THỜI GIAN THỰC (REALTIME DATABASE):\n${JSON.stringify(snapshot, null, 2)}`,
+      `${SYSTEM_PROMPT}\n\nDỮ LIỆU THỜI GIAN THỰC (REALTIME DATABASE):\n${JSON.stringify(scopedSnapshot, null, 2)}`,
       userQuery
     );
 

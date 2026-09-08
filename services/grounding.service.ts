@@ -79,3 +79,36 @@ export async function buildGroundingSnapshot(): Promise<GroundingSnapshot> {
   };
 }
 
+/**
+ * Narrows a full GroundingSnapshot down to a single member's own data —
+ * used when mode === "devops" so the AI prompt never sees other members'
+ * effort/tasks. Projects are recomputed from that member's own active
+ * tasks only (not the team-wide totals).
+ */
+export function scopeSnapshotToMember(snapshot: GroundingSnapshot, memberId: string): GroundingSnapshot {
+  const member = snapshot.members.find((m) => m.id === memberId);
+  if (!member) {
+    return { members: [], projects: [] };
+  }
+
+  const projectsByName = new Map<string, { totalEffort: number; activeTaskCount: number }>();
+  for (const t of member.activeTasks) {
+    const entry = projectsByName.get(t.project) ?? { totalEffort: 0, activeTaskCount: 0 };
+    entry.totalEffort += t.effort;
+    entry.activeTaskCount += 1;
+    projectsByName.set(t.project, entry);
+  }
+
+  const projects = Array.from(projectsByName.entries()).map(([name, agg]) => ({
+    name,
+    totalEffort: agg.totalEffort,
+    assignedMembers: [member.name],
+    activeTaskCount: agg.activeTaskCount,
+  }));
+
+  return {
+    members: [member],
+    projects,
+  };
+}
+

@@ -1,3 +1,105 @@
+# Spec — rev 3 (2026-09-08)
+
+> **Phạm vi rev 3**: chỉ sửa 3 vấn đề `must` mà PM trả `REVISE` sau khi test Chat AI (`docs/product/feedback.md`, mục "PM Feedback — Chat AI — 2026-09-08": FB-CHAT-01, FB-CHAT-02, FB-CHAT-03). Đây là spec đầu tiên cho tính năng Chat AI (yêu cầu gốc ở `docs/product/requirements.md`, mục "Requirements — Chat AI", US-01..US-16) — Chat AI trước giờ được build thẳng từ requirements, chưa từng có spec, nên rev 3 **chỉ đặc tả phần liên quan tới 3 fix này**, không viết lại toàn bộ đặc tả cho US-01..US-16.
+>
+> **Chưa cover trong rev này**: nhóm case D.3 (giao task cho Leader — US-12), phần còn lại của nhóm D, nhóm E, nhóm F trong checklist QC/PM — theo feedback, PM chưa test được các nhóm này do sự cố môi trường (không phải do lỗi app), cần PM/QC chạy lại ở rev sau. Rev 3 không đưa ra spec cho các nhóm đó; Developer không cần implement gì thêm ngoài 3 mục dưới đây trong rev này.
+>
+> Rev 2 (Overdue Task Alerts) giữ nguyên bên dưới làm lịch sử/tham chiếu, không liên quan tới Chat AI.
+
+## Rev 3 — Tổng quan vấn đề
+
+Chat AI hiện có 2 API route xử lý (`app/api/ai/answer-query/route.ts` cho hỏi đáp + phát hiện ý định giao task, `app/api/ai/format-entry/route.ts` cho soạn entry card từ ảnh/text), dùng chung `services/task-extractor.service.ts` để trích xuất `FormattedEntry` (title/projectName/assigneeName/effortMinutes/...) từ văn bản tự nhiên bằng AI model, rồi hiển thị entry card (`components/chat/entry-card.tsx`) chờ Leader bấm Xác nhận mới ghi vào Firestore.
+
+Qua đọc code xác nhận 3 root cause:
+- **FB-CHAT-01**: không có bước validate nào phát hiện văn bản người dùng còn chứa placeholder dạng `[...]` (ví dụ gõ nguyên `/assign` template chưa điền) trước khi đưa vào `extractTaskEntryFromInput`. Cơ chế phát hiện placeholder duy nhất hiện có (`detectMemberQueryTarget` trong `answer-query/route.ts`, dòng ~78-95) chỉ áp dụng cho câu hỏi tra cứu thành viên kiểu `/status`/`/info`, không chạy trước nhánh tạo task (`isTaskCreationIntent` → `extractTaskEntryFromInput`, chạy trước cả bước này). `task-extractor.service.ts` và `lib/schemas.ts` (`formattedEntrySchema`) không có rule nào từ chối `title`/`projectName`/`assigneeName` là chuỗi placeholder chưa điền — miễn là AI model trả về chuỗi không rỗng (`.min(1)`), entry vẫn hợp lệ, kể cả khi giá trị là `"[Tên công việc]"` y nguyên.
+- **FB-CHAT-02**: `task-extractor.service.ts` không có bước bắt buộc kiểm tra `projectName`/`effortMinutes` sau khi model trích xuất xong. Hệ thống prompt (`getTaskExtractionSystemPrompt`) chỉ hướng dẫn model *tự suy luận/mặc định* khi thiếu thông tin (rule 3: "Default to 60 (1 tiếng) if unspecified"; không có rule nào cho `projectName` nên model tự bịa "Unknown"). Route `answer-query/route.ts` nhận `entry` từ `extractTaskEntryFromInput` và luôn coi là đủ điều kiện tạo entry card (dòng 134-156), không có bước hỏi lại khi field bắt buộc bị thiếu/là giá trị placeholder-hoá như "Unknown".
+- **FB-CHAT-03**: `SLASH_COMMANDS` (`lib/slash-commands.ts`) khai báo `/report` (`report-allocation`) với `mode: "all"` — không có metadata nào đánh dấu lệnh này chỉ dành cho Leader. `app/api/ai/answer-query/route.ts` nhận `mode` và `memberId` từ body (dòng 118-126, đã được `components/chat/chat-box.tsx` gửi lên sẵn ở dòng 336-337) nhưng chỉ dùng để ghi `createChatLog` — không dùng để giới hạn dữ liệu đưa vào `snapshot` (từ `buildGroundingSnapshot()`, chứa toàn bộ effort của mọi member) trước khi nhét nguyên `JSON.stringify(snapshot)` vào prompt gọi AI (dòng 200-203). Do đó bất kỳ câu hỏi nào ở mode `devops` (kể cả `/report`) vẫn nhận được dữ liệu đầy đủ của toàn team.
+
+**Nguyên tắc sửa chung cho cả 3**: fix tại đúng 1 điểm dùng chung cho mọi lệnh/luồng liên quan, không vá riêng từng slash command hay từng câu hỏi.
+
+## Rev 3 — Thay đổi
+
+### FB-CHAT-01 (US-04, US-11) → F-06 mới: Validate placeholder chưa điền, dùng chung cho mọi lệnh có mẫu
+
+**Hành vi đúng cần có**: bất kỳ văn bản nào (gõ trực tiếp lệnh slash còn nguyên `[...]`, hoặc copy-paste `template` từ `SLASH_COMMANDS` mà quên sửa) chứa placeholder chưa điền ở **bất kỳ trường nào** cần trích xuất cho task (tên việc, tên người phụ trách, tên dự án, thời lượng) đều phải bị chặn *trước khi* tạo entry card — kể cả khi placeholder nằm trong output của model, không chỉ trong input gõ tay của user (model có thể "trả nguyên" placeholder nếu input có placeholder).
+
+**Điểm sửa duy nhất (root cause)**: thêm 1 hàm dùng chung `hasUnfilledPlaceholder(text: string): boolean` (gợi ý đặt tại `lib/intent.ts` cạnh `isTaskCreationIntent`/`isInformationalQuery`, vì đây đã là nơi tập trung logic phân loại intent dùng chung cho mọi route — không thêm file mới, không tạo helper riêng cho từng slash command) nhận diện pattern `[...]` (ký tự bất kỳ giữa `[` và `]`, không rỗng) xuất hiện trong chuỗi. Áp dụng hàm này ở **2 nơi**, cả hai đều bắt buộc:
+1. **Trước khi gọi `extractTaskEntryFromInput`** trong `answer-query/route.ts` (chặn sớm ngay khi phát hiện `isTaskCreationIntent(userQuery)` — kiểm tra `userQuery` gốc có chứa `[...]` không, trả lời yêu cầu điền cụ thể, không gọi AI trích xuất).
+2. **Sau khi `extractTaskEntryFromInput` trả về `entry`**, kiểm tra lại từng field `entry.title`, `entry.projectName`, `entry.assigneeName` — phòng trường hợp placeholder không nằm trong câu gốc dễ nhận ra (ví dụ user gõ lẫn lộn, hoặc model tự chèn `[...]` vào output) vẫn bị chặn trước khi trả entry card về client.
+
+Cả 2 điểm dùng chung đúng 1 hàm `hasUnfilledPlaceholder` — không viết logic regex `[...]` lần thứ hai ở nơi khác.
+
+**Rule nghiệp vụ**:
+- Định nghĩa "placeholder chưa điền" = chuỗi khớp pattern `\[[^\]]+\]` (một cặp ngoặc vuông bao một đoạn text không rỗng bên trong), áp dụng thống nhất cho input người dùng gõ và cho từng field của `entry` sau khi trích xuất.
+- Khi phát hiện placeholder ở bước 1 (trước extract): trả lời ngay dạng câu hỏi lại (giống format `/status` đã làm đúng ở Case A.3), liệt kê rõ (các) chỗ còn thiếu, kèm ví dụ đã điền đủ dựa theo `template` gốc của lệnh đó nếu xác định được lệnh; **không gọi** `extractTaskEntryFromInput`, **không tạo** `entry`/entry card.
+- Khi phát hiện placeholder ở bước 2 (sau extract, field vẫn còn `[...]`): không trả `entry` về client (không tạo entry card), trả lời yêu cầu điền cụ thể trường đang thiếu, liệt kê rõ field nào (tên việc/tên người/tên dự án) còn là placeholder.
+- Áp dụng cho **mọi** lệnh có `template` trong `SLASH_COMMANDS` (`/assign`, `/reassign`, `/remove`, `/add`, `/log`, `/info`, `/task`, `/project`), không chỉ riêng `/assign` hay `/status` — vì validate nằm ở tầng dùng chung (`hasUnfilledPlaceholder` + 2 điểm gọi trong `answer-query/route.ts`), tự động áp dụng cho tất cả, không cần khai báo riêng cho từng lệnh.
+- Không được tự chọn người phụ trách thay thế (như hành vi sai hiện tại — tự đề xuất "DevOps Engineer") khi lý do thiếu tên là do placeholder chưa điền; đây khác với trường hợp tên người có thật nhưng gõ sai/không tồn tại (F đã có, giữ nguyên hành vi đề xuất người thay thế trong trường hợp đó).
+
+**Acceptance criteria**:
+- `AC-CHAT-01-1`: Given Leader gõ nguyên văn "Giao task [Tên công việc] cho [Tên nhân sự] thuộc dự án [Tên dự án] thời gian [1 tiếng]" (đúng `template` gốc của `/assign`, không sửa gì), When gửi, Then AI **không** tạo entry card, trả lời yêu cầu điền cụ thể cả 3 chỗ (tên việc, tên nhân sự, tên dự án — không cần validate riêng `[1 tiếng]` nếu đã chặn ở bước 1), không có nút Xác nhận nào xuất hiện.
+- `AC-CHAT-02`: Given Leader gõ "Giao task [Tên công việc] cho Bảo Dương 2005 thuộc dự án LineFX thời gian 1 tiếng" (chỉ 1 field còn placeholder, các field khác đã điền tên thật), When gửi, Then AI vẫn từ chối tạo entry card và chỉ rõ đúng field còn placeholder là "tên công việc", không báo chung chung.
+- `AC-CHAT-03`: Given Leader dùng lệnh khác có template (`/reassign`, `/remove`, `/add`, `/log`) và để nguyên bất kỳ chỗ `[...]` nào trong đó, When gửi, Then hành vi giống hệt AC-CHAT-01-1 — bị chặn trước khi tạo entry, không cần thêm code riêng cho từng lệnh (kiểm tra bằng cách audit code: chỉ có 1 nơi gọi `hasUnfilledPlaceholder` trước extract + 1 nơi sau extract, không có nhánh riêng theo `command.id`).
+- `AC-CHAT-04`: Given Leader gõ "Giao task Update SSL certificate cho Bao Duong 98 thuộc dự án LineFX, thời gian 2 tiếng" (không có `[...]` nào — case D.1 đã ACCEPT), When gửi, Then hành vi không đổi so với hiện tại: entry card vẫn được tạo bình thường (không bị chặn nhầm bởi validate mới).
+- `AC-CHAT-05`: Given Leader gõ tên người có thật nhưng sai chính tả nhẹ (không phải placeholder, ví dụ Case A.2 "bao duong 2oo5"), When dùng trong ngữ cảnh giao task, Then validate placeholder không can thiệp — hành vi fuzzy-match tên người (`findMemberByName`) giữ nguyên như hiện tại.
+
+---
+
+### FB-CHAT-02 (US-11) → F-07 mới: Bắt buộc hỏi lại khi thiếu dự án/thời lượng trong giao task tự nhiên
+
+**Hành vi đúng cần có**: khi Leader giao task bằng ngôn ngữ tự nhiên (không qua template lệnh) mà không nói rõ dự án hoặc thời lượng, AI phải hỏi lại, không tự điền giá trị suy đoán/mặc định ("Unknown", "60 phút mặc định") rồi vẫn cho xác nhận.
+
+**Điểm sửa duy nhất (root cause)**: thêm bước validate bắt buộc ngay sau khi `extractTaskEntryFromInput` trả về `entry`, đặt tại `answer-query/route.ts` (cùng chỗ vừa thêm check placeholder ở F-06, đi chung 1 khối validate "entry đủ điều kiện tạo entry card chưa" — không tách 2 hàm riêng lẻ cho 2 loại thiếu sót khác nhau). Điều kiện chặn:
+- `entry.projectName` rỗng, hoặc bằng (không phân biệt hoa/thường) một trong các giá trị coi là "chưa xác định thật": `"unknown"`, `"không rõ"`, `"chưa rõ"`, `"n/a"` — đây là các giá trị model có xu hướng tự bịa khi không có dữ liệu, không phải tên dự án thật do Leader cung cấp.
+- Đồng thời áp dụng nguyên tắc: câu gốc của Leader (`userQuery`) không chứa bất kỳ từ khoá nào gợi ý tên dự án (không cần NLP phức tạp — chỉ cần: nếu model tự trả về 1 trong các giá trị "chưa xác định thật" ở trên, coi như thiếu, không cố phân biệt thêm "model đoán sai" hay "input thực sự không có" vì hệ quả xử lý giống nhau: đều phải hỏi lại).
+- `effortMinutes` không tính là "thiếu" nếu Leader không nói rõ — theo US-11 gốc, cả dự án và thời lượng đều là trường bắt buộc, nhưng hệ thống hiện tại default effort về 60 phút một cách hợp lý cho trải nghiệm nhanh (giữ nguyên); tuy nhiên nếu về sau phát hiện model trả `effortMinutes` cho giá trị canh dấu hiệu "không nói gì" (ví dụ input hoàn toàn không có từ khoá thời lượng nào: không số, không "tiếng/giờ/phút/ngày"), áp dụng cùng cơ chế hỏi lại như dự án — xem *Câu hỏi mở cho PM* vì đây là điểm cần PM xác nhận rõ mức độ bắt buộc.
+
+**Rule nghiệp vụ**:
+- Khi phát hiện `projectName` thuộc nhóm "chưa xác định thật": **không** trả `entry` về client, **không** tạo entry card, **không** cho phép bấm Xác nhận.
+- Trả lời dạng hỏi lại rõ ràng, nêu đúng các thông tin đã có (tên việc, người phụ trách, thời lượng nếu có) để Leader không phải gõ lại từ đầu, chỉ cần bổ sung phần thiếu — ví dụ: "Đã ghi nhận: giao **Kiểm tra log server** cho **Bảo Dương 2005**, thời gian **1 tiếng**. Bạn cho biết task này thuộc **dự án nào**?"
+- Không log `entry` vào `createChatLog` với `confirmed: false` khi bị chặn ở bước này (khác với luồng bình thường) — vì đây chưa phải một entry hợp lệ, tránh rác dữ liệu chatLog dạng nháp không dùng được.
+
+**Acceptance criteria**:
+- `AC-CHAT-06`: Given Leader gõ "Giao task Kiểm tra log server cho Bảo Dương 2005, thời gian 1 tiếng" (không nói dự án — đúng Case D.2 đã fail), When gửi, Then AI **không** tạo entry card, **không** hiện dự án "Unknown", trả lời hỏi lại tên dự án và nhắc lại các thông tin đã có (tên việc, người phụ trách, thời lượng).
+- `AC-CHAT-07`: Given Leader trả lời tiếp theo câu hỏi ở AC-CHAT-06 bằng tên dự án thật (ví dụ "LineFX"), When gửi, Then AI tạo entry card đầy đủ với dự án LineFX và các thông tin đã nói trước đó, cho phép Xác nhận bình thường (giữ mạch hội thoại trong phiên — tái dùng cơ chế context đã có cho US-14, không cần Leader gõ lại toàn bộ câu).
+- `AC-CHAT-08`: Given Leader gõ đầy đủ dự án và thời lượng thật (Case D.1: "...thuộc dự án LineFX, thời gian 2 tiếng"), When gửi, Then hành vi không đổi — entry card tạo ngay như hiện tại (không bị chặn nhầm).
+- `AC-CHAT-09`: Given entry được tạo hợp lệ, When kiểm tra giá trị `projectName` trên mọi entry card đã hiển thị cho Leader, Then không bao giờ xuất hiện giá trị "Unknown"/"Không rõ"/"N/A" — mọi entry card hiển thị đều có tên dự án thật hoặc AI đã hỏi lại trước đó.
+
+---
+
+### FB-CHAT-03 (US-06) → F-08 mới: Giới hạn lệnh báo cáo toàn team theo mode/vai trò hiện tại
+
+**Hành vi đúng cần có**: khi đang ở mode `devops` (không phải Leader), các lệnh/câu hỏi mang tính báo cáo quản lý toàn team (`/report`, và tương tự cho `/overload`, `/load`, `/effort`, `/free` nếu hỏi ở phạm vi toàn team) phải bị từ chối hoặc chỉ trả dữ liệu của chính member đang được chọn ở mode đó — không lộ effort/task của thành viên khác.
+
+**Điểm sửa duy nhất (root cause)**: `answer-query/route.ts` đã nhận `mode` và `currentMemberId` từ request (đã có sẵn, do `chat-box.tsx` gửi lên) — sửa **đúng 1 chỗ**: trước khi build prompt gọi AI ở bước "4. Standard Q&A flow" (dòng ~199-203), nếu `currentMode === "devops"`, thu hẹp `snapshot` (kết quả `buildGroundingSnapshot()`) xuống chỉ còn dữ liệu của `currentMemberId` trước khi đưa vào prompt — không thêm điều kiện riêng theo từng slash command (`/report` vs `/overload` vs...), vì gốc rễ là **dữ liệu đưa vào AI ở mode devops không bao giờ nên chứa effort/task của người khác**, bất kể câu hỏi cụ thể là gì. Việc lọc dữ liệu tại nguồn (snapshot) tự động áp dụng cho mọi lệnh/câu hỏi báo cáo toàn team mà không cần liệt kê danh sách lệnh bị chặn.
+- Hàm mới `scopeSnapshotToMember(snapshot, memberId): GroundingSnapshot` (đặt cạnh `buildGroundingSnapshot` trong `services/grounding.service.ts`, tái dùng type `GroundingSnapshot` có sẵn, không tạo type mới) trả về snapshot chỉ giữ lại phần tử `members` có `id === memberId`, và `projects` được lọc lại `assignedMembers`/`totalEffort`/`activeTaskCount` chỉ tính trên task của member đó (tái dùng cách tính hiện có trong `buildGroundingSnapshot`, áp dụng thêm điều kiện lọc theo `memberId`).
+- Khi `currentMode === "devops"` mà không xác định được `currentMemberId` hợp lệ (rỗng hoặc không khớp member nào) — coi như không có quyền xem gì ngoài câu trả lời của chính họ; trả lời báo không xác định được người dùng hiện tại, không fallback về toàn team.
+
+**Rule nghiệp vụ**:
+- Áp dụng cho **toàn bộ** câu hỏi/lệnh khi `mode === "devops"`, không giới hạn riêng `/report` — vì điểm sửa nằm ở tầng dữ liệu (snapshot) đưa vào AI, không phải ở tầng nhận diện lệnh.
+- Ở mode `devops`, dữ liệu AI nhận được (và do đó có thể trả lời) chỉ gồm thông tin của chính `currentMemberId`: task, effort, dự án liên quan tới member đó. Không có field `members` (mảng người khác) hay `projects` (tổng effort toàn dự án gộp cả người khác) trong payload gửi cho model.
+- Ở mode `leader`, hành vi giữ nguyên hoàn toàn như hiện tại — không giới hạn gì (Leader vẫn thấy toàn bộ team, đúng vai trò).
+- Không cần phân biệt "từ chối" hay "chỉ trả dữ liệu của chính mình" bằng 2 cơ chế khác nhau — chọn phương án **chỉ trả dữ liệu của chính mình** (đơn giản hơn, không cần thêm câu trả lời từ chối riêng, và vẫn hữu ích cho DevOps hỏi về việc của bản thân qua `/report`-style câu hỏi).
+
+**Acceptance criteria**:
+- `AC-CHAT-10`: Given Leader chuyển sang mode DevOps chọn member "Bảo Dương 2005", gõ `/report`, When gửi, Then câu trả lời **không** chứa tên, effort, hoặc task của "Bao Duong 98" hay bất kỳ member nào khác ngoài "Bảo Dương 2005" — đúng Case B.3 đã fail nay phải pass.
+- `AC-CHAT-11`: Given cùng ngữ cảnh AC-CHAT-10, When xem nội dung trả lời, Then vẫn có thể chứa effort/task của chính "Bảo Dương 2005" (không bị chặn hoàn toàn, chỉ bị thu hẹp phạm vi) — không phải trả lời rỗng hay từ chối cứng.
+- `AC-CHAT-12`: Given ở mode DevOps chọn "Bảo Dương 2005", gõ `/overload` hoặc `/load` hoặc bất kỳ câu hỏi tổng hợp toàn team nào khác, When gửi, Then hành vi giống AC-CHAT-10 — không lộ dữ liệu người khác (kiểm chứng đây là root-cause fix áp dụng chung, không phải chỉ vá riêng `/report`).
+- `AC-CHAT-13`: Given Leader ở mode Leader (không phải devops), gõ `/report`, When gửi, Then hành vi không đổi so với hiện tại — trả về đầy đủ effort toàn team như Case B.3 mô tả (đây vẫn là hành vi đúng cho Leader).
+- `AC-CHAT-14`: Given ở mode DevOps nhưng không xác định được `memberId` hợp lệ (ví dụ lỗi state), gõ `/report`, When gửi, Then AI không trả về dữ liệu toàn team (không fallback về hành vi Leader), trả lời phù hợp rằng không xác định được người dùng hiện tại.
+
+## Ngoài phạm vi rev 3
+- FB-CHAT-04 (nhãn "Quá tải" hiển thị sai cho effort 6%) — theo feedback đây là "nice to have", không nằm trong 6 nhóm case A-F chặn ACCEPT, không đưa vào rev này.
+- Nhóm case D.3 (giao task cho Leader — US-12), phần D còn lại, nhóm E, nhóm F — PM chưa test được do sự cố môi trường, không phải scope của rev 3. Cần PM/QC chạy lại các nhóm này ở rev sau; nếu phát sinh vấn đề mới, BA sẽ viết rev kế tiếp.
+- Không viết spec đầy đủ cho toàn bộ US-01..US-16 của Chat AI (đã hoạt động đúng theo phần "Đạt" trong feedback, không cần đặc tả lại) — rev 3 chỉ đặc tả phần sửa lỗi.
+- Không đổi UI/component `entry-card.tsx`, `chat-box.tsx` về mặt hình thức hiển thị — chỉ đổi logic ở tầng API route/service quyết định *có* tạo entry card / *có* trả dữ liệu toàn team hay không.
+
+## Câu hỏi mở cho PM (rev 3)
+- FB-CHAT-02: khi Leader giao task tự nhiên mà hoàn toàn không nhắc tới thời lượng nào (không số, không "tiếng/giờ/phút/ngày"), hệ thống hiện default 60 phút. Rev 3 giữ nguyên default này (không hỏi lại) vì feedback PM chỉ minh hoạ case thiếu **dự án**, không minh hoạ case thiếu **thời lượng** hoàn toàn. Giả định: default effort 60 phút vẫn chấp nhận được, chỉ dự án là bắt buộc phải hỏi lại. Nếu PM muốn thời lượng cũng bắt buộc hỏi lại khi hoàn toàn không được nhắc tới, cần xác nhận thêm ở rev sau — áp dụng cùng cơ chế F-07 (mở rộng điều kiện chặn).
+- FB-CHAT-03: rev 3 áp dụng thu hẹp dữ liệu cho **mọi** câu hỏi ở mode DevOps (không riêng lệnh report), kể cả câu hỏi thông thường như "tình hình team" đang có thể hữu ích cho DevOps biết đồng đội. Giả định: đây là hành vi đúng theo tinh thần US-06 ("không được lộ dữ liệu tổng hợp của toàn team cho một tài khoản không phải Leader") — áp dụng rộng để tránh phải liệt kê danh sách lệnh "nhạy cảm" cần review lại mỗi khi thêm lệnh mới. Nếu PM muốn DevOps vẫn xem được thông tin cơ bản không nhạy cảm của đồng đội (ví dụ chỉ tên + đang rảnh/bận, không effort chi tiết), cần làm rõ ở rev sau.
+
+---
+
 # Spec — rev 2 (2026-09-07)
 
 > Rev 2 sửa 3 vấn đề PM trả về `REVISE` sau khi preview rev 1 (`docs/product/feedback.md`: FB-01, FB-02, FB-03). Nội dung Rev 1 giữ nguyên bên dưới làm lịch sử/tham chiếu — Developer/QC đọc **Rev 2 — Thay đổi** trước, phần Rev 1 vẫn còn hiệu lực cho mọi thứ không bị nhắc tới ở đây.

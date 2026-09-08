@@ -39,7 +39,7 @@ export function MemberCard({
 
   const computedEffort =
     inProgressTasks.length > 0
-      ? inProgressTasks.reduce((sum, t) => sum + t.effortPercent, 0)
+      ? inProgressTasks.reduce((sum, t) => sum + (t.effortPercent ?? 0), 0)
       : member.effortPercent;
 
   const derivedStatus: MemberStatus =

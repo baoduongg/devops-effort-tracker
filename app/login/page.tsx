@@ -81,10 +81,18 @@ export default function LoginPage(): React.JSX.Element {
               />
             </VStack>
 
-            {/* Security note */}
-            <div className="flex items-center gap-1.5 text-[11px] text-neutral-500 pt-1">
-              <ShieldCheck size={13} className="text-emerald-400" />
-              <span>Bảo mật dữ liệu Firebase & AI Grounding</span>
+            {/* Security note & Back to Landing */}
+            <div className="flex flex-col items-center gap-2 pt-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+                <ShieldCheck size={13} className="text-emerald-400" />
+                <span>Bảo mật dữ liệu Firebase & AI Grounding</span>
+              </div>
+              <a
+                href="/landing"
+                className="text-xs text-sky-400 hover:text-sky-300 hover:underline transition-colors mt-1"
+              >
+                ← Xem trang giới thiệu tính năng
+              </a>
             </div>
           </VStack>
         </Card>

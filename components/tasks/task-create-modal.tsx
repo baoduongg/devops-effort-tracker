@@ -15,6 +15,7 @@ import { createTask, getTasksByMember } from "@/services/tasks.service";
 import { createProject } from "@/services/projects.service";
 import { updateMember } from "@/services/members.service";
 import { formatEffortDuration, EFFORT_DURATION_PRESETS } from "@/lib/effort";
+import { notifyTaskAssigned } from "@/lib/notify";
 import type { Project } from "@/types/project";
 import type { Member, MemberStatus } from "@/types/member";
 import type { TaskStatus } from "@/types/task";
@@ -189,6 +190,12 @@ export function TaskCreateModal({
       } catch (err) {
         console.warn("Could not update member effort status:", err);
       }
+
+      const assignedMemberName = members.find((m) => m.id === memberId)?.name || "N/A";
+      const assignedProjectName = isCreatingNewProject
+        ? newProjectName.trim()
+        : projects.find((p) => p.id === finalProjectId)?.name || "N/A";
+      notifyTaskAssigned(assignedMemberName, title.trim(), assignedProjectName);
 
       onTaskCreated?.(taskId);
       handleResetForm();
