@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, FolderPlus } from "lucide-react";
+import { Plus, FolderPlus, Clock } from "lucide-react";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { HStack } from "@astryxdesign/core/Stack";
 import { Grid } from "@astryxdesign/core/Grid";
@@ -14,6 +14,7 @@ import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { createTask, getTasksByMember } from "@/services/tasks.service";
 import { createProject } from "@/services/projects.service";
 import { updateMember } from "@/services/members.service";
+import { formatEffortDuration, EFFORT_DURATION_PRESETS } from "@/lib/effort";
 import type { Project } from "@/types/project";
 import type { Member, MemberStatus } from "@/types/member";
 import type { TaskStatus } from "@/types/task";
@@ -32,13 +33,6 @@ const STATUS_OPTIONS = [
   { value: "in_progress", label: "Đang thực hiện (In Progress)" },
   { value: "planned", label: "Kế hoạch (Planned)" },
   { value: "done", label: "Hoàn thành (Done)" },
-];
-
-const EFFORT_PRESETS = [
-  { label: "15% (~1h)", value: 15 },
-  { label: "25% (~2h)", value: 25 },
-  { label: "50% (~4h)", value: 50 },
-  { label: "100% (1 ngày)", value: 100 },
 ];
 
 function getTodayString(): string {
@@ -71,7 +65,7 @@ export function TaskCreateModal({
   const [memberId, setMemberId] = useState<string>(
     defaultMemberId || (members[0]?.id ?? "")
   );
-  const [effortPercent, setEffortPercent] = useState<number>(25);
+  const [effortMinutes, setEffortMinutes] = useState<number>(60);
   const [status, setStatus] = useState<TaskStatus>("in_progress");
   const [startDate, setStartDate] = useState<string>(today);
   const [endDate, setEndDate] = useState<string | null>(null);
@@ -111,7 +105,7 @@ export function TaskCreateModal({
     setNewProjectName("");
     setProjectId(defaultProjectId || (projects[0]?.id ?? ""));
     setMemberId(defaultMemberId || (members[0]?.id ?? ""));
-    setEffortPercent(25);
+    setEffortMinutes(60);
     setStatus("in_progress");
     setStartDate(getTodayString());
     setEndDate(null);
@@ -144,6 +138,9 @@ export function TaskCreateModal({
     setSubmitting(true);
     setError(null);
 
+    const resolvedMinutes = Math.max(1, Math.round(effortMinutes || 60));
+    const resolvedPercent = Math.round((resolvedMinutes / 480) * 100);
+
     try {
       if (isCreatingNewProject) {
         finalProjectId = await createProject({
@@ -158,7 +155,8 @@ export function TaskCreateModal({
         projectId: finalProjectId,
         title: title.trim(),
         description: description.trim() || title.trim(),
-        effortPercent: Math.round(effortPercent),
+        effortMinutes: resolvedMinutes,
+        effortPercent: resolvedPercent,
         startDate: startDate || getTodayString(),
         endDate: endDate || null,
         status,
@@ -173,8 +171,8 @@ export function TaskCreateModal({
           (t) => t.id !== taskId && t.status === "in_progress"
         );
         const totalEffort =
-          otherActiveTasks.reduce((sum, t) => sum + t.effortPercent, 0) +
-          (isTaskActive ? Math.round(effortPercent) : 0);
+          otherActiveTasks.reduce((sum, t) => sum + (t.effortPercent || 0), 0) +
+          (isTaskActive ? resolvedPercent : 0);
         const activeCount = otherActiveTasks.length + (isTaskActive ? 1 : 0);
         const newStatus: MemberStatus =
           activeCount === 0 || totalEffort === 0
@@ -233,7 +231,7 @@ export function TaskCreateModal({
           onChange={setTitle}
           placeholder="VD: Nâng cấp cụm EKS lên v1.30, Cấu hình CI/CD GitLab..."
           isRequired
-          autoFocus
+          hasAutoFocus
         />
 
         {/* Project Selection */}
@@ -277,33 +275,42 @@ export function TaskCreateModal({
           onChange={setMemberId}
         />
 
-        {/* Effort & Presets */}
-        <div className="flex flex-col gap-1.5">
-          <NumberInput
-            label="Mức tải công việc (%)"
-            min={0}
-            max={200}
-            step={5}
-            units="%"
-            value={effortPercent}
-            onChange={(v) => setEffortPercent(v ?? 0)}
-          />
-          <div className="flex items-center gap-1.5 pt-1">
-            <span className="text-[11px] text-neutral-400">Chọn nhanh:</span>
-            {EFFORT_PRESETS.map((p) => (
+        {/* Effort & Duration Presets */}
+        <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/[0.08]">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-neutral-300 font-medium flex items-center gap-1.5">
+              <Clock size={13} className="text-sky-400" />
+              Thời lượng thực hiện: <span className="text-sky-300 font-semibold">{formatEffortDuration(effortMinutes)}</span>
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            {EFFORT_DURATION_PRESETS.map((p) => (
               <button
-                key={p.value}
+                key={p.minutes}
                 type="button"
-                onClick={() => setEffortPercent(p.value)}
-                className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors ${
-                  effortPercent === p.value
+                onClick={() => setEffortMinutes(p.minutes)}
+                className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                  effortMinutes === p.minutes
                     ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
-                    : "bg-white/[0.02] text-neutral-400 border-white/[0.06] hover:bg-white/[0.06] hover:text-neutral-200"
+                    : "bg-white/[0.03] text-neutral-300 border-white/[0.08] hover:bg-white/[0.08] hover:text-white"
                 }`}
               >
                 {p.label}
               </button>
             ))}
+          </div>
+
+          <div className="pt-2">
+            <NumberInput
+              label="Số phút tùy chỉnh"
+              min={1}
+              max={4800}
+              step={15}
+              units="phút"
+              value={effortMinutes}
+              onChange={(v) => setEffortMinutes(v ?? 60)}
+            />
           </div>
         </div>
 

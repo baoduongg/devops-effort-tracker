@@ -3,6 +3,7 @@ import { Token } from "@astryxdesign/core/Token";
 import { Text } from "@astryxdesign/core/Text";
 import { VStack } from "@astryxdesign/core/Stack";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
+import { formatTaskEffort } from "@/lib/effort";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Project } from "@/types/project";
 
@@ -39,7 +40,7 @@ export function TimelineItem({ task, project }: TimelineItemProps): React.JSX.El
             {new Date(task.startDate).toLocaleDateString()}
             {task.endDate ? ` - ${new Date(task.endDate).toLocaleDateString()}` : ""}
             {" · "}
-            {task.effortPercent}% effort
+            {formatTaskEffort(task)}
           </Text>
         </VStack>
       }

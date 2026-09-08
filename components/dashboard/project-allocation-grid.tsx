@@ -5,6 +5,7 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Avatar } from "@astryxdesign/core/Avatar";
 import { Card } from "@astryxdesign/core/Card";
+import { formatTaskEffort } from "@/lib/effort";
 import type { Member } from "@/types/member";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -143,7 +144,7 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
                             <span className="truncate text-neutral-200">{task.title}</span>
                           </div>
                           <span className="text-neutral-400 text-[11px] ml-2 flex-shrink-0">
-                            {assignee?.name.split(" ")[0] ?? "Unassigned"} ({task.effortPercent}%)
+                            {assignee?.name.split(" ")[0] ?? "Unassigned"} ({formatTaskEffort(task)})
                           </span>
                         </div>
                       );

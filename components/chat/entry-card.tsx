@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, FolderKanban, Check, Edit3, User } from "lucide-react";
+import { CalendarDays, FolderKanban, Check, Edit3, User, AlertCircle, Clock } from "lucide-react";
 import { Card } from "@astryxdesign/core/Card";
 import { VStack, HStack, StackItem } from "@astryxdesign/core/Stack";
 import { TextInput } from "@astryxdesign/core/TextInput";
@@ -14,6 +14,7 @@ import { Token } from "@astryxdesign/core/Token";
 import { Text } from "@astryxdesign/core/Text";
 import { Icon } from "@astryxdesign/core/Icon";
 import type { FormattedEntry } from "@/types/chat";
+import { formatEffortDuration, EFFORT_DURATION_PRESETS } from "@/lib/effort";
 
 interface EntryCardProps {
   entry: FormattedEntry;
@@ -42,16 +43,23 @@ const STATUS_LABEL_MAP: Record<string, string> = {
 export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): React.JSX.Element {
   const [edited, setEdited] = useState<FormattedEntry>({
     ...entry,
+    effortMinutes: entry.effortMinutes || (entry.effortPercent ? Math.round((entry.effortPercent / 100) * 480) : 60),
     status: entry.status || "in_progress",
     assigneeName: entry.assigneeName || null,
   });
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const durationStr = formatEffortDuration(edited.effortMinutes);
+
   async function handleConfirm(): Promise<void> {
     setSubmitting(true);
     try {
-      await onConfirm(edited);
+      await onConfirm({
+        ...edited,
+        effortMinutes: edited.effortMinutes || 60,
+        effortPercent: Math.round(((edited.effortMinutes || 60) / 480) * 100),
+      });
     } finally {
       setSubmitting(false);
     }
@@ -83,7 +91,7 @@ export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): Reac
               )}
               <Text type="supporting" color="secondary">•</Text>
               <Text type="supporting" color="secondary">
-                {edited.effortPercent}% Effort
+                Thời lượng: <span className="text-sky-300 font-medium">{durationStr}</span>
               </Text>
               {edited.startDate && (
                 <>
@@ -142,17 +150,54 @@ export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): Reac
               placeholder="Tên nhân sự được giao (VD: Sang, Tuấn...)"
             />
 
-            <NumberInput
-              label="Effort (%)"
-              size="sm"
-              width="100%"
-              min={0}
-              max={200}
-              step={5}
-              units="%"
-              value={edited.effortPercent}
-              onChange={(v) => setEdited({ ...edited, effortPercent: v ?? 0 })}
-            />
+            <div className="flex flex-col gap-1.5 w-full">
+              <HStack justify="between" vAlign="center">
+                <span className="text-xs text-neutral-300 font-medium flex items-center gap-1.5">
+                  <Clock size={13} className="text-sky-400" />
+                  Thời lượng thực hiện: <span className="text-sky-300 font-semibold">{durationStr}</span>
+                </span>
+              </HStack>
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                {EFFORT_DURATION_PRESETS.map((p) => (
+                  <button
+                    key={p.minutes}
+                    type="button"
+                    onClick={() =>
+                      setEdited({
+                        ...edited,
+                        effortMinutes: p.minutes,
+                        effortPercent: Math.round((p.minutes / 480) * 100),
+                      })
+                    }
+                    className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
+                      edited.effortMinutes === p.minutes
+                        ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
+                        : "bg-white/[0.03] text-neutral-300 border-white/[0.08] hover:bg-white/[0.08] hover:text-white"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <NumberInput
+                label="Số phút tùy chỉnh (phút)"
+                size="sm"
+                width="100%"
+                min={1}
+                max={4800}
+                step={15}
+                units="phút"
+                value={edited.effortMinutes}
+                onChange={(v) => {
+                  const mins = v ?? 60;
+                  setEdited({
+                    ...edited,
+                    effortMinutes: mins,
+                    effortPercent: Math.round((mins / 480) * 100),
+                  });
+                }}
+              />
+            </div>
 
             <Selector
               label="Trạng thái"
@@ -215,9 +260,10 @@ export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): Reac
                 />
               )}
               <Token
-                label={`${edited.effortPercent}% Effort`}
+                label={durationStr}
                 size="sm"
-                color={edited.effortPercent > 100 ? "red" : edited.effortPercent > 60 ? "yellow" : "teal"}
+                color={edited.effortMinutes > 480 ? "red" : edited.effortMinutes >= 240 ? "yellow" : "teal"}
+                icon={<Clock size={12} />}
               />
               <HStack gap={1} vAlign="center">
                 <Icon icon={CalendarDays} size="xsm" color="secondary" />
@@ -227,6 +273,15 @@ export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): Reac
                 </Text>
               </HStack>
             </HStack>
+
+            {edited.suggestionNote && (
+              <div className="p-2.5 rounded-md bg-amber-500/10 border border-amber-500/30 flex items-start gap-2">
+                <Icon icon={AlertCircle} size="sm" color="warning" />
+                <Text size="sm" type="supporting" className="text-amber-200 leading-snug">
+                  {edited.suggestionNote}
+                </Text>
+              </div>
+            )}
           </VStack>
         )}
 

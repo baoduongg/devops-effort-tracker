@@ -5,6 +5,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { Card } from "@astryxdesign/core/Card";
 import { Grid } from "@astryxdesign/core/Grid";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
+import { formatTaskEffort, formatEffortDuration } from "@/lib/effort";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
 
@@ -28,6 +29,11 @@ export function MemberTaskBreakdown({ tasks, projects }: MemberTaskBreakdownProp
     .filter((t) => t.status === "done")
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
+  const totalInProgressMinutes = inProgressTasks.reduce(
+    (s, t) => s + (t.effortMinutes || Math.round(((t.effortPercent || 0) / 100) * 480)),
+    0
+  );
+
   return (
     <Grid columns={{ minWidth: 320, max: 3 }} gap={4}>
       {/* Col 1: Active In-Progress Tasks */}
@@ -41,7 +47,7 @@ export function MemberTaskBreakdown({ tasks, projects }: MemberTaskBreakdownProp
               </Text>
             </HStack>
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300">
-              {inProgressTasks.reduce((s, t) => s + t.effortPercent, 0)}% tải
+              {formatEffortDuration(totalInProgressMinutes)} tải
             </span>
           </div>
 
@@ -91,7 +97,7 @@ export function MemberTaskBreakdown({ tasks, projects }: MemberTaskBreakdownProp
                       </div>
 
                       <span className="text-xs font-bold px-2 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30 flex-shrink-0">
-                        {task.effortPercent}%
+                        {formatTaskEffort(task)}
                       </span>
                     </div>
 
@@ -170,7 +176,7 @@ export function MemberTaskBreakdown({ tasks, projects }: MemberTaskBreakdownProp
                       </div>
 
                       <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/20 font-semibold flex-shrink-0">
-                        {task.effortPercent}%
+                        {formatTaskEffort(task)}
                       </span>
                     </div>
 

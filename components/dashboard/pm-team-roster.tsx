@@ -14,6 +14,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
+import { formatTaskEffort } from "@/lib/effort";
 import type { Member, MemberStatus } from "@/types/member";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -217,7 +218,7 @@ export function PMTeamRoster({ members, tasks, projects }: PMTeamRosterProps): R
                             ) : null}
 
                             <span className="font-semibold px-2 py-0.5 rounded-md text-xs bg-sky-500/15 text-sky-300 border border-sky-500/30">
-                              {task.effortPercent}%
+                              {formatTaskEffort(task)}
                             </span>
                           </div>
                         </div>
@@ -266,7 +267,7 @@ export function PMTeamRoster({ members, tasks, projects }: PMTeamRosterProps): R
                               Từ {formatTaskDate(task.startDate)}
                             </span>
                             <span className="px-1.5 py-0.2 rounded text-[11px] bg-purple-500/15 text-purple-300 font-medium">
-                              {task.effortPercent}%
+                              {formatTaskEffort(task)}
                             </span>
                           </div>
                         </div>

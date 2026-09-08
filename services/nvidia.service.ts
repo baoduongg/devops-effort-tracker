@@ -9,16 +9,7 @@ const nvidiaClient: AxiosInstance = axios.create({
   timeout: 45000,
 });
 
-const TEXT_MODELS = [
-  "openai/gpt-oss-20b",
-  "minimaxai/minimax-m3",
-  "nvidia/nemotron-3-super-120b-a12b",
-];
-
-const VISION_MODELS = [
-  "meta/llama-3.2-11b-vision-instruct",
-  "meta/llama-3.2-90b-vision-instruct",
-];
+const MODELS = ["meta/llama-3.2-11b-vision-instruct", "meta/llama-3.2-90b-vision-instruct"];
 
 interface ChatCompletionResponse {
   choices: { message: { content: string } }[];
@@ -27,7 +18,7 @@ interface ChatCompletionResponse {
 export async function callNvidiaText(systemPrompt: string, userText: string): Promise<string> {
   let lastError: unknown = null;
 
-  for (const model of TEXT_MODELS) {
+  for (const model of MODELS) {
     try {
       const response = await nvidiaClient.post<ChatCompletionResponse>("/chat/completions", {
         model,
@@ -63,7 +54,7 @@ export async function callNvidiaVision(prompt: string, imageUrl: string): Promis
 
   let lastError: unknown = null;
 
-  for (const model of VISION_MODELS) {
+  for (const model of MODELS) {
     try {
       const response = await nvidiaClient.post<ChatCompletionResponse>("/chat/completions", {
         model,

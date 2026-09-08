@@ -16,13 +16,23 @@ import type { Task, TaskInput } from "@/types/task";
 const tasksCol = collection(db, "tasks");
 
 function toTask(id: string, data: Record<string, unknown>): Task {
+  const effortMinutes = typeof data.effortMinutes === "number" ? data.effortMinutes : undefined;
+  const effortPercent = typeof data.effortPercent === "number" ? data.effortPercent : undefined;
+  const resolvedMinutes =
+    effortMinutes !== undefined
+      ? effortMinutes
+      : effortPercent !== undefined
+        ? Math.round((effortPercent / 100) * 480)
+        : 60;
+
   return {
     id,
     memberId: (data.memberId as string) ?? "",
     projectId: (data.projectId as string) ?? "",
     title: (data.title as string) ?? "",
     description: (data.description as string) ?? "",
-    effortPercent: (data.effortPercent as number) ?? 0,
+    effortPercent: effortPercent ?? Math.round((resolvedMinutes / 480) * 100),
+    effortMinutes: resolvedMinutes,
     status: (data.status as Task["status"]) ?? "in_progress",
     startDate: toIsoString(data.startDate),
     endDate: data.endDate ? toIsoString(data.endDate) : null,

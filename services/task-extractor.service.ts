@@ -1,6 +1,6 @@
 import { callNvidiaText, callNvidiaVision } from "@/services/nvidia.service";
 import { formattedEntrySchema } from "@/lib/schemas";
-import { getMembers } from "@/services/members.service";
+import { getMembers, findBestSuitableMember, findMemberByName } from "@/services/members.service";
 import type { FormattedEntry } from "@/types/chat";
 
 function formatDate(d: Date): string {
@@ -40,20 +40,27 @@ ${teamMembersContext ? `KNOWN DEVOPS TEAM MEMBERS:\n${teamMembersContext}\n` : "
 EXTRACTION & INFERENCE RULES:
 1. "title": Concise, professional summary of the task or incident (e.g. "Hook - Issue AWS", "Setup CI/CD pipeline", "Fix lỗi connect AWS bên service Hook").
 2. "projectName": Project or module name (e.g. "Hook", "Core Platform", "EKS Cluster", "Atlas Migration").
-3. "effortPercent": Integer number between 0 and 200 (MUST be a whole integer, e.g. 15, 20, 25, 50, 100 - NEVER return decimal values like 12.5).
-   - If hours/time are mentioned (e.g. "~1h", "1 tiếng", "1 giờ", "2 giờ", "nửa ngày", "1 ngày"), convert based on an 8-hour working day: 1h ≈ 15%, 2h ≈ 25%, 4h ≈ 50%, 8h/1 ngày ≈ 100%. Always round to whole integer percentages.
-   - If a percentage is explicitly mentioned (e.g. "30%"), use that exact integer.
-   - Default to 30-50% if unspecified.
-4. "assigneeName": The engineer actually doing the work or being assigned / borrowed.
-   - Match with known team members if available (e.g. "Dương Bao 98", "Linh Tran", "Huy Nguyen", "Mai Pham").
-   - If someone is logging their own work without mentioning another person, return null.
+3. "effortMinutes": Integer number representing the estimated duration in MINUTES (MUST be an integer, e.g. 15, 30, 45, 60, 90, 120, 240, 480).
+   - If minutes are mentioned (e.g. "15 phút", "15p", "30 phút", "30p", "45 phút"), extract exact minutes (15, 30, 45).
+   - If hours are mentioned (e.g. "1 tiếng", "1 giờ", "1h", "2 tiếng", "2h", "4 tiếng", "4h"), convert to minutes (1h -> 60, 1.5h -> 90, 2h -> 120, 4h -> 240).
+   - If days are mentioned (e.g. "nửa ngày", "1 ngày", "2 ngày"), convert based on an 8-hour working day: nửa ngày = 240, 1 ngày = 480, 2 ngày = 960.
+   - If a percentage was mentioned (e.g. "50%"), convert based on an 8h day: 15% -> 60, 25% -> 120, 50% -> 240, 100% -> 480.
+   - Default to 60 (1 tiếng) if unspecified.
+4. "assigneeName": The engineer actually assigned to perform the work or being borrowed.
+   - In chat dialogues, Slack/Teams/Zalo screenshots, or cross-team requests:
+     * Identify who will execute the task: look for phrases like "mượn [Tên]", "nhờ [Tên]", "giao cho [Tên]", "assign [Tên]", "chú [Tên]", "anh [Tên]", "em [Tên]", "bạn [Tên]", "bác [Tên]", "[Tên] cứu nạn / support / fix / xử lý", "e gấp thì dùng đi" -> The assignee is "[Tên]".
+     * Always remove Vietnamese honorific prefixes ("chú", "anh", "chị", "em", "bạn", "bác", "ông") to return the clean name (e.g. "chú Sang" -> "Sang", "anh Huy" -> "Huy", "em Linh" -> "Linh").
+     * Ignore people mentioned as absent/off/on leave (e.g. "Tùng off", "nghỉ") — do NOT assign to them.
+     * Ignore requesters/managers in the chat headers unless they are doing the work themselves.
+   - Match with known team members list if available.
+   - If no specific assignee is found or mentioned, pick the most suitable engineer from the KNOWN DEVOPS TEAM MEMBERS list whose role is NOT Leader (only pick DevOps engineers), matching skills and availability. NEVER assign to a Leader unless explicitly instructed.
 5. "startDate" and "endDate": Strictly YYYY-MM-DD format based on the calendar rules above (e.g. today is ${todayStr}).
 6. "status": "planned" | "in_progress" | "done".
    - If user asks to plan a task for future or next week, set "planned".
-   - If user asks to create/execute a task now or fix an active issue, set "in_progress".
+   - If user asks to create/execute a task now or fix an active issue/incident, set "in_progress".
 
 Return ONLY a single valid JSON object with this exact shape, no markdown, no explanation:
-{"title": string, "projectName": string, "effortPercent": integer (0-200), "assigneeName": string | null, "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD" | null, "status": "planned" | "in_progress" | "done"}`;
+{"title": string, "projectName": string, "effortMinutes": integer (minutes, e.g. 15, 30, 60, 120, 240, 480), "assigneeName": string | null, "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD" | null, "status": "planned" | "in_progress" | "done"}`;
 }
 
 export function extractJsonFromAiText(raw: string): unknown {
@@ -61,46 +68,75 @@ export function extractJsonFromAiText(raw: string): unknown {
 
   // 1. Try stripping markdown code block ```json ... ```
   const codeBlockMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-  const target = (codeBlockMatch ? codeBlockMatch[1] : raw).trim();
-
-  try {
-    const parsed = JSON.parse(target);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed[0];
+  if (codeBlockMatch) {
+    try {
+      return JSON.parse(codeBlockMatch[1].trim());
+    } catch {
+      // continue
     }
-    return parsed;
-  } catch {
-    // 2. Try regex object match { ... }
-    const objMatch = target.match(/\{[\s\S]*\}/);
-    if (objMatch) {
-      try {
-        return JSON.parse(objMatch[0]);
-      } catch {
-        // continue
-      }
-    }
-    // 3. Try regex array match [ ... ]
-    const arrMatch = target.match(/\[[\s\S]*\]/);
-    if (arrMatch) {
-      try {
-        const arr = JSON.parse(arrMatch[0]);
-        return Array.isArray(arr) && arr.length > 0 ? arr[0] : arr;
-      } catch {
-        // continue
-      }
-    }
-    return null;
   }
+
+  // 2. Try parsing raw directly
+  try {
+    return JSON.parse(raw.trim());
+  } catch {
+    // continue
+  }
+
+  // 3. Find individual JSON objects { ... } (non-greedy or balanced)
+  const regex = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g;
+  const matches = raw.match(regex) || raw.match(/\{[\s\S]*?\}/g);
+  if (matches) {
+    for (const match of matches) {
+      try {
+        const obj = JSON.parse(match.trim());
+        if (obj && typeof obj === "object" && (obj.title || obj.projectName)) {
+          return obj;
+        }
+      } catch {
+        // continue
+      }
+    }
+    // Fallback try any parsed match
+    for (const match of matches) {
+      try {
+        const obj = JSON.parse(match.trim());
+        if (obj && typeof obj === "object") return obj;
+      } catch {
+        // continue
+      }
+    }
+  }
+
+  // 4. Try greedy match as last resort
+  const greedyMatch = raw.match(/\{[\s\S]*\}/);
+  if (greedyMatch) {
+    try {
+      return JSON.parse(greedyMatch[0].trim());
+    } catch {
+      // continue
+    }
+  }
+
+  return null;
+}
+
+export interface ExtractTaskResult {
+  entry: FormattedEntry;
+  notificationMessage?: string | null;
 }
 
 export async function extractTaskEntryFromInput(
   inputText: string,
   imageUrl?: string | null
-): Promise<FormattedEntry | null> {
+): Promise<ExtractTaskResult | null> {
   let teamMembersContext = "";
+  let allMembers: import("@/types/member").Member[] = [];
   try {
-    const members = await getMembers();
-    teamMembersContext = members.map((m) => `- ${m.name} (${m.skills.join(", ") || "DevOps"})`).join("\n");
+    allMembers = await getMembers();
+    teamMembersContext = allMembers
+      .map((m) => `- ${m.name} (Role: ${m.role || "devops"}, Skills: ${m.skills.join(", ") || "DevOps"}, Status: ${m.status}, Effort: ${m.effortPercent}%)`)
+      .join("\n");
   } catch (err) {
     console.warn("Could not load team members for AI grounding:", err);
   }
@@ -108,8 +144,20 @@ export async function extractTaskEntryFromInput(
   const systemPrompt = getTaskExtractionSystemPrompt(teamMembersContext);
 
   try {
+    const visionPrompt = `${systemPrompt}
+
+SCREENSHOT ANALYSIS INSTRUCTIONS:
+Carefully inspect all text, messages, timestamps, and usernames in this screenshot from top to bottom.
+- Extract the core task/incident (e.g. "Fix lỗi connect AWS bên service Hook").
+- Extract the project name (e.g. "Hook").
+- Extract the assigned engineer for assigneeName (e.g. "Sang", after stripping Vietnamese prefixes like "chú", "anh", etc. Ignore people who are off/absent like "Tùng off", and ignore managers/requesters in the headers).
+- Extract effort / duration in minutes (e.g. 15p -> 15, 30m -> 30, 1h -> 60, 2h -> 120, 1 ngày -> 480).
+- Set status to "in_progress" for immediate bug/incident fixes or "planned" for future tasks.
+
+${inputText ? `Additional user note: ${inputText}\n` : ""}Return ONLY the JSON object.`;
+
     const raw = imageUrl
-      ? await callNvidiaVision(`${systemPrompt}\n\nIMPORTANT: Return ONLY the JSON object. Do not explain.\nUser note: ${inputText}`, imageUrl)
+      ? await callNvidiaVision(visionPrompt, imageUrl)
       : await callNvidiaText(systemPrompt, inputText);
 
     const jsonCandidate = extractJsonFromAiText(raw);
@@ -130,8 +178,53 @@ export async function extractTaskEntryFromInput(
     }
 
     const data = parsed.data;
-    data.effortPercent = Math.round(data.effortPercent);
-    return data;
+    data.effortMinutes = Math.max(1, Math.round(data.effortMinutes || 60));
+    data.effortPercent = Math.round((data.effortMinutes / 480) * 100);
+
+    if (data.assigneeName) {
+      data.assigneeName = data.assigneeName
+        .replace(/^(chú|anh|chị|em|bạn|bác|ông|thầy)\s+/i, "")
+        .replace(/\s+(cứu nạn|support|fix|xử lý|làm)$/i, "")
+        .trim();
+    }
+
+    let notificationMessage: string | null = null;
+    const rawAssignee = data.assigneeName;
+
+    // CHECK IF ASSIGNEE IS IN MEMBER LIST:
+    if (allMembers.length > 0) {
+      if (rawAssignee) {
+        const matched = findMemberByName(allMembers, rawAssignee);
+        if (matched) {
+          // Confirmed member in the team
+          data.assigneeName = matched.name;
+        } else {
+          // Specified person was not found in team members (e.g. "Sang" is not in team members)
+          const suitable = findBestSuitableMember(allMembers, data.title, data.projectName);
+          if (suitable) {
+            data.assigneeName = suitable.name;
+            const skillsStr = suitable.skills && suitable.skills.length > 0 ? suitable.skills.join(", ") : "DevOps";
+            const note = `Không tìm thấy nhân sự "${rawAssignee}" trong danh sách thành viên. Hệ thống tự động đề xuất ${suitable.name} (Kỹ năng: ${skillsStr}, Trạng thái: ${suitable.status}).`;
+            data.suggestionNote = note;
+            notificationMessage = `⚠️ **Lưu ý nhân sự:** Không tìm thấy thành viên **"${rawAssignee}"** trong danh sách đội ngũ hiện tại.\n\n💡 Dựa trên chuyên môn và lịch làm việc, hệ thống đã tự động đề xuất **${suitable.name}** (kỹ năng: ${skillsStr}, trạng thái: ${suitable.status}) phụ trách công việc này.\n\n👉 Bạn có thể bấm **Chỉnh sửa** trên thẻ bên dưới nếu muốn đổi người khác trước khi **Xác nhận**.`;
+          } else {
+            data.assigneeName = null;
+            notificationMessage = `⚠️ **Lưu ý:** Không tìm thấy nhân sự **"${rawAssignee}"** trong danh sách thành viên. Vui lòng bấm **Chỉnh sửa** để chọn người thực hiện.`;
+          }
+        }
+      } else {
+        // No assignee specified in input -> auto-suggest best available member
+        const suitable = findBestSuitableMember(allMembers, data.title, data.projectName);
+        if (suitable) {
+          data.assigneeName = suitable.name;
+          const skillsStr = suitable.skills && suitable.skills.length > 0 ? suitable.skills.join(", ") : "DevOps";
+          data.suggestionNote = `Tự động phân công cho ${suitable.name} dựa trên độ phù hợp kỹ năng.`;
+          notificationMessage = `💡 Tự động phân công cho **${suitable.name}** (kỹ năng: ${skillsStr}, trạng thái: ${suitable.status}) phù hợp nhất với task này.`;
+        }
+      }
+    }
+
+    return { entry: data, notificationMessage };
   } catch (err) {
     console.error("extractTaskEntryFromInput error:", err);
     return null;

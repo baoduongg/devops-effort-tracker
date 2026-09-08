@@ -21,6 +21,7 @@ import { Card } from "@astryxdesign/core/Card";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
+import { formatTaskEffort } from "@/lib/effort";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Project } from "@/types/project";
 
@@ -310,7 +311,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
 
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <span className="text-[11px] px-1.5 py-0.5 rounded bg-black/40 font-bold">
-                              {task.effortPercent}%
+                              {formatTaskEffort(task)}
                             </span>
                           </div>
                         </div>
@@ -386,7 +387,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                         </div>
 
                         <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-sky-500/15 text-sky-300 border border-sky-500/25 flex-shrink-0">
-                          {task.effortPercent}% tải
+                          {formatTaskEffort(task)}
                         </span>
                       </div>
 
@@ -491,7 +492,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
 
                 <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-500/15 text-sky-300 border border-sky-500/25 flex items-center gap-1">
                   <Layers size={13} />
-                  {selectedTask.effortPercent}% Effort
+                  {formatTaskEffort(selectedTask)}
                 </span>
 
                 {selectedTaskOverdue && (

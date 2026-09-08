@@ -4,6 +4,7 @@ import { Avatar } from "@astryxdesign/core/Avatar";
 import { Text } from "@astryxdesign/core/Text";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { StatusBadge } from "@/components/dashboard/status-badge";
+import { formatTaskEffort } from "@/lib/effort";
 import type { Member, MemberStatus } from "@/types/member";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -80,7 +81,7 @@ export function MemberCard({
                     </span>
                     <span className="truncate text-neutral-200">{t.title}</span>
                   </div>
-                  <span className="text-sky-400 font-bold flex-shrink-0">{t.effortPercent}%</span>
+                  <span className="text-sky-400 font-bold flex-shrink-0">{formatTaskEffort(t)}</span>
                 </div>
               );
             })}

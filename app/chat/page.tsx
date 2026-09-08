@@ -1,3 +1,5 @@
+"use client";
+
 import { VStack, StackItem } from "@astryxdesign/core/Stack";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";

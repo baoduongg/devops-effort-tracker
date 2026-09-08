@@ -1,69 +1,49 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import { VStack, HStack, StackItem } from "@astryxdesign/core/Stack";
 import { ChatComposer, ChatComposerInput, ChatComposerDrawer, ChatSendButton } from "@astryxdesign/core/Chat";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Text } from "@astryxdesign/core/Text";
 import { Icon } from "@astryxdesign/core/Icon";
-import { TriangleAlert, Sparkles, MessageSquare, X } from "lucide-react";
+import {
+  TriangleAlert,
+  Sparkles,
+  MessageSquare,
+  X,
+  Zap,
+  UserCheck,
+  BarChart2,
+  Clock,
+  UserPlus,
+  CalendarPlus,
+  ListTodo,
+  Users,
+  FolderGit2,
+  Flame,
+  Activity,
+  BarChart3,
+  NotebookPen,
+  ArrowRightLeft,
+  Trash2,
+} from "lucide-react";
 import { ModeToggle } from "@/components/chat/mode-toggle";
 import { ChatThread } from "@/components/chat/chat-thread";
+import { SlashCommandPopup } from "@/components/chat/slash-command-popup";
+import { CommandTemplateModal } from "@/components/chat/command-template-modal";
 import { useChatStore } from "@/store/chat.store";
 import { useAuthStore } from "@/store/auth.store";
 import { useMembersStore } from "@/store/members.store";
 import { createTask, getTasksByMember } from "@/services/tasks.service";
-import { getProjectByName, createProject } from "@/services/projects.service";
-import { getMembers, updateMember } from "@/services/members.service";
+import { getProjectByName, createProject, getProjects } from "@/services/projects.service";
+import { getMembers, updateMember, findBestSuitableMember, findMemberByName } from "@/services/members.service";
 import { confirmChatLog, getChatLogsByMember, chatLogsToMessages } from "@/services/chatLogs.service";
+import { getAvailableSlashCommands, resolveSlashCommand, SLASH_COMMANDS, type SlashCommand } from "@/lib/slash-commands";
+import { isTaskCreationIntent } from "@/lib/intent";
 import type { FormattedEntry } from "@/types/chat";
 import type { Member, MemberStatus } from "@/types/member";
-
-function findMemberByName(allMembers: Member[], targetName?: string | null): Member | null {
-  if (!targetName || !targetName.trim()) return null;
-
-  const normalize = (s: string) =>
-    s
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/đ/g, "d")
-      .replace(/Đ/g, "D")
-      .replace(/[^a-z0-9\s]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-
-  const queryNorm = normalize(targetName);
-  if (!queryNorm) return null;
-
-  // 1. Exact normalized match
-  const exact = allMembers.find((m) => normalize(m.name) === queryNorm);
-  if (exact) return exact;
-
-  // 2. Substring match (either member name contains target or target contains member name)
-  const sub = allMembers.find((m) => {
-    const mNorm = normalize(m.name);
-    return mNorm.includes(queryNorm) || queryNorm.includes(mNorm);
-  });
-  if (sub) return sub;
-
-  // 3. Word overlap match (e.g. "Dương Bao 98" vs "Bao Duong")
-  const queryWords = queryNorm.split(" ").filter((w) => w.length > 1);
-  let bestMatch: Member | null = null;
-  let maxMatchedWords = 0;
-
-  for (const m of allMembers) {
-    const mWords = normalize(m.name).split(" ").filter((w) => w.length > 1);
-    const matchedCount = queryWords.filter((w) => mWords.some((mw) => mw.includes(w) || w.includes(mw))).length;
-    if (matchedCount > maxMatchedWords && matchedCount >= 1) {
-      maxMatchedWords = matchedCount;
-      bestMatch = m;
-    }
-  }
-
-  return bestMatch;
-}
+import type { Project } from "@/types/project";
 
 async function compressImageToBase64(file: File, maxDimension = 1000): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -89,7 +69,7 @@ async function compressImageToBase64(file: File, maxDimension = 1000): Promise<s
           resolve(readerEvent.target?.result as string);
           return;
         }
-        ctx.drawImage(img, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
         // Optimized JPEG compression for fast transfer & AI processing
         const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
         resolve(dataUrl);
@@ -101,6 +81,30 @@ async function compressImageToBase64(file: File, maxDimension = 1000): Promise<s
     reader.readAsDataURL(file);
   });
 }
+
+function generateMessageId(suffix = ""): string {
+  const ts = new Date().getTime();
+  const rand = Math.random().toString(36).substring(2, 7);
+  return suffix ? `${ts}-${suffix}-${rand}` : `${ts}-${rand}`;
+}
+
+// Visual styling for the quick-action pills, keyed by the SlashCommand id it represents.
+const PILL_STYLES: Record<string, { label: string; icon: React.ElementType; iconColor: string; hoverBorder: string }> = {
+  "coord-log": { label: "Ghi log", icon: NotebookPen, iconColor: "text-emerald-400", hoverBorder: "hover:border-emerald-500/50 hover:bg-emerald-500/10" },
+  "coord-add": { label: "Lên kế hoạch", icon: CalendarPlus, iconColor: "text-amber-400", hoverBorder: "hover:border-amber-500/50 hover:bg-amber-500/10" },
+  "basic-tasks": { label: "Công việc", icon: ListTodo, iconColor: "text-purple-400", hoverBorder: "hover:border-purple-500/50 hover:bg-purple-500/10" },
+  "basic-members": { label: "Thành viên", icon: Users, iconColor: "text-emerald-400", hoverBorder: "hover:border-emerald-500/50 hover:bg-emerald-500/10" },
+  "basic-projects": { label: "Dự án", icon: FolderGit2, iconColor: "text-sky-400", hoverBorder: "hover:border-sky-500/50 hover:bg-sky-500/10" },
+  "resource-free": { label: "Ai đang rảnh?", icon: UserCheck, iconColor: "text-emerald-400", hoverBorder: "hover:border-emerald-500/50 hover:bg-emerald-500/10" },
+  "resource-overload": { label: "Quá tải", icon: Flame, iconColor: "text-amber-400", hoverBorder: "hover:border-amber-500/50 hover:bg-amber-500/10" },
+  "resource-effort": { label: "% Effort", icon: Activity, iconColor: "text-purple-400", hoverBorder: "hover:border-purple-500/50 hover:bg-purple-500/10" },
+  "resource-load": { label: "Tải công việc", icon: BarChart3, iconColor: "text-sky-400", hoverBorder: "hover:border-sky-500/50 hover:bg-sky-500/10" },
+  "coord-assign": { label: "Giao task", icon: UserPlus, iconColor: "text-purple-400", hoverBorder: "hover:border-purple-500/50 hover:bg-purple-500/10" },
+  "coord-reassign": { label: "Chuyển task", icon: ArrowRightLeft, iconColor: "text-amber-400", hoverBorder: "hover:border-amber-500/50 hover:bg-amber-500/10" },
+  "coord-remove": { label: "Xóa task", icon: Trash2, iconColor: "text-rose-400", hoverBorder: "hover:border-rose-500/50 hover:bg-rose-500/10" },
+  "report-allocation": { label: "Báo cáo Effort", icon: BarChart2, iconColor: "text-sky-400", hoverBorder: "hover:border-sky-500/50 hover:bg-sky-500/10" },
+  "report-overdue": { label: "Task trễ hạn", icon: Clock, iconColor: "text-rose-400", hoverBorder: "hover:border-rose-500/50 hover:bg-rose-500/10" },
+};
 
 const DEVOPS_PROMPT_SUGGESTIONS = [
   "Nâng cấp cụm EKS lên v1.30 cho dự án Core Platform, tải 50%, xong vào thứ 6",
@@ -129,6 +133,36 @@ export function ChatBox(): React.JSX.Element {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Members & Projects data for template modal & grounding
+  const [allMembers, setAllMembers] = useState<Member[]>([]);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
+
+  // Template command modal state
+  const [activeTemplateCommand, setActiveTemplateCommand] = useState<SlashCommand | null>(null);
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+
+  // Slash command state
+  const [isCommandPopupOpen, setIsCommandPopupOpen] = useState(false);
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
+
+  // Load members and projects for command templates
+  useEffect(() => {
+    getMembers().then(setAllMembers).catch(console.warn);
+    getProjects().then(setAllProjects).catch(console.warn);
+  }, []);
+
+  // Compute search keyword when user types with "/"
+  const commandSearchQuery = useMemo(() => {
+    if (text.startsWith("/")) {
+      return text.trim();
+    }
+    return "";
+  }, [text]);
+
+  const filteredCommands = useMemo(() => {
+    return getAvailableSlashCommands(mode, commandSearchQuery);
+  }, [mode, commandSearchQuery]);
 
   // Sync mode with user role when available
   useEffect(() => {
@@ -185,19 +219,87 @@ export function ChatBox(): React.JSX.Element {
     }
   }
 
+  function handleTextChange(newText: string) {
+    setText(newText);
+    if (newText.startsWith("/")) {
+      setIsCommandPopupOpen(true);
+      setSelectedCommandIndex(0);
+    } else if (!newText) {
+      setIsCommandPopupOpen(false);
+    }
+  }
+
+  function handleSelectCommand(cmd: SlashCommand) {
+    setIsCommandPopupOpen(false);
+    setSelectedCommandIndex(0);
+
+    if (cmd.id === "general-clear") {
+      setText("");
+      return;
+    }
+
+    // If command requires filling a template, open interactive modal
+    if (cmd.template) {
+      setText("");
+      setActiveTemplateCommand(cmd);
+      setIsTemplateModalOpen(true);
+      return;
+    }
+
+    if (cmd.isInstantPrompt && cmd.prompt) {
+      // Direct execution for quick queries
+      handleSubmit(cmd.prompt);
+      return;
+    }
+
+    if (cmd.prompt) {
+      setText(cmd.prompt);
+      return;
+    }
+
+    setText(`${cmd.command} `);
+  }
+
   async function handleSubmit(overrideText?: string): Promise<void> {
-    const textToSend = (overrideText !== undefined ? overrideText : text).trim();
-    if (!textToSend && !imageUrl) return;
+    const rawTextToSend = (overrideText !== undefined ? overrideText : text).trim();
+    if (!rawTextToSend && !imageUrl) return;
+
+    // Check if user typed a bare template command (e.g. "/assign", "/plan", "/log", "/status")
+    if (rawTextToSend.startsWith("/") && overrideText === undefined) {
+      const parts = rawTextToSend.split(/\s+/);
+      const cmdName = parts[0].toLowerCase();
+      const hasArgs = parts.length > 1 && parts.slice(1).join("").trim().length > 0;
+      if (!hasArgs) {
+        const matched = SLASH_COMMANDS.find(
+          (c) =>
+            (c.mode === "all" || c.mode === mode) &&
+            (c.command.toLowerCase() === cmdName || c.aliases?.includes(cmdName))
+        );
+        if (matched && matched.template) {
+          setIsCommandPopupOpen(false);
+          setText("");
+          setActiveTemplateCommand(matched);
+          setIsTemplateModalOpen(true);
+          return;
+        }
+      }
+    }
+
+    // Resolve any slash commands to full natural language prompts
+    const resolvedText = resolveSlashCommand(rawTextToSend, mode);
+
+    setIsCommandPopupOpen(false);
+    setSelectedCommandIndex(0);
 
     const userMessage = {
-      id: `${Date.now()}`,
+      id: generateMessageId("user"),
       role: "user" as const,
-      text: textToSend || null,
+      text: resolvedText || null,
       imageUrl: imageUrl || null,
     };
 
     appendMessage(mode, userMessage);
-    const currentText = textToSend;
+    const currentText = resolvedText;
     const currentImageUrl = imageUrl;
     setText("");
     setImageUrl(null);
@@ -205,16 +307,23 @@ export function ChatBox(): React.JSX.Element {
     setError(null);
 
     try {
-      if (mode === "devops") {
+      if (mode === "devops" && (currentImageUrl || isTaskCreationIntent(currentText))) {
         const res = await axios.post("/api/ai/format-entry", {
-          memberId: user?.memberId || user?.id || "leader",
+          memberId: user?.memberId || user?.uid || "leader",
           text: currentText,
           userInput: currentText,
           imageUrl: currentImageUrl,
         });
-        const { entry, chatLogId } = res.data;
+        const { entry, chatLogId, message } = res.data;
+        if (message) {
+          appendMessage("devops", {
+            id: generateMessageId("ai-notice"),
+            role: "ai-answer",
+            text: message,
+          });
+        }
         appendMessage("devops", {
-          id: `${Date.now()}-ai`,
+          id: generateMessageId("ai-entry"),
           role: "ai-entry",
           entry,
           chatLogId,
@@ -224,26 +333,28 @@ export function ChatBox(): React.JSX.Element {
         const res = await axios.post("/api/ai/answer-query", {
           question: currentText,
           query: currentText,
+          memberId: user?.memberId || user?.uid || (mode === "devops" ? "" : "leader"),
+          mode,
         });
         const { answer, entry, chatLogId } = res.data;
         if (entry) {
           if (answer) {
-            appendMessage("leader", {
-              id: `${Date.now()}-ai-text`,
+            appendMessage(mode, {
+              id: generateMessageId("ai-text"),
               role: "ai-answer",
               text: answer,
             });
           }
-          appendMessage("leader", {
-            id: `${Date.now()}-ai-entry`,
+          appendMessage(mode, {
+            id: generateMessageId("ai-entry"),
             role: "ai-entry",
             entry,
-            chatLogId: chatLogId || `${Date.now()}`,
+            chatLogId: chatLogId || generateMessageId("log"),
             confirmed: false,
           });
         } else {
-          appendMessage("leader", {
-            id: `${Date.now()}-ai`,
+          appendMessage(mode, {
+            id: generateMessageId("ai-answer"),
             role: "ai-answer",
             text: answer,
           });
@@ -271,10 +382,17 @@ export function ChatBox(): React.JSX.Element {
     }
 
     if (!targetMemberId) {
+      const fallbackMember = findBestSuitableMember(allMembers, entry.title, entry.projectName);
+      if (fallbackMember) {
+        targetMemberId = fallbackMember.id;
+      }
+    }
+
+    if (!targetMemberId) {
       if (entry.assigneeName) {
         setError(`Không tìm thấy nhân sự "${entry.assigneeName}" trong danh sách thành viên. Vui lòng kiểm tra lại tên.`);
       } else {
-        setError("Vui lòng chỉ định nhân sự (Assignee) để gán task.");
+        setError("Không có nhân sự nào khả dụng trong hệ thống để gán task.");
       }
       return;
     }
@@ -295,12 +413,16 @@ export function ChatBox(): React.JSX.Element {
       };
     }
 
+    const effortMinutes = entry.effortMinutes || (entry.effortPercent ? Math.round((entry.effortPercent / 100) * 480) : 60);
+    const effortPercent = entry.effortPercent ?? Math.round((effortMinutes / 480) * 100);
+
     const taskId = await createTask({
       memberId: targetMemberId,
       projectId: project.id,
       title: entry.title,
       description: entry.title,
-      effortPercent: entry.effortPercent,
+      effortMinutes,
+      effortPercent,
       startDate: entry.startDate || new Date().toISOString().split("T")[0],
       endDate: entry.endDate,
       status: entry.status || "in_progress",
@@ -311,14 +433,14 @@ export function ChatBox(): React.JSX.Element {
     try {
       const existingTasks = await getTasksByMember(targetMemberId);
       const otherActiveTasks = existingTasks.filter((t) => t.id !== taskId && t.status === "in_progress");
-      const totalEffort = otherActiveTasks.reduce((sum, t) => sum + t.effortPercent, 0) + (isTaskActive ? entry.effortPercent : 0);
+      const totalEffort = otherActiveTasks.reduce((sum, t) => sum + (t.effortPercent || 0), 0) + (isTaskActive ? effortPercent : 0);
       const activeCount = otherActiveTasks.length + (isTaskActive ? 1 : 0);
       const newStatus: MemberStatus =
         activeCount === 0 || totalEffort === 0
           ? "available"
           : totalEffort > 100
-          ? "overloaded"
-          : "busy";
+            ? "overloaded"
+            : "busy";
 
       await updateMember(targetMemberId, {
         currentTaskId: isTaskActive ? taskId : (otherActiveTasks[0]?.id || null),
@@ -341,6 +463,23 @@ export function ChatBox(): React.JSX.Element {
 
   const suggestions = mode === "devops" ? DEVOPS_PROMPT_SUGGESTIONS : LEADER_PROMPT_SUGGESTIONS;
 
+  // Key quick commands for the current mode, styled by id and sourced from SLASH_COMMANDS
+  const quickPillCommands = useMemo(() => {
+    const pillIds =
+      mode === "devops"
+        ? ["devops-log", "devops-plan", "devops-my-tasks", "devops-my-effort"]
+        : ["leader-free", "leader-overloaded", "leader-report", "leader-overdue", "leader-assign"];
+
+    return pillIds
+      .map((id) => {
+        const cmd = SLASH_COMMANDS.find((c) => c.id === id);
+        const style = PILL_STYLES[id];
+        if (!cmd || !style) return null;
+        return { cmd, ...style };
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null);
+  }, [mode]);
+
   return (
     <VStack gap={2} height="100%" className="h-full min-h-0 flex-1 overflow-hidden">
       <StackItem size="static">
@@ -350,7 +489,7 @@ export function ChatBox(): React.JSX.Element {
       {/* Quick Prompt Suggestions when chat is empty or fresh */}
       {messages.length === 0 && !loadingHistory && (
         <StackItem size="static">
-          <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex flex-col gap-2">
+          <div className="p-3.5 rounded-xl bg-neutral-800/40 border border-neutral-700/60 flex flex-col gap-2">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-300">
               <Sparkles size={13} className="text-sky-400" />
               <span>Gợi ý câu lệnh nhanh ({mode === "devops" ? "Ghi nhận công việc" : "Hỏi đáp Quản lý"}):</span>
@@ -361,10 +500,15 @@ export function ChatBox(): React.JSX.Element {
                   key={i}
                   type="button"
                   onClick={() => setText(sug)}
-                  className="text-left p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.04] text-xs text-neutral-300 transition-colors flex items-center gap-2"
+                  className="text-left p-2.5 rounded-lg bg-neutral-800/70 hover:bg-neutral-700/80 border border-neutral-700/50 hover:border-sky-500/40 text-xs text-neutral-200 hover:text-white transition-all flex items-center justify-between gap-2 cursor-pointer shadow-sm group hover:-translate-y-0.5"
                 >
-                  <MessageSquare size={12} className="text-neutral-500 flex-shrink-0" />
-                  <span className="truncate">{sug}</span>
+                  <div className="flex items-center gap-2 truncate">
+                    <MessageSquare size={13} className="text-sky-400 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                    <span className="truncate">{sug}</span>
+                  </div>
+                  <span className="text-[10px] text-neutral-400 font-medium bg-white/[0.06] px-1.5 py-0.5 rounded border border-white/[0.04] flex-shrink-0">
+                    Sử dụng
+                  </span>
                 </button>
               ))}
             </div>
@@ -385,73 +529,178 @@ export function ChatBox(): React.JSX.Element {
         </StackItem>
       )}
 
+      {/* Quick slash command toolbar */}
       <StackItem size="static">
-        <ChatComposer
-          value={text}
-          onChange={setText}
-          onSubmit={(submittedText) => handleSubmit(submittedText)}
-          isDisabled={thinking}
-          sendButton={
-            <ChatSendButton
-              isDisabled={(!text.trim() && !imageUrl) || thinking}
-              onSend={() => handleSubmit()}
-            />
-          }
-          drawer={
-            (uploadingImage || imageUrl) && (
-              <ChatComposerDrawer>
-                {uploadingImage ? (
-                  <HStack gap={2} vAlign="center">
-                    <Spinner size="sm" label="Đang xử lý ảnh" />
-                    <Text type="supporting">Đang tối ưu hình ảnh…</Text>
-                  </HStack>
-                ) : (
-                  <div className="relative inline-block my-1">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={imageUrl!}
-                      alt="Ảnh chụp màn hình"
-                      style={{ maxHeight: 120, maxWidth: 260, borderRadius: 8, objectFit: "contain" }}
-                      className="border border-white/10 shadow-md"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setImageUrl(null)}
-                      title="Gỡ ảnh đính kèm"
-                      className="absolute -top-2 -right-2 p-1 rounded-full bg-neutral-900 border border-neutral-700 text-neutral-300 hover:text-white hover:bg-rose-600 transition-colors shadow-lg cursor-pointer"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                )}
-              </ChatComposerDrawer>
-            )
-          }
-          input={
-            <ChatComposerInput
-              label="Nhập tin nhắn"
-              placeholder={
-                mode === "devops"
-                  ? "Mô tả công việc bạn vừa làm hoặc dán ảnh chụp màn hình (Cmd/Ctrl+V)..."
-                  : "Đặt câu hỏi về phân bổ nhân sự, task quá hạn, tải công việc..."
+        <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-0.5 scrollbar-none">
+          {/* Main Slash Command Trigger Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setIsCommandPopupOpen((prev) => !prev);
+              if (!text.startsWith("/")) {
+                setText("/");
               }
-              value={text}
-              onChange={setText}
-              onSubmit={(submittedText) => handleSubmit(submittedText)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey && imageUrl && !text.trim()) {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
-              onFiles={(files) => {
-                const image = files.find((f) => f.type.startsWith("image/"));
-                if (image) handleUploadImage(image);
-              }}
-            />
-          }
-        />
+            }}
+            className={`group flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer shadow-sm ${isCommandPopupOpen
+                ? "bg-sky-500/20 text-sky-200 border border-sky-400/40 ring-1 ring-sky-500/30"
+                : "bg-neutral-800/90 hover:bg-neutral-700 text-neutral-200 hover:text-white border border-neutral-700 hover:border-sky-500/50"
+              }`}
+            title="Mở danh sách toàn bộ câu lệnh nhanh (Gõ '/')"
+          >
+            <Zap size={13} className="text-sky-400 transition-transform group-hover:scale-110" />
+            <span>Xem lệnh</span>
+          </button>
+
+          <div className="h-4 w-[1px] bg-neutral-700/60 flex-shrink-0 mx-0.5" />
+
+          {/* Quick Action Pill Buttons */}
+          <div className="flex items-center gap-1.5 flex-nowrap">
+            {quickPillCommands.map((pill) => {
+              const IconComp = pill.icon;
+              return (
+                <button
+                  key={pill.cmd.command}
+                  type="button"
+                  onClick={() => handleSelectCommand(pill.cmd)}
+                  title={pill.cmd.prompt ? `Nhấn để hỏi nhanh: ${pill.cmd.prompt}` : `Nhấn để soạn lệnh ${pill.cmd.command}`}
+                  className={`group flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-neutral-800/80 hover:bg-neutral-700/90 text-neutral-200 hover:text-white border border-neutral-700/80 transition-all duration-150 cursor-pointer shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 ${pill.hoverBorder}`}
+                >
+                  <IconComp size={12} className={`${pill.iconColor} transition-transform group-hover:scale-110`} />
+                  <span>{pill.label}</span>
+                  <span className="text-[10px] text-neutral-400 group-hover:text-neutral-300 font-mono bg-white/[0.06] px-1 py-0.2 rounded border border-white/[0.04]">
+                    {pill.cmd.command}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </StackItem>
+
+      {/* Input area with Slash Command Popup */}
+      <StackItem size="static">
+        <div className="relative">
+          <SlashCommandPopup
+            isOpen={isCommandPopupOpen}
+            commands={filteredCommands}
+            selectedIndex={selectedCommandIndex}
+            mode={mode}
+            searchQuery={commandSearchQuery}
+            onSelect={handleSelectCommand}
+            onClose={() => setIsCommandPopupOpen(false)}
+          />
+
+          <ChatComposer
+            value={text}
+            onChange={handleTextChange}
+            onSubmit={(submittedText) => handleSubmit(submittedText)}
+            isDisabled={thinking}
+            sendButton={
+              <ChatSendButton
+                isDisabled={(!text.trim() && !imageUrl) || thinking}
+                onSend={() => handleSubmit()}
+              />
+            }
+            drawer={
+              (uploadingImage || imageUrl) && (
+                <ChatComposerDrawer>
+                  {uploadingImage ? (
+                    <HStack gap={2} vAlign="center">
+                      <Spinner size="sm" label="Đang xử lý ảnh" />
+                      <Text type="supporting">Đang tối ưu hình ảnh…</Text>
+                    </HStack>
+                  ) : (
+                    <div className="relative inline-block my-1">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imageUrl!}
+                        alt="Ảnh chụp màn hình"
+                        style={{ maxHeight: 120, maxWidth: 260, borderRadius: 8, objectFit: "contain" }}
+                        className="border border-white/10 shadow-md"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setImageUrl(null)}
+                        title="Gỡ ảnh đính kèm"
+                        className="absolute -top-2 -right-2 p-1 rounded-full bg-neutral-900 border border-neutral-700 text-neutral-300 hover:text-white hover:bg-rose-600 transition-colors shadow-lg cursor-pointer"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )}
+                </ChatComposerDrawer>
+              )
+            }
+            input={
+              <ChatComposerInput
+                label="Nhập tin nhắn"
+                placeholder={
+                  mode === "devops"
+                    ? "Gõ '/' để mở danh sách lệnh hoặc mô tả công việc (Cmd/Ctrl+V ảnh)..."
+                    : "Gõ '/' để mở danh sách lệnh hoặc hỏi về nhân sự, phân bổ effort..."
+                }
+                value={text}
+                onChange={handleTextChange}
+                onSubmit={(submittedText) => handleSubmit(submittedText)}
+                onKeyDown={(e) => {
+                  if (isCommandPopupOpen && filteredCommands.length > 0) {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setSelectedCommandIndex((prev) => (prev + 1) % filteredCommands.length);
+                      return;
+                    }
+                    if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setSelectedCommandIndex((prev) => (prev - 1 + filteredCommands.length) % filteredCommands.length);
+                      return;
+                    }
+                    if (e.key === "Enter" || e.key === "Tab") {
+                      if (!e.shiftKey) {
+                        e.preventDefault();
+                        handleSelectCommand(filteredCommands[selectedCommandIndex]);
+                        return;
+                      }
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setIsCommandPopupOpen(false);
+                      return;
+                    }
+                  }
+
+                  if (e.key === "/" && (!text || text === "/")) {
+                    setIsCommandPopupOpen(true);
+                  }
+
+                  if (e.key === "Enter" && !e.shiftKey && imageUrl && !text.trim()) {
+                    e.preventDefault();
+                    handleSubmit();
+                  }
+                }}
+                onFiles={(files) => {
+                  const image = files.find((f) => f.type.startsWith("image/"));
+                  if (image) handleUploadImage(image);
+                }}
+              />
+            }
+          />
+        </div>
+      </StackItem>
+
+      {/* Interactive Command Template Modal */}
+      <CommandTemplateModal
+        isOpen={isTemplateModalOpen}
+        onOpenChange={setIsTemplateModalOpen}
+        command={activeTemplateCommand}
+        members={allMembers}
+        projects={allProjects}
+        onInsertToChat={(preparedPrompt) => {
+          setText(preparedPrompt);
+        }}
+        onSubmitPrompt={(preparedPrompt) => {
+          handleSubmit(preparedPrompt);
+        }}
+      />
     </VStack>
   );
 }

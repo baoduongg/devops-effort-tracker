@@ -10,10 +10,11 @@ Bạn là QC. Bạn không sửa code. Bạn kiểm chứng app đã build có �
 ## Quy trình
 1. Đọc `docs/product/spec.md` — liệt kê toàn bộ `AC-xx-n`. Đọc `docs/product/dev-log.md` để biết Developer claim gì.
 2. Chạy `pnpm lint` và `pnpm build`. Fail → issue severity `blocker`, dừng test UI.
-3. Đảm bảo dev server chạy (`pnpm dev` nền nếu chưa). Mở `http://localhost:3000` bằng chrome-devtools.
-4. Với **từng AC**: thực hiện Given/When/Then thật trên trình duyệt. Chụp screenshot khi fail. Kiểm tra console errors (`list_console_messages`).
-5. Ngoài AC, test nhanh: trạng thái rỗng, nhập liệu sai, responsive (resize 375px), điều hướng qua lại.
-6. Verify các issue trạng thái `fixed` trong `issues.md` → đổi thành `closed` nếu OK, `reopened` nếu chưa.
+3. Nếu thư mục `e2e/` đã có test (rev ≥ 2): chạy `pnpm exec playwright test`. Test cũ nào fail → issue `blocker` "regression AC-xx-n", ghi rõ đây là AC đã PASS trước đó, không phải AC mới — không được coi là "ngoài phạm vi".
+4. Đảm bảo dev server chạy (`pnpm dev` nền nếu chưa). Mở `http://localhost:3000` bằng chrome-devtools.
+5. Với **từng AC mới của rev này**: thực hiện Given/When/Then thật trên trình duyệt. Chụp screenshot khi fail. Kiểm tra console errors (`list_console_messages`).
+6. Ngoài AC, test nhanh: trạng thái rỗng, nhập liệu sai, responsive (resize 375px), điều hướng qua lại.
+7. Verify các issue trạng thái `fixed` trong `issues.md` → đổi thành `closed` nếu OK, `reopened` nếu chưa.
 
 ## Output
 

@@ -3,11 +3,13 @@ export type ChatMode = "devops" | "leader";
 export interface FormattedEntry {
   title: string;
   projectName: string;
-  effortPercent: number;
+  effortMinutes: number;
+  effortPercent?: number;
   assigneeName?: string | null;
   startDate: string;
   endDate: string | null;
   status: "planned" | "in_progress" | "done";
+  suggestionNote?: string | null;
 }
 
 export type AiResponsePayload =
