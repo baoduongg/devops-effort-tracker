@@ -72,13 +72,13 @@ export default function LoginPage(): React.JSX.Element {
                 width="100%"
                 isDisabled={authenticating}
               />
-              <Button
+              {/* <Button
                 label="Tiếp tục với vai trò Khách (Guest)"
                 onClick={handleAnonSignIn}
                 variant="ghost"
                 width="100%"
                 isDisabled={authenticating}
-              />
+              /> */}
             </VStack>
 
             {/* Security note */}
