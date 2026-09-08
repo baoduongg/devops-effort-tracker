@@ -48,7 +48,7 @@ When touching AI features, know the failure boundary: NVIDIA API calls can fail 
 
 ## UI
 
-shadcn/ui-style components in `components/ui/` (Radix primitives + `class-variance-authority` + `tailwind-merge`, configured via `components.json`). Domain components are grouped by feature (`chat/`, `dashboard/`, `members/`, `notifications/`, `timeline/`, `layout/`). Forms use `react-hook-form` + `@hookform/resolvers` + zod where AI-facing validation applies.
+Astryx design system components (`@astryxdesign/core`). Domain components are grouped by feature (`chat/`, `dashboard/`, `members/`, `notifications/`, `timeline/`, `layout/`).
 
 <!-- ASTRYX:START -->
 Astryx v0.5.3 · 163 components

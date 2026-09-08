@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Plus, FolderPlus, Clock } from "lucide-react";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { HStack } from "@astryxdesign/core/Stack";
@@ -59,15 +59,11 @@ export function TaskCreateModal({
   const currentUser = useAuthStore((state) => state.user);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [projectId, setProjectId] = useState<string>(
-    defaultProjectId || (projects[0]?.id ?? "")
-  );
+  const [projectId, setProjectId] = useState<string>("");
   const [isCreatingNewProject, setIsCreatingNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
 
-  const [memberId, setMemberId] = useState<string>(
-    defaultMemberId || (members[0]?.id ?? "")
-  );
+  const [memberId, setMemberId] = useState<string>("");
   const [effortMinutes, setEffortMinutes] = useState<number>(60);
   const [status, setStatus] = useState<TaskStatus>("in_progress");
   const [startDate, setStartDate] = useState<string>(today);
@@ -76,20 +72,17 @@ export function TaskCreateModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync defaults when modal opens, or once project/member lists finish loading
-  useEffect(() => {
-    if (!isOpen) return;
-    setProjectId((prev) =>
-      prev && projects.some((p) => p.id === prev)
-        ? prev
-        : defaultProjectId || (projects[0]?.id ?? "")
-    );
-    setMemberId((prev) =>
-      prev && members.some((m) => m.id === prev)
-        ? prev
-        : defaultMemberId || (members[0]?.id ?? "")
-    );
-  }, [isOpen, projects, members, defaultProjectId, defaultMemberId]);
+  // Compute effective projectId & memberId based on user selection or defaults
+  const currentProjectId = useMemo(() => {
+    if (isCreatingNewProject) return "";
+    if (projectId && projects.some((p) => p.id === projectId)) return projectId;
+    return defaultProjectId || (projects[0]?.id ?? "");
+  }, [isCreatingNewProject, projectId, projects, defaultProjectId]);
+
+  const currentMemberId = useMemo(() => {
+    if (memberId && members.some((m) => m.id === memberId)) return memberId;
+    return defaultMemberId || (members[0]?.id ?? "");
+  }, [memberId, members, defaultMemberId]);
 
   const memberOptions = useMemo(() => {
     return members.map((m) => ({
@@ -120,8 +113,8 @@ export function TaskCreateModal({
     setDescription("");
     setIsCreatingNewProject(false);
     setNewProjectName("");
-    setProjectId(defaultProjectId || (projects[0]?.id ?? ""));
-    setMemberId(defaultMemberId || (members[0]?.id ?? ""));
+    setProjectId("");
+    setMemberId("");
     setEffortMinutes(60);
     setStatus("in_progress");
     setStartDate(getTodayString());
@@ -136,7 +129,7 @@ export function TaskCreateModal({
       return;
     }
 
-    let finalProjectId = projectId;
+    let finalProjectId = isCreatingNewProject ? "" : currentProjectId;
     if (isCreatingNewProject) {
       if (!newProjectName.trim()) {
         setError("Vui lòng nhập tên dự án mới.");
@@ -147,7 +140,7 @@ export function TaskCreateModal({
       return;
     }
 
-    if (!memberId) {
+    if (!currentMemberId) {
       setError("Vui lòng chọn nhân sự thực hiện task.");
       return;
     }
@@ -167,7 +160,7 @@ export function TaskCreateModal({
       }
 
       const taskId = await createTask({
-        memberId,
+        memberId: currentMemberId,
         projectId: finalProjectId,
         title: title.trim(),
         description: description.trim() || title.trim(),
@@ -181,7 +174,7 @@ export function TaskCreateModal({
       // Update assigned member status & effort in Firestore
       const isTaskActive = status === "in_progress";
       try {
-        const existingTasks = await getTasksByMember(memberId);
+        const existingTasks = await getTasksByMember(currentMemberId);
         const otherActiveTasks = existingTasks.filter(
           (t) => t.id !== taskId && t.status === "in_progress"
         );
@@ -196,7 +189,7 @@ export function TaskCreateModal({
             ? "overloaded"
             : "busy";
 
-        await updateMember(memberId, {
+        await updateMember(currentMemberId, {
           currentTaskId: isTaskActive ? taskId : (otherActiveTasks[0]?.id || null),
           effortMinutes: totalEffortMinutes,
           status: newStatus,
@@ -205,8 +198,8 @@ export function TaskCreateModal({
         console.warn("Could not update member effort status:", err);
       }
 
-      const assignedMember = members.find((m) => m.id === memberId);
-      const memberName = assignedMember?.name ?? memberId;
+      const assignedMember = members.find((m) => m.id === currentMemberId);
+      const memberName = assignedMember?.name ?? currentMemberId;
       const projectName = isCreatingNewProject
         ? newProjectName.trim()
         : projects.find((p) => p.id === finalProjectId)?.name ?? finalProjectId;
@@ -293,7 +286,7 @@ export function TaskCreateModal({
           <Selector
             label="Dự án"
             options={projectOptions}
-            value={projectId || (projects[0]?.id ?? "")}
+            value={currentProjectId}
             onChange={handleProjectChange}
           />
         )}
@@ -302,7 +295,7 @@ export function TaskCreateModal({
         <Selector
           label="Người thực hiện (Assignee)"
           options={memberOptions}
-          value={memberId || (members[0]?.id ?? "")}
+          value={currentMemberId}
           onChange={setMemberId}
         />
 
