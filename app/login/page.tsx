@@ -72,22 +72,22 @@ export default function LoginPage(): React.JSX.Element {
                 width="100%"
                 isDisabled={authenticating}
               />
-              <Button
+              {/* <Button
                 label="Tiếp tục với vai trò Khách (Guest / Demo)"
                 onClick={handleAnonSignIn}
                 variant="ghost"
                 width="100%"
                 isDisabled={authenticating}
-              />
+              /> */}
             </VStack>
 
-            <a
+            {/* <a
               href="/landing"
               className="text-xs text-sky-400/90 hover:text-sky-300 transition-colors flex items-center justify-center gap-1 pt-1 font-medium"
             >
               <span>Khám phá tính năng nổi bật (Landing Page)</span>
               <span>→</span>
-            </a>
+            </a> */}
 
             {/* Security note */}
             <div className="flex items-center gap-1.5 text-[11px] text-neutral-500 pt-1">
