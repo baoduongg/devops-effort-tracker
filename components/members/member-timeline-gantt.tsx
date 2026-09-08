@@ -20,8 +20,10 @@ import { Text } from "@astryxdesign/core/Text";
 import { Card } from "@astryxdesign/core/Card";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
 import { formatTaskEffort } from "@/lib/effort";
+import { parseDateLocal, calculateDefaultEndDate } from "@/lib/date";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Project } from "@/types/project";
 
@@ -32,13 +34,14 @@ interface MemberTimelineGanttProps {
 
 function formatDateVN(dateStr: string | null): string {
   if (!dateStr) return "";
-  const d = new Date(dateStr);
+  const d = parseDateLocal(dateStr);
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-function calculateDays(startDate: string, endDate: string | null): number {
-  const start = new Date(startDate).getTime();
-  const end = endDate ? new Date(endDate).getTime() : start;
+function calculateDays(startDate: string, endDate: string | null, effortMinutes?: number): number {
+  const start = parseDateLocal(startDate).getTime();
+  const resolvedEndStr = endDate || calculateDefaultEndDate(startDate, effortMinutes ?? 60);
+  const end = parseDateLocal(resolvedEndStr).getTime();
   const diffDays = Math.max(1, Math.round((end - start) / (24 * 60 * 60 * 1000)) + 1);
   return diffDays;
 }
@@ -90,8 +93,9 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
   // Filter tasks active or falling within this window
   const validTasks = tasks.filter((t) => {
     if (t.status !== "in_progress" && t.status !== "planned" && t.status !== "done") return false;
-    const taskStart = new Date(t.startDate).getTime();
-    const taskEnd = t.endDate ? new Date(t.endDate).getTime() : taskStart + 7 * 24 * 60 * 60 * 1000;
+    const taskStart = parseDateLocal(t.startDate).getTime();
+    const resolvedEndStr = t.endDate || calculateDefaultEndDate(t.startDate, t.effortMinutes);
+    const taskEnd = parseDateLocal(resolvedEndStr).getTime() + 24 * 60 * 60 * 1000;
     return taskEnd >= windowStartMs && taskStart <= windowEndMs;
   });
 
@@ -131,42 +135,15 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
           </HStack>
 
           <HStack gap={2} vAlign="center" wrap="wrap">
-            {/* View Mode Toggle */}
-            <div className="flex items-center bg-white/[0.04] p-0.5 rounded-lg border border-white/[0.06] text-xs">
-              <button
-                type="button"
-                onClick={() => setViewMode("both")}
-                className={`px-2.5 py-1 rounded-md transition-all font-medium ${
-                  viewMode === "both"
-                    ? "bg-sky-500/20 text-sky-300 shadow-sm"
-                    : "text-neutral-400 hover:text-neutral-200"
-                }`}
-              >
-                Tất cả
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("gantt")}
-                className={`px-2.5 py-1 rounded-md transition-all font-medium ${
-                  viewMode === "gantt"
-                    ? "bg-sky-500/20 text-sky-300 shadow-sm"
-                    : "text-neutral-400 hover:text-neutral-200"
-                }`}
-              >
-                Gantt
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                className={`px-2.5 py-1 rounded-md transition-all font-medium ${
-                  viewMode === "list"
-                    ? "bg-sky-500/20 text-sky-300 shadow-sm"
-                    : "text-neutral-400 hover:text-neutral-200"
-                }`}
-              >
-                Danh sách
-              </button>
-            </div>
+            <SegmentedControl
+              label="Chế độ xem"
+              value={viewMode}
+              onChange={(v) => setViewMode(v as "both" | "gantt" | "list")}
+            >
+              <SegmentedControlItem value="both" label="Tất cả" icon={<Layers size={14} strokeWidth={2} />} />
+              <SegmentedControlItem value="gantt" label="Gantt" icon={<CalendarRange size={14} strokeWidth={2} />} />
+              <SegmentedControlItem value="list" label="Danh sách" icon={<ListFilter size={14} strokeWidth={2} />} />
+            </SegmentedControl>
 
             <HStack gap={1} vAlign="center">
               <Button
@@ -251,12 +228,10 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                     const project = projectMap.get(task.projectId);
                     const isDone = task.status === "done";
                     const isPlanned = task.status === "planned";
-                    const taskStart = new Date(task.startDate).getTime();
-                    const taskEnd = isDone
-                      ? taskStart + 24 * 60 * 60 * 1000
-                      : task.endDate
-                      ? new Date(task.endDate).getTime()
-                      : taskStart + 7 * 24 * 60 * 60 * 1000;
+                    const taskStart = parseDateLocal(task.startDate).getTime();
+                    const resolvedEndStr =
+                      task.endDate || calculateDefaultEndDate(task.startDate, task.effortMinutes);
+                    const taskEnd = parseDateLocal(resolvedEndStr).getTime() + 24 * 60 * 60 * 1000;
 
                     // Calculate positioning percentage in the 14-day window
                     const leftPct = Math.max(
@@ -352,7 +327,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                   const statusInfo = STATUS_LABELS[task.status] || STATUS_LABELS.in_progress;
                   const overdue = isOverdue(task);
                   const isHovered = hoveredTaskId === task.id;
-                  const daysCount = calculateDays(task.startDate, task.endDate);
+                  const daysCount = calculateDays(task.startDate, task.endDate, task.effortMinutes);
 
                   return (
                     <div
@@ -409,7 +384,9 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                           <CalendarIcon size={12} className="text-neutral-500" />
                           <span>
                             {formatDateVN(task.startDate)}
-                            {task.endDate ? ` → ${formatDateVN(task.endDate)}` : " (Đang làm)"}
+                            {task.endDate && task.endDate !== task.startDate
+                              ? ` → ${formatDateVN(task.endDate)}`
+                              : ""}
                           </span>
                           <span className="text-neutral-500">({daysCount} ngày)</span>
                         </div>

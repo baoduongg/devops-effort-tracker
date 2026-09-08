@@ -12,7 +12,7 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { toIsoString } from "@/lib/date";
+import { toIsoString, calculateDefaultEndDate, parseDateLocal, formatDateLocal } from "@/lib/date";
 import type { Task, TaskInput } from "@/types/task";
 
 const tasksCol = collection(db, "tasks");
@@ -67,10 +67,14 @@ export function subscribeAllTasks(callback: (tasks: Task[]) => void): () => void
 }
 
 export async function createTask(input: TaskInput): Promise<string> {
+  const resolvedStartDate = input.startDate || formatDateLocal(new Date());
+  const resolvedEndDate =
+    input.endDate || calculateDefaultEndDate(resolvedStartDate, input.effortMinutes);
+
   const ref = await addDoc(tasksCol, {
     ...input,
-    startDate: Timestamp.fromDate(new Date(input.startDate)),
-    endDate: input.endDate ? Timestamp.fromDate(new Date(input.endDate)) : null,
+    startDate: Timestamp.fromDate(parseDateLocal(resolvedStartDate)),
+    endDate: Timestamp.fromDate(parseDateLocal(resolvedEndDate)),
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   });

@@ -11,7 +11,7 @@ export default function Home(): React.JSX.Element {
 
   useEffect(() => {
     if (loading) return;
-    router.replace(user ? "/dashboard" : "/login");
+    router.replace(user ? "/dashboard" : "/landing");
   }, [user, loading, router]);
 
   return <div className="p-6 text-muted-foreground">Loading…</div>;

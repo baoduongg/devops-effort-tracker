@@ -21,6 +21,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
 import { formatTaskEffort } from "@/lib/effort";
+import { parseDateLocal, calculateDefaultEndDate } from "@/lib/date";
 import type { Member } from "@/types/member";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -33,13 +34,14 @@ interface TeamTimelineChartProps {
 
 function formatDateVN(dateStr: string | null): string {
   if (!dateStr) return "";
-  const d = new Date(dateStr);
+  const d = parseDateLocal(dateStr);
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-function calculateDays(startDate: string, endDate: string | null): number {
-  const start = new Date(startDate).getTime();
-  const end = endDate ? new Date(endDate).getTime() : start;
+function calculateDays(startDate: string, endDate: string | null, effortMinutes?: number): number {
+  const start = parseDateLocal(startDate).getTime();
+  const resolvedEndStr = endDate || calculateDefaultEndDate(startDate, effortMinutes ?? 60);
+  const end = parseDateLocal(resolvedEndStr).getTime();
   return Math.max(1, Math.round((end - start) / (24 * 60 * 60 * 1000)) + 1);
 }
 
@@ -173,8 +175,9 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
                 const memberTasks = tasks.filter((t) => {
                   if (t.memberId !== member.id) return false;
                   if (t.status !== "in_progress" && t.status !== "planned" && t.status !== "done") return false;
-                  const taskStart = new Date(t.startDate).getTime();
-                  const taskEnd = t.endDate ? new Date(t.endDate).getTime() : taskStart + 7 * 24 * 60 * 60 * 1000;
+                  const taskStart = parseDateLocal(t.startDate).getTime();
+                  const resolvedEndStr = t.endDate || calculateDefaultEndDate(t.startDate, t.effortMinutes);
+                  const taskEnd = parseDateLocal(resolvedEndStr).getTime() + 24 * 60 * 60 * 1000;
                   return taskEnd >= windowStartMs && taskStart <= windowEndMs;
                 });
 
@@ -221,12 +224,10 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
                           const project = projectMap.get(task.projectId);
                           const isDone = task.status === "done";
                           const isPlanned = task.status === "planned";
-                          const taskStart = new Date(task.startDate).getTime();
-                          const taskEnd = isDone
-                            ? taskStart + 24 * 60 * 60 * 1000
-                            : task.endDate
-                            ? new Date(task.endDate).getTime()
-                            : taskStart + 7 * 24 * 60 * 60 * 1000;
+                          const taskStart = parseDateLocal(task.startDate).getTime();
+                          const resolvedEndStr =
+                            task.endDate || calculateDefaultEndDate(task.startDate, task.effortMinutes);
+                          const taskEnd = parseDateLocal(resolvedEndStr).getTime() + 24 * 60 * 60 * 1000;
 
                           // Calculate positioning percentage in the 14-day window
                           const leftPct = Math.max(

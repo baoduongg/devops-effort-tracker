@@ -28,7 +28,7 @@ export async function notifyTaskCreated(notice: TaskCreatedNotice): Promise<void
     ``,
     `Hạn chót: ${deadline}`,
     ``,
-    `Chi tiết: ${notice.link}`,
+    `Chi tiết: [Link](${notice.link})`,
     ``,
     `Cần thêm thông tin hay hỗ trợ gì cứ hú ${notice.creatorName} liền nha. Chúc bạn một ngày làm việc mượt mà, không bug! 🚀`,
   ].join("\n");

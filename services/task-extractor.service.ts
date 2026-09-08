@@ -2,13 +2,11 @@ import { callNvidiaText, callNvidiaVision } from "@/services/nvidia.service";
 import { formattedEntrySchema } from "@/lib/schemas";
 import { getMembers, findBestSuitableMember, findMemberByName } from "@/services/members.service";
 import { formatEffortDuration } from "@/lib/effort";
+import { formatDateLocal, calculateDefaultEndDate } from "@/lib/date";
 import type { FormattedEntry } from "@/types/chat";
 
 function formatDate(d: Date): string {
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return formatDateLocal(d);
 }
 
 export function getTaskExtractionSystemPrompt(teamMembersContext = ""): string {
@@ -56,6 +54,13 @@ EXTRACTION & INFERENCE RULES:
    - Match with known team members list if available.
    - If no specific assignee is found or mentioned, pick the most suitable engineer from the KNOWN DEVOPS TEAM MEMBERS list whose role is NOT Leader (only pick DevOps engineers), matching skills and availability. NEVER assign to a Leader unless explicitly instructed.
 5. "startDate" and "endDate": Strictly YYYY-MM-DD format based on the calendar rules above (e.g. today is ${todayStr}).
+   - "startDate": Starting date of the task. Default to ${todayStr} if unspecified.
+   - "endDate": Task deadline / completion date.
+     * If user explicitly specifies a deadline (e.g. "deadline 15/09", "hạn hoàn thành 2026-09-12", "hạn cuối thứ 6"), extract that exact date in YYYY-MM-DD.
+     * If user does NOT mention a deadline: calculate deadline = "startDate" + effort duration:
+       - For effort <= 1 working day (effortMinutes <= 480, e.g. 15p, 1h, 2h, 4h, 1 ngày): "endDate" MUST be the SAME as "startDate" (e.g. "${todayStr}").
+       - For effort > 1 day (effortMinutes > 480, e.g. 2 ngày -> +1 day, 3 ngày -> +2 days): "endDate" is the completion date taking working days into account.
+     * NEVER default "endDate" to 1-2 weeks in the future when effort is only 1 hour or 1 day.
 6. "status": "planned" | "in_progress" | "done".
    - If user asks to plan a task for future or next week, set "planned".
    - If user asks to create/execute a task now or fix an active issue/incident, set "in_progress".
@@ -180,6 +185,14 @@ ${inputText ? `Additional user note: ${inputText}\n` : ""}Return ONLY the JSON o
 
     const data = parsed.data;
     data.effortMinutes = Math.max(1, Math.round(data.effortMinutes || 60));
+
+    if (!data.startDate) {
+      data.startDate = formatDateLocal(new Date());
+    }
+
+    if (!data.endDate) {
+      data.endDate = calculateDefaultEndDate(data.startDate, data.effortMinutes);
+    }
 
     if (data.assigneeName) {
       data.assigneeName = data.assigneeName
