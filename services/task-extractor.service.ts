@@ -1,6 +1,7 @@
 import { callNvidiaText, callNvidiaVision } from "@/services/nvidia.service";
 import { formattedEntrySchema } from "@/lib/schemas";
 import { getMembers, findBestSuitableMember, findMemberByName } from "@/services/members.service";
+import { formatEffortDuration } from "@/lib/effort";
 import type { FormattedEntry } from "@/types/chat";
 
 function formatDate(d: Date): string {
@@ -135,7 +136,7 @@ export async function extractTaskEntryFromInput(
   try {
     allMembers = await getMembers();
     teamMembersContext = allMembers
-      .map((m) => `- ${m.name} (Role: ${m.role || "devops"}, Skills: ${m.skills.join(", ") || "DevOps"}, Status: ${m.status}, Effort: ${m.effortPercent}%)`)
+      .map((m) => `- ${m.name} (Role: ${m.role || "devops"}, Skills: ${m.skills.join(", ") || "DevOps"}, Status: ${m.status}, Effort: ${formatEffortDuration(m.effortMinutes)})`)
       .join("\n");
   } catch (err) {
     console.warn("Could not load team members for AI grounding:", err);
@@ -179,7 +180,6 @@ ${inputText ? `Additional user note: ${inputText}\n` : ""}Return ONLY the JSON o
 
     const data = parsed.data;
     data.effortMinutes = Math.max(1, Math.round(data.effortMinutes || 60));
-    data.effortPercent = Math.round((data.effortMinutes / 480) * 100);
 
     if (data.assigneeName) {
       data.assigneeName = data.assigneeName

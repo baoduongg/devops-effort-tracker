@@ -29,6 +29,7 @@ import { Icon } from "@astryxdesign/core/Icon";
 import { useAuthStore } from "@/store/auth.store";
 import { subscribeUsers } from "@/services/auth.service";
 import { subscribeAllTasks } from "@/services/tasks.service";
+import { formatEffortDuration, minutesToWorkdayPercent } from "@/lib/effort";
 import type { Member, MemberStatus } from "@/types/member";
 import type { AppUser, UserRole } from "@/types/user";
 import type { Task } from "@/types/task";
@@ -59,30 +60,31 @@ const sortOptions = [
   { value: "effort_asc", label: "Tải việc (Thấp → Cao)" },
 ];
 
-function getStatusBadge(status: MemberStatus, effort: number, activeCount: number, plannedCount: number) {
-  if (activeCount === 0 || effort === 0) {
+// Thresholds scaled from an 8h/480m workday
+function getStatusBadge(status: MemberStatus, effortMinutes: number, activeCount: number, plannedCount: number) {
+  if (activeCount === 0 || effortMinutes === 0) {
     return {
       label: plannedCount > 0 ? `Trống việc (${plannedCount} task KH)` : "Trống việc",
       colorClass: "bg-emerald-500/10 text-emerald-400 border-emerald-500/25",
       dot: "bg-emerald-400",
     };
   }
-  if (effort > 100 || status === "overloaded") {
+  if (effortMinutes > 480 || status === "overloaded") {
     return {
-      label: `Quá tải (${effort}%)`,
+      label: `Quá tải (${formatEffortDuration(effortMinutes)})`,
       colorClass: "bg-rose-500/10 text-rose-400 border-rose-500/25",
       dot: "bg-rose-400 animate-pulse",
     };
   }
-  if (effort >= 80) {
+  if (effortMinutes >= 384) {
     return {
-      label: `Bận tải cao (${effort}%)`,
+      label: `Bận tải cao (${formatEffortDuration(effortMinutes)})`,
       colorClass: "bg-amber-500/10 text-amber-400 border-amber-500/25",
       dot: "bg-amber-400",
     };
   }
   return {
-    label: `Đang làm việc (${effort}%)`,
+    label: `Đang làm việc (${formatEffortDuration(effortMinutes)})`,
     colorClass: "bg-sky-500/10 text-sky-400 border-sky-500/25",
     dot: "bg-sky-400",
   };
@@ -160,8 +162,8 @@ export function MemberList({
 
       const effort =
         mTasks.length > 0
-          ? inProgress.reduce((sum, t) => sum + t.effortPercent, 0)
-          : member.effortPercent || 0;
+          ? inProgress.reduce((sum, t) => sum + t.effortMinutes, 0)
+          : member.effortMinutes || 0;
 
       const activeCount = inProgress.length;
       const plannedCount = planned.length;
@@ -169,7 +171,7 @@ export function MemberList({
       let status: MemberStatus = "available";
       if (activeCount === 0 || effort === 0) {
         status = "available";
-      } else if (effort > 100) {
+      } else if (effort > 480) {
         status = "overloaded";
       } else {
         status = "busy";
@@ -201,20 +203,20 @@ export function MemberList({
     }).length;
     const busy = otherMembers.filter((m) => {
       const { effort, activeCount } = getMemberWorkload(m);
-      return activeCount > 0 && effort > 0 && effort <= 100;
+      return activeCount > 0 && effort > 0 && effort <= 480;
     }).length;
     const overloaded = otherMembers.filter((m) => {
       const { effort } = getMemberWorkload(m);
-      return effort > 100;
+      return effort > 480;
     }).length;
-    const avgEffort =
+    const avgEffortMinutes =
       total > 0
         ? Math.round(
             otherMembers.reduce((sum, m) => sum + getMemberWorkload(m).effort, 0) / total
           )
         : 0;
 
-    return { total, available, busy, overloaded, avgEffort };
+    return { total, available, busy, overloaded, avgEffortMinutes };
   }, [otherMembers, getMemberWorkload]);
 
   // Filter and sort the remaining members
@@ -234,8 +236,8 @@ export function MemberList({
       const matchesStatus =
         statusFilter === "all" ||
         (statusFilter === "available" && (activeCount === 0 || effort === 0)) ||
-        (statusFilter === "overloaded" && effort > 100) ||
-        (statusFilter === "busy" && activeCount > 0 && effort > 0 && effort <= 100);
+        (statusFilter === "overloaded" && effort > 480) ||
+        (statusFilter === "busy" && activeCount > 0 && effort > 0 && effort <= 480);
 
       const matchesRole = roleFilter === "all" || memberRole === roleFilter;
 
@@ -319,14 +321,14 @@ export function MemberList({
             <div className="mt-2 flex items-baseline gap-1.5">
               <span
                 className={`text-2xl font-bold ${
-                  kpis.avgEffort > 100
+                  kpis.avgEffortMinutes > 480
                     ? "text-rose-400"
-                    : kpis.avgEffort > 60
+                    : kpis.avgEffortMinutes > 288
                     ? "text-sky-400"
                     : "text-emerald-400"
                 }`}
               >
-                {kpis.avgEffort}%
+                {formatEffortDuration(kpis.avgEffortMinutes)}
               </span>
               <span className="text-xs text-neutral-500">toàn đội</span>
             </div>
@@ -507,31 +509,31 @@ export function MemberList({
                     <span className="text-neutral-400 font-medium">Tải công việc:</span>
                     <span
                       className={`font-bold ${
-                        effort > 100
+                        effort > 480
                           ? "text-rose-400"
-                          : effort > 60
+                          : effort > 288
                           ? "text-sky-300"
                           : effort > 0
                           ? "text-sky-400"
                           : "text-emerald-400"
                       }`}
                     >
-                      {effort}% {activeCount > 0 ? `(${activeCount} task đang làm)` : "(Rảnh)"}
+                      {formatEffortDuration(effort)} {activeCount > 0 ? `(${activeCount} task đang làm)` : "(Rảnh)"}
                     </span>
                   </div>
 
                   <div className="w-full h-2 rounded-full bg-white/[0.06] overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
-                        effort > 100
+                        effort > 480
                           ? "bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]"
-                          : effort > 60
+                          : effort > 288
                           ? "bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.5)]"
                           : effort > 0
                           ? "bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.5)]"
                           : "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                       }`}
-                      style={{ width: `${Math.min(effort, 100)}%` }}
+                      style={{ width: `${Math.min(minutesToWorkdayPercent(effort), 100)}%` }}
                     />
                   </div>
                 </div>

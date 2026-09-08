@@ -43,7 +43,7 @@ const STATUS_LABEL_MAP: Record<string, string> = {
 export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): React.JSX.Element {
   const [edited, setEdited] = useState<FormattedEntry>({
     ...entry,
-    effortMinutes: entry.effortMinutes || (entry.effortPercent ? Math.round((entry.effortPercent / 100) * 480) : 60),
+    effortMinutes: entry.effortMinutes || 60,
     status: entry.status || "in_progress",
     assigneeName: entry.assigneeName || null,
   });
@@ -58,7 +58,6 @@ export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): Reac
       await onConfirm({
         ...edited,
         effortMinutes: edited.effortMinutes || 60,
-        effortPercent: Math.round(((edited.effortMinutes || 60) / 480) * 100),
       });
     } finally {
       setSubmitting(false);
@@ -166,7 +165,6 @@ export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): Reac
                       setEdited({
                         ...edited,
                         effortMinutes: p.minutes,
-                        effortPercent: Math.round((p.minutes / 480) * 100),
                       })
                     }
                     className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
@@ -193,7 +191,6 @@ export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): Reac
                   setEdited({
                     ...edited,
                     effortMinutes: mins,
-                    effortPercent: Math.round((mins / 480) * 100),
                   });
                 }}
               />

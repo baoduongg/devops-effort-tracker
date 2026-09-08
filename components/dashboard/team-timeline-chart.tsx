@@ -20,6 +20,7 @@ import { Card } from "@astryxdesign/core/Card";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
+import { formatTaskEffort } from "@/lib/effort";
 import type { Member } from "@/types/member";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -255,7 +256,7 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
                                 width: `${widthPct}%`,
                                 backgroundColor: color,
                               }}
-                              title={`Nhấn để xem chi tiết: ${task.title} (${project?.name ?? "Project"}) | Effort: ${task.effortPercent}%`}
+                              title={`Nhấn để xem chi tiết: ${task.title} (${project?.name ?? "Project"}) | Effort: ${formatTaskEffort(task)}`}
                             >
                               <div className="flex items-center gap-1 min-w-0 pr-1 truncate">
                                 {isDone && <CheckCircle2 size={11} className="flex-shrink-0" />}
@@ -268,7 +269,7 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
                                 </span>
                               </div>
                               <span className="text-[10px] ml-1 px-1 rounded bg-black/40 font-bold flex-shrink-0">
-                                {task.effortPercent}%
+                                {formatTaskEffort(task)}
                               </span>
                             </div>
                           );
@@ -347,7 +348,7 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
 
                 <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-500/15 text-sky-300 border border-sky-500/25 flex items-center gap-1">
                   <Layers size={13} />
-                  {selectedTask.task.effortPercent}% Effort
+                  {formatTaskEffort(selectedTask.task)} Effort
                 </span>
 
                 {selectedTaskOverdue && (

@@ -25,7 +25,12 @@ function toMember(id: string, data: Record<string, unknown>): Member {
     skills: (data.skills as string[]) ?? [],
     status: (data.status as Member["status"]) ?? "available",
     currentTaskId: (data.currentTaskId as string | null) ?? null,
-    effortPercent: (data.effortPercent as number) ?? 0,
+    effortMinutes:
+      typeof data.effortMinutes === "number"
+        ? data.effortMinutes
+        : typeof data.effortPercent === "number"
+          ? Math.round((data.effortPercent / 100) * 480)
+          : 0,
     role: (data.role as Member["role"]) ?? undefined,
     updatedAt: toIsoString(data.updatedAt),
   };
@@ -177,9 +182,9 @@ export function findBestSuitableMember(
       score -= 20;
     }
 
-    // 3. Lower effort bonus
-    const effort = typeof m.effortPercent === "number" ? m.effortPercent : 0;
-    score += Math.max(0, 10 - Math.round(effort / 10));
+    // 3. Lower effort bonus (scaled against an 8h/480m workday)
+    const effort = typeof m.effortMinutes === "number" ? m.effortMinutes : 0;
+    score += Math.max(0, 10 - Math.round(effort / 48));
 
     return { member: m, score, effort };
   });

@@ -29,10 +29,7 @@ export function MemberTaskBreakdown({ tasks, projects }: MemberTaskBreakdownProp
     .filter((t) => t.status === "done")
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
-  const totalInProgressMinutes = inProgressTasks.reduce(
-    (s, t) => s + (t.effortMinutes || Math.round(((t.effortPercent || 0) / 100) * 480)),
-    0
-  );
+  const totalInProgressMinutes = inProgressTasks.reduce((s, t) => s + t.effortMinutes, 0);
 
   return (
     <Grid columns={{ minWidth: 320, max: 3 }} gap={4}>

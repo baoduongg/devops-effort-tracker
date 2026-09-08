@@ -103,7 +103,7 @@ export async function linkOrCreateUser(firebaseUser: User): Promise<AppUser> {
         skills: ["DevOps", "CI/CD"],
         status: "available",
         currentTaskId: null,
-        effortPercent: 0,
+        effortMinutes: 0,
         updatedAt: Timestamp.now(),
       });
     }

@@ -8,6 +8,8 @@ import {
   where,
   onSnapshot,
   Timestamp,
+  type UpdateData,
+  type DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toIsoString } from "@/lib/date";
@@ -17,12 +19,12 @@ const tasksCol = collection(db, "tasks");
 
 function toTask(id: string, data: Record<string, unknown>): Task {
   const effortMinutes = typeof data.effortMinutes === "number" ? data.effortMinutes : undefined;
-  const effortPercent = typeof data.effortPercent === "number" ? data.effortPercent : undefined;
+  const legacyEffortPercent = typeof data.effortPercent === "number" ? data.effortPercent : undefined;
   const resolvedMinutes =
     effortMinutes !== undefined
       ? effortMinutes
-      : effortPercent !== undefined
-        ? Math.round((effortPercent / 100) * 480)
+      : legacyEffortPercent !== undefined
+        ? Math.round((legacyEffortPercent / 100) * 480)
         : 60;
 
   return {
@@ -31,7 +33,6 @@ function toTask(id: string, data: Record<string, unknown>): Task {
     projectId: (data.projectId as string) ?? "",
     title: (data.title as string) ?? "",
     description: (data.description as string) ?? "",
-    effortPercent: effortPercent ?? Math.round((resolvedMinutes / 480) * 100),
     effortMinutes: resolvedMinutes,
     status: (data.status as Task["status"]) ?? "in_progress",
     startDate: toIsoString(data.startDate),
@@ -77,7 +78,7 @@ export async function createTask(input: TaskInput): Promise<string> {
 }
 
 export async function updateTask(id: string, input: Partial<TaskInput>): Promise<void> {
-  const payload: Record<string, unknown> = {
+  const payload: UpdateData<DocumentData> = {
     ...input,
     updatedAt: Timestamp.now(),
   };

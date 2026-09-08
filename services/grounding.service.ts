@@ -9,14 +9,14 @@ export interface GroundingSnapshot {
     name: string;
     role: "leader" | "devops";
     status: string;
-    totalEffortPercent: number;
+    totalEffortMinutes: number;
     skills: string[];
     activeTasks: Array<{ title: string; project: string; duration: string; effort: number; endDate: string | null }>;
     plannedTasks: Array<{ title: string; project: string; duration: string; effort: number; startDate: string }>;
   }>;
   projects: Array<{
     name: string;
-    totalEffort: number;
+    totalEffortMinutes: number;
     assignedMembers: string[];
     activeTaskCount: number;
   }>;
@@ -32,27 +32,27 @@ export async function buildGroundingSnapshot(): Promise<GroundingSnapshot> {
     const memberTasks = tasks.filter((t) => t.memberId === m.id);
     const inProgress = memberTasks.filter((t) => t.status === "in_progress");
     const planned = memberTasks.filter((t) => t.status === "planned");
-    const computedEffort = inProgress.reduce((sum, t) => sum + (t.effortPercent || 0), 0);
+    const computedEffortMinutes = inProgress.reduce((sum, t) => sum + (t.effortMinutes || 0), 0);
 
     return {
       id: m.id,
       name: m.name,
       role: m.role ?? "devops",
-      status: computedEffort > 100 ? "overloaded" : computedEffort > 60 ? "busy" : "available",
-      totalEffortPercent: computedEffort,
+      status: computedEffortMinutes > 480 ? "overloaded" : computedEffortMinutes > 288 ? "busy" : "available",
+      totalEffortMinutes: computedEffortMinutes,
       skills: m.skills,
       activeTasks: inProgress.map((t) => ({
         title: t.title,
         project: projectById.get(t.projectId)?.name ?? "Unknown",
         duration: formatTaskEffort(t),
-        effort: t.effortPercent || 0,
+        effort: t.effortMinutes || 0,
         endDate: t.endDate,
       })),
       plannedTasks: planned.map((t) => ({
         title: t.title,
         project: projectById.get(t.projectId)?.name ?? "Unknown",
         duration: formatTaskEffort(t),
-        effort: t.effortPercent || 0,
+        effort: t.effortMinutes || 0,
         startDate: t.startDate,
       })),
     };
@@ -60,14 +60,14 @@ export async function buildGroundingSnapshot(): Promise<GroundingSnapshot> {
 
   const projectData = projects.map((p) => {
     const pTasks = tasks.filter((t) => t.projectId === p.id && t.status === "in_progress");
-    const totalEffort = pTasks.reduce((sum, t) => sum + (t.effortPercent || 0), 0);
+    const totalEffortMinutes = pTasks.reduce((sum, t) => sum + (t.effortMinutes || 0), 0);
     const assignedMemberNames = Array.from(
       new Set(pTasks.map((t) => memberById.get(t.memberId)?.name).filter(Boolean))
     ) as string[];
 
     return {
       name: p.name,
-      totalEffort,
+      totalEffortMinutes,
       assignedMembers: assignedMemberNames,
       activeTaskCount: pTasks.length,
     };

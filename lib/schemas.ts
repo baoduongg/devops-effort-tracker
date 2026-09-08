@@ -4,7 +4,6 @@ export const formattedEntrySchema = z.object({
   title: z.string().min(1),
   projectName: z.string().min(1),
   effortMinutes: z.coerce.number().min(1).default(60),
-  effortPercent: z.coerce.number().optional(),
   assigneeName: z.string().nullable().optional(),
   startDate: z.string().min(1),
   endDate: z.string().nullable(),

@@ -14,7 +14,7 @@ import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
-import { formatTaskEffort } from "@/lib/effort";
+import { formatTaskEffort, formatEffortDuration } from "@/lib/effort";
 import type { Member, MemberStatus } from "@/types/member";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -25,44 +25,46 @@ interface PMTeamRosterProps {
   projects: Project[];
 }
 
-function getMemberBandwidthInfo(effort: number, activeTasksCount: number): {
+// Thresholds scaled from an 8h/480m workday
+function getMemberBandwidthInfo(effortMinutes: number, activeTasksCount: number): {
   status: MemberStatus;
   label: string;
   dotColor: string;
   isIdle: boolean;
   colorClass: string;
 } {
-  if (activeTasksCount === 0 || effort === 0) {
+  const durationStr = formatEffortDuration(effortMinutes);
+  if (activeTasksCount === 0 || effortMinutes === 0) {
     return {
       status: "available",
-      label: "Trống việc (100% rảnh)",
+      label: "Trống việc (rảnh)",
       dotColor: "bg-emerald-400",
       isIdle: true,
       colorClass: "text-emerald-400 bg-emerald-500/10 border-emerald-500/25",
     };
   }
-  if (effort > 100) {
+  if (effortMinutes > 480) {
     return {
       status: "overloaded",
-      label: `Quá tải ${effort}%`,
+      label: `Quá tải ${durationStr}`,
       dotColor: "bg-rose-400 animate-pulse",
       isIdle: false,
       colorClass: "text-rose-400 bg-rose-500/10 border-rose-500/25",
     };
   }
-  if (effort >= 80) {
+  if (effortMinutes >= 384) {
     return {
       status: "busy",
-      label: `Bận ${effort}%`,
+      label: `Bận ${durationStr}`,
       dotColor: "bg-amber-400",
       isIdle: false,
       colorClass: "text-amber-400 bg-amber-500/10 border-amber-500/25",
     };
   }
-  if (effort >= 50) {
+  if (effortMinutes >= 240) {
     return {
       status: "busy",
-      label: `Vừa tải ${effort}%`,
+      label: `Vừa tải ${durationStr}`,
       dotColor: "bg-sky-400",
       isIdle: false,
       colorClass: "text-sky-400 bg-sky-500/10 border-sky-500/25",
@@ -70,7 +72,7 @@ function getMemberBandwidthInfo(effort: number, activeTasksCount: number): {
   }
   return {
     status: "busy",
-    label: `Đang làm ${effort}%`,
+    label: `Đang làm ${durationStr}`,
     dotColor: "bg-sky-400",
     isIdle: false,
     colorClass: "text-sky-400 bg-sky-500/10 border-sky-500/25",
@@ -92,8 +94,8 @@ export function PMTeamRoster({ members, tasks, projects }: PMTeamRosterProps): R
         const memberTasks = tasks.filter((t) => t.memberId === member.id);
         const inProgressTasks = memberTasks.filter((t) => t.status === "in_progress");
         const plannedTasks = memberTasks.filter((t) => t.status === "planned");
-        const computedEffort = inProgressTasks.reduce((sum, t) => sum + t.effortPercent, 0);
-        const bandwidth = getMemberBandwidthInfo(computedEffort, inProgressTasks.length);
+        const computedEffortMinutes = inProgressTasks.reduce((sum, t) => sum + t.effortMinutes, 0);
+        const bandwidth = getMemberBandwidthInfo(computedEffortMinutes, inProgressTasks.length);
         const isLeader = member.role === "leader";
 
         return (

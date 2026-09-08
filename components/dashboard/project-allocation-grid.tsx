@@ -5,7 +5,7 @@ import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Avatar } from "@astryxdesign/core/Avatar";
 import { Card } from "@astryxdesign/core/Card";
-import { formatTaskEffort } from "@/lib/effort";
+import { formatTaskEffort, formatEffortDuration } from "@/lib/effort";
 import type { Member } from "@/types/member";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -25,12 +25,12 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
         const projectTasks = tasks.filter((t) => t.projectId === project.id);
         const activeTasks = projectTasks.filter((t) => t.status !== "done");
 
-        const totalEffort = activeTasks.reduce((sum, t) => sum + t.effortPercent, 0);
+        const totalEffortMinutes = activeTasks.reduce((sum, t) => sum + t.effortMinutes, 0);
 
         // Find unique members contributing to this project and their subtotal effort
         const memberEffortMap = new Map<string, number>();
         activeTasks.forEach((t) => {
-          memberEffortMap.set(t.memberId, (memberEffortMap.get(t.memberId) ?? 0) + t.effortPercent);
+          memberEffortMap.set(t.memberId, (memberEffortMap.get(t.memberId) ?? 0) + t.effortMinutes);
         });
 
         const assignedMembers = Array.from(memberEffortMap.entries()).map(([memberId, effort]) => ({
@@ -71,7 +71,7 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
                   }}
                 >
                   <Layers size={12} />
-                  <span>{totalEffort}% Effort</span>
+                  <span>{formatEffortDuration(totalEffortMinutes)} Effort</span>
                 </div>
               </div>
 
@@ -103,7 +103,7 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
                               {member.name}
                             </Link>
                           </HStack>
-                          <span className="font-semibold text-sky-400">{effort}% effort</span>
+                          <span className="font-semibold text-sky-400">{formatEffortDuration(effort)} effort</span>
                         </div>
                       );
                     })}

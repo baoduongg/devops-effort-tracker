@@ -95,7 +95,7 @@ export default function DashboardPage(): React.JSX.Element {
   const memberEffortMap = useMemo(() => {
     const map = new Map<string, number>();
     inProgressTasks.forEach((t) => {
-      map.set(t.memberId, (map.get(t.memberId) ?? 0) + t.effortPercent);
+      map.set(t.memberId, (map.get(t.memberId) ?? 0) + t.effortMinutes);
     });
     return map;
   }, [inProgressTasks]);
@@ -130,14 +130,14 @@ export default function DashboardPage(): React.JSX.Element {
   }, [displayMembers, memberEffortMap, memberActiveTasksCountMap]);
 
   const overloadedCount = useMemo(() => {
-    return displayMembers.filter((m) => (memberEffortMap.get(m.id) ?? 0) > 100).length;
+    return displayMembers.filter((m) => (memberEffortMap.get(m.id) ?? 0) > 480).length;
   }, [displayMembers, memberEffortMap]);
 
   const activeWorkingCount = useMemo(() => {
     return displayMembers.filter((m) => {
       const effort = memberEffortMap.get(m.id) ?? 0;
       const count = memberActiveTasksCountMap.get(m.id) ?? 0;
-      return count > 0 && effort > 0 && effort <= 100;
+      return count > 0 && effort > 0 && effort <= 480;
     }).length;
   }, [displayMembers, memberEffortMap, memberActiveTasksCountMap]);
 
@@ -211,9 +211,9 @@ export default function DashboardPage(): React.JSX.Element {
       if (selectedCapacity === "available") {
         if (activeCount > 0 && totalEffort > 0) return false;
       } else if (selectedCapacity === "working") {
-        if (activeCount === 0 || totalEffort === 0 || totalEffort > 100) return false;
+        if (activeCount === 0 || totalEffort === 0 || totalEffort > 480) return false;
       } else if (selectedCapacity === "overloaded") {
-        if (totalEffort <= 100) return false;
+        if (totalEffort <= 480) return false;
       }
 
       // Overdue Filter

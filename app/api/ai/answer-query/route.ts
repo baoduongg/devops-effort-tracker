@@ -5,6 +5,7 @@ import { createChatLog } from "@/services/chatLogs.service";
 import { extractTaskEntryFromInput } from "@/services/task-extractor.service";
 import { getMembers, findMemberByName } from "@/services/members.service";
 import { isTaskCreationIntent } from "@/lib/intent";
+import { formatEffortDuration } from "@/lib/effort";
 import type { Member } from "@/types/member";
 
 const SYSTEM_PROMPT = `Bạn là Trợ lý AI Quản lý Nguồn lực & Điều phối Nhân sự DevOps (DevOps Effort & Resource Assistant).
@@ -14,7 +15,7 @@ QUY TẮC BẮT BUỘC KHI TRẢ LỜI:
 1. NGÔN NGỮ: Luôn trả lời hoàn toàn bằng TIẾNG VIỆT tự nhiên, mạch lạc, chuẩn phong thái quản trị điều hành.
 2. ĐỊNH DẠNG:
    - TUYỆT ĐỐI KHÔNG xuất ra raw JSON hoặc khối code kỹ thuật (\`\`\`json ... \`\`\`).
-   - Sử dụng Markdown trực quan: in đậm tiêu đề, gạch đầu dòng rõ ràng, làm nổi bật tên người, dự án, phần trăm effort.
+   - Sử dụng Markdown trực quan: in đậm tiêu đề, gạch đầu dòng rõ ràng, làm nổi bật tên người, dự án, thời lượng effort (phút/giờ).
 3. QUY TẮC KIỂM TRA SỰ TỒN TẠI CỦA THÀNH VIÊN (MEMBER EXISTENCE CHECK):
    - Khi người dùng hỏi thông tin, tình hình, task hoặc kế hoạch của một thành viên / nhân sự cụ thể:
      + BẮT BUỘC phải đối chiếu tên người được hỏi với danh sách "members" trong DỮ LIỆU THỜI GIAN THỰC.
@@ -104,11 +105,11 @@ function renderMemberList(members: Member[], snapshotMembers?: GroundingSnapshot
   return members
     .map((m) => {
       const snap = snapshotMap.get(m.name.toLowerCase());
-      const effort = snap ? snap.totalEffortPercent : (m.effortPercent ?? 0);
-      const statusIcon = effort > 100 ? "🔴 Quá tải" : effort > 60 ? "🟡 Vừa tải" : "🟢 Sẵn sàng";
+      const effortMinutes = snap ? snap.totalEffortMinutes : (m.effortMinutes ?? 0);
+      const statusIcon = effortMinutes > 480 ? "🔴 Quá tải" : effortMinutes > 288 ? "🟡 Vừa tải" : "🟢 Sẵn sàng";
       const roleText = m.role === "leader" ? "Leader" : "DevOps Engineer";
       const skillsText = m.skills && m.skills.length > 0 ? ` [${m.skills.slice(0, 3).join(", ")}]` : "";
-      return `- **${m.name}** (${roleText}${skillsText}) — ${statusIcon} (${effort}% Effort)`;
+      return `- **${m.name}** (${roleText}${skillsText}) — ${statusIcon} (${formatEffortDuration(effortMinutes)} Effort)`;
     })
     .join("\n");
 }
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const { entry, notificationMessage } = result;
         const assigneeText = entry.assigneeName ? `cho **${entry.assigneeName}**` : "";
         const projectText = entry.projectName ? `thuộc dự án **${entry.projectName}**` : "";
-        const effortText = entry.effortPercent ? ` (${entry.effortPercent}% Effort)` : "";
+        const effortText = entry.effortMinutes ? ` (${formatEffortDuration(entry.effortMinutes)} Effort)` : "";
         let answer = `Tôi đã soạn thảo thông tin giao task ${assigneeText} ${projectText}${effortText}.\n\nVui lòng kiểm tra thẻ công việc bên dưới và bấm **Xác nhận** để chính thức lưu task vào hệ thống.`;
         if (notificationMessage) {
           answer = `${notificationMessage}\n\n---\n${answer}`;

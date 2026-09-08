@@ -57,9 +57,9 @@ async function seed(): Promise<void> {
   }
 
   const members = [
-    { id: "member-linh", name: "Linh Tran", email: "linh.tran@example.com", photoURL: null, skills: ["Kubernetes", "Terraform", "AWS"], status: "busy", currentTaskId: "task-atlas-1", effortPercent: 80 },
-    { id: "member-huy", name: "Huy Nguyen", email: "huy.nguyen@example.com", photoURL: null, skills: ["CI/CD", "Docker", "GitHub Actions"], status: "overloaded", currentTaskId: "task-phoenix-1", effortPercent: 110 },
-    { id: "member-mai", name: "Mai Pham", email: "mai.pham@example.com", photoURL: null, skills: ["Observability", "Grafana", "Prometheus"], status: "available", currentTaskId: null, effortPercent: 20 },
+    { id: "member-linh", name: "Linh Tran", email: "linh.tran@example.com", photoURL: null, skills: ["Kubernetes", "Terraform", "AWS"], status: "busy", currentTaskId: "task-atlas-1", effortMinutes: 384 },
+    { id: "member-huy", name: "Huy Nguyen", email: "huy.nguyen@example.com", photoURL: null, skills: ["CI/CD", "Docker", "GitHub Actions"], status: "overloaded", currentTaskId: "task-phoenix-1", effortMinutes: 528 },
+    { id: "member-mai", name: "Mai Pham", email: "mai.pham@example.com", photoURL: null, skills: ["Observability", "Grafana", "Prometheus"], status: "available", currentTaskId: null, effortMinutes: 96 },
   ];
 
   for (const m of members) {
@@ -70,7 +70,7 @@ async function seed(): Promise<void> {
       skills: m.skills,
       status: m.status,
       currentTaskId: m.currentTaskId,
-      effortPercent: m.effortPercent,
+      effortMinutes: m.effortMinutes,
       updatedAt: now,
     });
   }
@@ -78,11 +78,11 @@ async function seed(): Promise<void> {
   const nowMs = now.getTime();
   const day = 24 * 60 * 60 * 1000;
   const tasks = [
-    { id: "task-atlas-1", memberId: "member-linh", projectId: "proj-atlas", title: "Migrate staging cluster to Atlas", description: "Move staging Kubernetes workloads to the new Atlas cluster", effortPercent: 60, status: "in_progress", startDate: new Date(nowMs - 3 * day), endDate: new Date(nowMs + 4 * day), source: "manual" },
-    { id: "task-atlas-2", memberId: "member-linh", projectId: "proj-atlas", title: "Write Terraform modules for Atlas networking", description: "VPC, subnets, and security groups as reusable modules", effortPercent: 20, status: "planned", startDate: new Date(nowMs + 5 * day), endDate: new Date(nowMs + 10 * day), source: "manual" },
-    { id: "task-phoenix-1", memberId: "member-huy", projectId: "proj-phoenix", title: "Rebuild pipeline caching layer", description: "Introduce remote build cache to cut CI time in half", effortPercent: 70, status: "in_progress", startDate: new Date(nowMs - 5 * day), endDate: new Date(nowMs + 2 * day), source: "manual" },
-    { id: "task-phoenix-2", memberId: "member-huy", projectId: "proj-phoenix", title: "On-call rotation setup", description: "Configure PagerDuty rotation for pipeline incidents", effortPercent: 40, status: "in_progress", startDate: new Date(nowMs - 1 * day), endDate: new Date(nowMs + 6 * day), source: "manual" },
-    { id: "task-sentinel-1", memberId: "member-mai", projectId: "proj-sentinel", title: "Evaluate Grafana Cloud vs self-hosted", description: "Cost and maintenance comparison for the observability stack decision", effortPercent: 20, status: "done", startDate: new Date(nowMs - 10 * day), endDate: new Date(nowMs - 2 * day), source: "manual" },
+    { id: "task-atlas-1", memberId: "member-linh", projectId: "proj-atlas", title: "Migrate staging cluster to Atlas", description: "Move staging Kubernetes workloads to the new Atlas cluster", effortMinutes: 288, status: "in_progress", startDate: new Date(nowMs - 3 * day), endDate: new Date(nowMs + 4 * day), source: "manual" },
+    { id: "task-atlas-2", memberId: "member-linh", projectId: "proj-atlas", title: "Write Terraform modules for Atlas networking", description: "VPC, subnets, and security groups as reusable modules", effortMinutes: 96, status: "planned", startDate: new Date(nowMs + 5 * day), endDate: new Date(nowMs + 10 * day), source: "manual" },
+    { id: "task-phoenix-1", memberId: "member-huy", projectId: "proj-phoenix", title: "Rebuild pipeline caching layer", description: "Introduce remote build cache to cut CI time in half", effortMinutes: 336, status: "in_progress", startDate: new Date(nowMs - 5 * day), endDate: new Date(nowMs + 2 * day), source: "manual" },
+    { id: "task-phoenix-2", memberId: "member-huy", projectId: "proj-phoenix", title: "On-call rotation setup", description: "Configure PagerDuty rotation for pipeline incidents", effortMinutes: 192, status: "in_progress", startDate: new Date(nowMs - 1 * day), endDate: new Date(nowMs + 6 * day), source: "manual" },
+    { id: "task-sentinel-1", memberId: "member-mai", projectId: "proj-sentinel", title: "Evaluate Grafana Cloud vs self-hosted", description: "Cost and maintenance comparison for the observability stack decision", effortMinutes: 96, status: "done", startDate: new Date(nowMs - 10 * day), endDate: new Date(nowMs - 2 * day), source: "manual" },
   ];
 
   for (const t of tasks) {
@@ -91,7 +91,7 @@ async function seed(): Promise<void> {
       projectId: t.projectId,
       title: t.title,
       description: t.description,
-      effortPercent: t.effortPercent,
+      effortMinutes: t.effortMinutes,
       status: t.status,
       startDate: t.startDate,
       endDate: t.endDate,

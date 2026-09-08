@@ -39,6 +39,7 @@ import { createTask, getTasksByMember } from "@/services/tasks.service";
 import { getProjectByName, createProject, getProjects } from "@/services/projects.service";
 import { getMembers, updateMember, findBestSuitableMember, findMemberByName } from "@/services/members.service";
 import { confirmChatLog, getChatLogsByMember, chatLogsToMessages } from "@/services/chatLogs.service";
+import { notifyTaskCreated } from "@/services/chatops.service";
 import { getAvailableSlashCommands, resolveSlashCommand, SLASH_COMMANDS, type SlashCommand } from "@/lib/slash-commands";
 import { isTaskCreationIntent } from "@/lib/intent";
 import type { FormattedEntry } from "@/types/chat";
@@ -413,8 +414,7 @@ export function ChatBox(): React.JSX.Element {
       };
     }
 
-    const effortMinutes = entry.effortMinutes || (entry.effortPercent ? Math.round((entry.effortPercent / 100) * 480) : 60);
-    const effortPercent = entry.effortPercent ?? Math.round((effortMinutes / 480) * 100);
+    const effortMinutes = entry.effortMinutes || 60;
 
     const taskId = await createTask({
       memberId: targetMemberId,
@@ -422,7 +422,6 @@ export function ChatBox(): React.JSX.Element {
       title: entry.title,
       description: entry.title,
       effortMinutes,
-      effortPercent,
       startDate: entry.startDate || new Date().toISOString().split("T")[0],
       endDate: entry.endDate,
       status: entry.status || "in_progress",
@@ -433,23 +432,35 @@ export function ChatBox(): React.JSX.Element {
     try {
       const existingTasks = await getTasksByMember(targetMemberId);
       const otherActiveTasks = existingTasks.filter((t) => t.id !== taskId && t.status === "in_progress");
-      const totalEffort = otherActiveTasks.reduce((sum, t) => sum + (t.effortPercent || 0), 0) + (isTaskActive ? effortPercent : 0);
+      const totalEffortMinutes = otherActiveTasks.reduce((sum, t) => sum + (t.effortMinutes || 0), 0) + (isTaskActive ? effortMinutes : 0);
       const activeCount = otherActiveTasks.length + (isTaskActive ? 1 : 0);
       const newStatus: MemberStatus =
-        activeCount === 0 || totalEffort === 0
+        activeCount === 0 || totalEffortMinutes === 0
           ? "available"
-          : totalEffort > 100
+          : totalEffortMinutes > 480
             ? "overloaded"
             : "busy";
 
       await updateMember(targetMemberId, {
         currentTaskId: isTaskActive ? taskId : (otherActiveTasks[0]?.id || null),
-        effortPercent: totalEffort,
+        effortMinutes: totalEffortMinutes,
         status: newStatus,
       });
     } catch (e) {
       console.warn("Could not sync member status immediately:", e);
     }
+
+    const targetMember = allMembers.find((m) => m.id === targetMemberId);
+    const memberName = targetMember?.name ?? targetMemberId;
+    notifyTaskCreated({
+      title: entry.title,
+      memberName,
+      memberEmail: targetMember?.email,
+      projectName: project.name,
+      link: `${window.location.origin}/dashboard`,
+      creatorName: user?.displayName ?? "Admin",
+      endDate: entry.endDate,
+    });
 
     if (chatLogId) {
       try {
@@ -542,8 +553,8 @@ export function ChatBox(): React.JSX.Element {
               }
             }}
             className={`group flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer shadow-sm ${isCommandPopupOpen
-                ? "bg-sky-500/20 text-sky-200 border border-sky-400/40 ring-1 ring-sky-500/30"
-                : "bg-neutral-800/90 hover:bg-neutral-700 text-neutral-200 hover:text-white border border-neutral-700 hover:border-sky-500/50"
+              ? "bg-sky-500/20 text-sky-200 border border-sky-400/40 ring-1 ring-sky-500/30"
+              : "bg-neutral-800/90 hover:bg-neutral-700 text-neutral-200 hover:text-white border border-neutral-700 hover:border-sky-500/50"
               }`}
             title="Mở danh sách toàn bộ câu lệnh nhanh (Gõ '/')"
           >

@@ -10,6 +10,7 @@ import { Card } from "@astryxdesign/core/Card";
 import { Token } from "@astryxdesign/core/Token";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { StatusBadge } from "@/components/dashboard/status-badge";
+import { formatEffortDuration, formatTaskEffort, minutesToWorkdayPercent } from "@/lib/effort";
 import type { Member, MemberStatus } from "@/types/member";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -20,35 +21,36 @@ interface WorkloadMatrixProps {
   projects: Project[];
 }
 
-function getEffortStatus(effort: number): {
+// Thresholds scaled from an 8h/480m workday (100% = 480m, 80% = 384m, 50% = 240m)
+function getEffortStatus(effortMinutes: number): {
   status: MemberStatus;
   label: string;
   dotVariant: "success" | "warning" | "error";
 } {
-  if (effort > 100) {
+  if (effortMinutes > 480) {
     return {
       status: "overloaded",
-      label: "Overloaded (>100%)",
+      label: "Overloaded (>8h)",
       dotVariant: "error",
     };
   }
-  if (effort >= 80) {
+  if (effortMinutes >= 384) {
     return {
       status: "busy",
-      label: "Busy (80-100%)",
+      label: "Busy (6.4h-8h)",
       dotVariant: "warning",
     };
   }
-  if (effort >= 50) {
+  if (effortMinutes >= 240) {
     return {
       status: "busy",
-      label: "Balanced (50-79%)",
+      label: "Balanced (4h-6.4h)",
       dotVariant: "success",
     };
   }
   return {
     status: "available",
-    label: "Available (<50%)",
+    label: "Available (<4h)",
     dotVariant: "success",
   };
 }
@@ -79,8 +81,8 @@ export function WorkloadMatrix({ members, tasks, projects }: WorkloadMatrixProps
           .slice(0, 3);
 
         // Dynamically compute effort from active tasks
-        const computedEffort = inProgressTasks.reduce((sum, t) => sum + t.effortPercent, 0);
-        const effortInfo = getEffortStatus(computedEffort);
+        const computedEffortMinutes = inProgressTasks.reduce((sum, t) => sum + t.effortMinutes, 0);
+        const effortInfo = getEffortStatus(computedEffortMinutes);
 
         return (
           <Card key={member.id} elevation="low">
@@ -125,7 +127,7 @@ export function WorkloadMatrix({ members, tasks, projects }: WorkloadMatrixProps
 
                 {/* Overall Effort Meter */}
                 <Token
-                  label={`${computedEffort}% Bandwidth (${effortInfo.label})`}
+                  label={`${formatEffortDuration(computedEffortMinutes)} Bandwidth (${effortInfo.label})`}
                   icon={<StatusDot variant={effortInfo.dotVariant} label={effortInfo.label} />}
                 />
 
@@ -142,11 +144,11 @@ export function WorkloadMatrix({ members, tasks, projects }: WorkloadMatrixProps
                 {inProgressTasks.map((task) => {
                   const project = projectMap.get(task.projectId);
                   const color = project?.color ?? "#3b82f6";
-                  const widthPercent = Math.min(task.effortPercent, 100);
+                  const widthPercent = Math.min(minutesToWorkdayPercent(task.effortMinutes), 100);
                   return (
                     <div
                       key={task.id}
-                      title={`${task.title} (${project?.name ?? "Project"}): ${task.effortPercent}%`}
+                      title={`${task.title} (${project?.name ?? "Project"}): ${formatTaskEffort(task)}`}
                       style={{
                         width: `${widthPercent}%`,
                         backgroundColor: color,
@@ -205,7 +207,7 @@ export function WorkloadMatrix({ members, tasks, projects }: WorkloadMatrixProps
                                   </Text>
                                 </HStack>
                                 <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30">
-                                  {task.effortPercent}%
+                                  {formatTaskEffort(task)}
                                 </span>
                               </div>
 
@@ -268,7 +270,7 @@ export function WorkloadMatrix({ members, tasks, projects }: WorkloadMatrixProps
                                   </Text>
                                 </HStack>
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/20">
-                                  {task.effortPercent}%
+                                  {formatTaskEffort(task)}
                                 </span>
                               </div>
 

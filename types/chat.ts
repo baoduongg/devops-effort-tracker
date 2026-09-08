@@ -4,7 +4,6 @@ export interface FormattedEntry {
   title: string;
   projectName: string;
   effortMinutes: number;
-  effortPercent?: number;
   assigneeName?: string | null;
   startDate: string;
   endDate: string | null;

@@ -6,11 +6,28 @@ import { HStack } from "@astryxdesign/core/Stack";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Button } from "@astryxdesign/core/Button";
+import { DateInput } from "@astryxdesign/core/DateInput";
+import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { Send, PenLine, Clock, Sparkles } from "lucide-react";
 import type { SlashCommand } from "@/lib/slash-commands";
 import type { Member } from "@/types/member";
 import type { Project } from "@/types/project";
+import type { TaskStatus } from "@/types/task";
 import { formatEffortDuration, EFFORT_DURATION_PRESETS } from "@/lib/effort";
+
+const STATUS_OPTIONS = [
+  { value: "in_progress", label: "Đang thực hiện (In Progress)" },
+  { value: "planned", label: "Kế hoạch (Planned)" },
+  { value: "done", label: "Hoàn thành (Done)" },
+];
+
+function getTodayString(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 interface CommandTemplateModalProps {
   isOpen: boolean;
@@ -69,6 +86,10 @@ function CommandTemplateForm({
       ? "tuần sau"
       : ""
   );
+  const [status, setStatus] = useState<TaskStatus>("in_progress");
+  const [startDate, setStartDate] = useState<string>(getTodayString());
+  const [endDate, setEndDate] = useState<string | null>(null);
+  const [notes, setNotes] = useState("");
 
   // Review custom edited prompt
   const [customPrompt, setCustomPrompt] = useState("");
@@ -99,8 +120,14 @@ function CommandTemplateForm({
     const duration = durationStr;
 
     switch (command.id) {
-      case "coord-assign":
-        return `Giao task ${title} cho ${member} thuộc dự án ${proj} thời gian ${duration}`;
+      case "coord-assign": {
+        const statusLabel =
+          status === "done" ? "hoàn thành" : status === "planned" ? "kế hoạch" : "đang thực hiện";
+        const datePart = startDate ? `, bắt đầu ${startDate}` : "";
+        const deadlinePart = endDate ? `, hạn hoàn thành ${endDate}` : "";
+        const notesPart = notes.trim() ? `. Ghi chú: ${notes.trim()}` : "";
+        return `Giao task ${title} cho ${member} thuộc dự án ${proj} thời gian ${duration}, trạng thái ${statusLabel}${datePart}${deadlinePart}${notesPart}`;
+      }
 
       case "coord-reassign":
         return `Chuyển task ${title} từ ${member} sang cho ${newMember}`;
@@ -150,6 +177,10 @@ function CommandTemplateForm({
     selectedProjectName,
     durationStr,
     timeframe,
+    status,
+    startDate,
+    endDate,
+    notes,
   ]);
 
   const finalPrompt = isManualPromptEdited ? customPrompt : generatedPrompt;
@@ -176,7 +207,8 @@ function CommandTemplateForm({
   const isLogCommand = command.id === "coord-log";
 
   return (
-    <div className="p-5 flex flex-col gap-4">
+    <div className="flex flex-col min-h-0 flex-1">
+    <div className="p-5 flex flex-col gap-4 overflow-y-auto min-h-0">
       {/* 1. Member Info Lookup */}
       {isInfoCommand && (
         <div className="flex flex-col gap-3">
@@ -367,6 +399,57 @@ function CommandTemplateForm({
             </div>
           </div>
 
+          {/* Status & Dates (Assign only) */}
+          {isAssignCommand && (
+            <>
+              <Selector
+                label="Trạng thái"
+                options={STATUS_OPTIONS}
+                value={status}
+                onChange={(v) => {
+                  setStatus(v as TaskStatus);
+                  setIsManualPromptEdited(false);
+                }}
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <DateInput
+                  label="Ngày bắt đầu"
+                  format="date"
+                  width="100%"
+                  value={startDate as ISODateString}
+                  onChange={(v) => {
+                    setStartDate(v ?? getTodayString());
+                    setIsManualPromptEdited(false);
+                  }}
+                />
+
+                <DateInput
+                  label="Hạn hoàn thành (Deadline)"
+                  format="date"
+                  width="100%"
+                  hasClear
+                  placeholder="Tùy chọn"
+                  value={(endDate || undefined) as ISODateString | undefined}
+                  onChange={(v) => {
+                    setEndDate(v || null);
+                    setIsManualPromptEdited(false);
+                  }}
+                />
+              </div>
+
+              <TextInput
+                label="Ghi chú chi tiết (Tùy chọn)"
+                value={notes}
+                onChange={(v) => {
+                  setNotes(v);
+                  setIsManualPromptEdited(false);
+                }}
+                placeholder="Mô tả tóm tắt bối cảnh hoặc yêu cầu kỹ thuật..."
+              />
+            </>
+          )}
+
           {/* Timeframe / Completed Date for Log & Add */}
           {(isLogCommand || isAddCommand) && (
             <TextInput
@@ -427,9 +510,10 @@ function CommandTemplateForm({
           💡 Bạn có thể chỉnh sửa trực tiếp nội dung ở trên nếu muốn bổ sung thêm chi tiết.
         </span>
       </div>
+    </div>
 
       {/* Modal Action Buttons */}
-      <HStack gap={2} justify="end" className="pt-2 border-t border-white/[0.06]">
+      <HStack gap={2} justify="end" className="p-5 pt-2 border-t border-white/[0.06]">
         <Button
           type="button"
           label="Hủy"

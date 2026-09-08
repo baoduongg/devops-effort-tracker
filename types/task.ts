@@ -7,8 +7,7 @@ export interface Task {
   projectId: string;
   title: string;
   description: string;
-  effortPercent?: number;
-  effortMinutes?: number;
+  effortMinutes: number;
   status: TaskStatus;
   startDate: string;
   endDate: string | null;

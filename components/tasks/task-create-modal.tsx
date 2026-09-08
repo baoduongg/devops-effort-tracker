@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Plus, FolderPlus, Clock } from "lucide-react";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { HStack } from "@astryxdesign/core/Stack";
@@ -14,6 +14,8 @@ import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { createTask, getTasksByMember } from "@/services/tasks.service";
 import { createProject } from "@/services/projects.service";
 import { updateMember } from "@/services/members.service";
+import { notifyTaskCreated } from "@/services/chatops.service";
+import { useAuthStore } from "@/store/auth.store";
 import { formatEffortDuration, EFFORT_DURATION_PRESETS } from "@/lib/effort";
 import type { Project } from "@/types/project";
 import type { Member, MemberStatus } from "@/types/member";
@@ -54,6 +56,7 @@ export function TaskCreateModal({
 }: TaskCreateModalProps): React.JSX.Element {
   const today = useMemo(() => getTodayString(), []);
 
+  const currentUser = useAuthStore((state) => state.user);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [projectId, setProjectId] = useState<string>(
@@ -73,11 +76,25 @@ export function TaskCreateModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync defaults when modal opens
+  // Sync defaults when modal opens, or once project/member lists finish loading
+  useEffect(() => {
+    if (!isOpen) return;
+    setProjectId((prev) =>
+      prev && projects.some((p) => p.id === prev)
+        ? prev
+        : defaultProjectId || (projects[0]?.id ?? "")
+    );
+    setMemberId((prev) =>
+      prev && members.some((m) => m.id === prev)
+        ? prev
+        : defaultMemberId || (members[0]?.id ?? "")
+    );
+  }, [isOpen, projects, members, defaultProjectId, defaultMemberId]);
+
   const memberOptions = useMemo(() => {
     return members.map((m) => ({
       value: m.id,
-      label: `${m.name} (${m.effortPercent || 0}% tải - ${m.status})`,
+      label: `${m.name} (${formatEffortDuration(m.effortMinutes)} tải - ${m.status})`,
     }));
   }, [members]);
 
@@ -139,7 +156,6 @@ export function TaskCreateModal({
     setError(null);
 
     const resolvedMinutes = Math.max(1, Math.round(effortMinutes || 60));
-    const resolvedPercent = Math.round((resolvedMinutes / 480) * 100);
 
     try {
       if (isCreatingNewProject) {
@@ -156,7 +172,6 @@ export function TaskCreateModal({
         title: title.trim(),
         description: description.trim() || title.trim(),
         effortMinutes: resolvedMinutes,
-        effortPercent: resolvedPercent,
         startDate: startDate || getTodayString(),
         endDate: endDate || null,
         status,
@@ -170,25 +185,40 @@ export function TaskCreateModal({
         const otherActiveTasks = existingTasks.filter(
           (t) => t.id !== taskId && t.status === "in_progress"
         );
-        const totalEffort =
-          otherActiveTasks.reduce((sum, t) => sum + (t.effortPercent || 0), 0) +
-          (isTaskActive ? resolvedPercent : 0);
+        const totalEffortMinutes =
+          otherActiveTasks.reduce((sum, t) => sum + (t.effortMinutes || 0), 0) +
+          (isTaskActive ? resolvedMinutes : 0);
         const activeCount = otherActiveTasks.length + (isTaskActive ? 1 : 0);
         const newStatus: MemberStatus =
-          activeCount === 0 || totalEffort === 0
+          activeCount === 0 || totalEffortMinutes === 0
             ? "available"
-            : totalEffort > 100
+            : totalEffortMinutes > 480
             ? "overloaded"
             : "busy";
 
         await updateMember(memberId, {
           currentTaskId: isTaskActive ? taskId : (otherActiveTasks[0]?.id || null),
-          effortPercent: totalEffort,
+          effortMinutes: totalEffortMinutes,
           status: newStatus,
         });
       } catch (err) {
         console.warn("Could not update member effort status:", err);
       }
+
+      const assignedMember = members.find((m) => m.id === memberId);
+      const memberName = assignedMember?.name ?? memberId;
+      const projectName = isCreatingNewProject
+        ? newProjectName.trim()
+        : projects.find((p) => p.id === finalProjectId)?.name ?? finalProjectId;
+      notifyTaskCreated({
+        title: title.trim(),
+        memberName,
+        memberEmail: assignedMember?.email,
+        projectName,
+        link: `${window.location.origin}/tasks`,
+        creatorName: currentUser?.displayName ?? "Admin",
+        endDate: endDate || null,
+      });
 
       onTaskCreated?.(taskId);
       handleResetForm();
@@ -217,7 +247,8 @@ export function TaskCreateModal({
         onOpenChange={onOpenChange}
       />
 
-      <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
+      <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
+      <div className="p-5 flex flex-col gap-4 overflow-y-auto min-h-0">
         {error && (
           <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/25 text-xs text-rose-400">
             {error}
@@ -352,8 +383,10 @@ export function TaskCreateModal({
           placeholder="Mô tả tóm tắt bối cảnh hoặc yêu cầu kỹ thuật..."
         />
 
+      </div>
+
         {/* Form Actions */}
-        <HStack gap={3} justify="end" className="pt-3 border-t border-white/[0.06]">
+        <HStack gap={3} justify="end" className="p-5 pt-3 border-t border-white/[0.06]">
           <Button
             type="button"
             label="Hủy"

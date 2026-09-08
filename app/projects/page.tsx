@@ -15,6 +15,7 @@ import { getProjects, createProject } from "@/services/projects.service";
 import { subscribeAllTasks } from "@/services/tasks.service";
 import { subscribeMembers } from "@/services/members.service";
 import { useAuthStore } from "@/store/auth.store";
+import { formatEffortDuration } from "@/lib/effort";
 import type { Project } from "@/types/project";
 import type { Task } from "@/types/task";
 import type { Member } from "@/types/member";
@@ -96,7 +97,7 @@ export default function ProjectsPage(): React.JSX.Element {
   const totalEffortAcrossProjects = useMemo(() => {
     return tasks
       .filter((t) => t.status === "in_progress")
-      .reduce((sum, t) => sum + t.effortPercent, 0);
+      .reduce((sum, t) => sum + t.effortMinutes, 0);
   }, [tasks]);
 
   const activeTasksCount = useMemo(() => {
@@ -156,7 +157,7 @@ export default function ProjectsPage(): React.JSX.Element {
               </span>
               <div className="flex flex-col">
                 <span className="text-xs text-neutral-400 font-medium">Tổng tải phân bổ</span>
-                <span className="text-lg font-bold text-emerald-300">{totalEffortAcrossProjects}% Effort</span>
+                <span className="text-lg font-bold text-emerald-300">{formatEffortDuration(totalEffortAcrossProjects)} Effort</span>
               </div>
             </div>
           </div>
@@ -257,12 +258,12 @@ export default function ProjectsPage(): React.JSX.Element {
             const plannedTasks = projectTasks.filter((t) => t.status === "planned");
             const doneTasks = projectTasks.filter((t) => t.status === "done");
 
-            const totalEffort = inProgressTasks.reduce((sum, t) => sum + t.effortPercent, 0);
+            const totalEffort = inProgressTasks.reduce((sum, t) => sum + t.effortMinutes, 0);
 
             // Group effort by member
             const memberEffortMap = new Map<string, number>();
             inProgressTasks.forEach((t) => {
-              memberEffortMap.set(t.memberId, (memberEffortMap.get(t.memberId) ?? 0) + t.effortPercent);
+              memberEffortMap.set(t.memberId, (memberEffortMap.get(t.memberId) ?? 0) + t.effortMinutes);
             });
 
             const assignedMembers = Array.from(memberEffortMap.entries()).map(([memberId, effort]) => ({
@@ -293,7 +294,7 @@ export default function ProjectsPage(): React.JSX.Element {
                           </Text>
                           {isUserAssigned && (
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                              Của bạn ({userEffortInProject}%)
+                              Của bạn ({formatEffortDuration(userEffortInProject)})
                             </span>
                           )}
                         </HStack>
@@ -312,7 +313,7 @@ export default function ProjectsPage(): React.JSX.Element {
                       }}
                     >
                       <Layers size={12} />
-                      <span>{totalEffort}% Effort</span>
+                      <span>{formatEffortDuration(totalEffort)} Effort</span>
                     </div>
                   </div>
 
@@ -340,7 +341,7 @@ export default function ProjectsPage(): React.JSX.Element {
                                 <Avatar name={member.name} src={member.photoURL ?? undefined} size="xsm" tooltip={false} />
                                 <span className="text-neutral-200">{member.name}</span>
                               </HStack>
-                              <span className="font-semibold text-sky-400">{effort}% effort</span>
+                              <span className="font-semibold text-sky-400">{formatEffortDuration(effort)} effort</span>
                             </div>
                           );
                         })}
@@ -384,7 +385,7 @@ export default function ProjectsPage(): React.JSX.Element {
                               <span className="truncate text-neutral-200">{task.title}</span>
                             </div>
                             <span className="text-neutral-400 text-[11px] ml-2 flex-shrink-0">
-                              {assignee?.name.split(" ")[0] ?? "Unassigned"} ({task.effortPercent}%)
+                              {assignee?.name.split(" ")[0] ?? "Unassigned"} ({formatEffortDuration(task.effortMinutes)})
                             </span>
                           </div>
                         );

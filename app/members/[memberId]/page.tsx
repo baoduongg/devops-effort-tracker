@@ -30,52 +30,55 @@ import { getTasksByMember } from "@/services/tasks.service";
 import { getProjects } from "@/services/projects.service";
 import { useAuthStore } from "@/store/auth.store";
 import { isOverdue } from "@/lib/overdue";
+import { formatEffortDuration } from "@/lib/effort";
 import type { Member, MemberInput, MemberStatus } from "@/types/member";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
 
 
-function getMemberBandwidthInfo(effort: number, activeCount: number): {
+// Thresholds scaled from an 8h/480m workday
+function getMemberBandwidthInfo(effortMinutes: number, activeCount: number): {
   status: MemberStatus;
   label: string;
   colorClass: string;
   dotColor: string;
 } {
-  if (activeCount === 0 || effort === 0) {
+  const durationStr = formatEffortDuration(effortMinutes);
+  if (activeCount === 0 || effortMinutes === 0) {
     return {
       status: "available",
-      label: "Trống việc (100% rảnh)",
+      label: "Trống việc (rảnh)",
       colorClass: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
       dotColor: "bg-emerald-400",
     };
   }
-  if (effort > 100) {
+  if (effortMinutes > 480) {
     return {
       status: "overloaded",
-      label: `Quá tải (${effort}%)`,
+      label: `Quá tải (${durationStr})`,
       colorClass: "text-rose-400 bg-rose-500/10 border-rose-500/20",
       dotColor: "bg-rose-400",
     };
   }
-  if (effort >= 80) {
+  if (effortMinutes >= 384) {
     return {
       status: "busy",
-      label: `Bận (${effort}%)`,
+      label: `Bận (${durationStr})`,
       colorClass: "text-amber-400 bg-amber-500/10 border-amber-500/20",
       dotColor: "bg-amber-400",
     };
   }
-  if (effort >= 50) {
+  if (effortMinutes >= 240) {
     return {
       status: "busy",
-      label: `Vừa tải (${effort}%)`,
+      label: `Vừa tải (${durationStr})`,
       colorClass: "text-sky-400 bg-sky-500/10 border-sky-500/20",
       dotColor: "bg-sky-400",
     };
   }
   return {
     status: "busy",
-    label: `Đang làm việc (${effort}%)`,
+    label: `Đang làm việc (${durationStr})`,
     colorClass: "text-sky-400 bg-sky-500/10 border-sky-500/20",
     dotColor: "bg-sky-400",
   };
@@ -124,7 +127,7 @@ export default function MemberDetailPage(): React.JSX.Element {
   const overdueTasks = useMemo(() => tasks.filter(isOverdue), [tasks]);
 
   const computedEffort = useMemo(() => {
-    return inProgressTasks.reduce((sum, t) => sum + t.effortPercent, 0);
+    return inProgressTasks.reduce((sum, t) => sum + t.effortMinutes, 0);
   }, [inProgressTasks]);
 
   const bandwidth = useMemo(() => {
@@ -230,7 +233,7 @@ export default function MemberDetailPage(): React.JSX.Element {
                 <Layers size={13} className="text-sky-400" />
                 Tổng tải
               </span>
-              <span className="text-lg font-bold text-sky-300">{computedEffort}%</span>
+              <span className="text-lg font-bold text-sky-300">{formatEffortDuration(computedEffort)}</span>
             </div>
 
             <div className="flex flex-col">

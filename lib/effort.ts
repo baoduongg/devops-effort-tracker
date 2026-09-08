@@ -58,37 +58,19 @@ export function formatEffortDuration(minutes?: number | null): string {
 }
 
 /**
- * Formats task effort whether stored as `effortMinutes` or legacy `effortPercent`.
+ * Formats task effort duration in minutes.
  */
-export function formatTaskEffort(task: { effortMinutes?: number | null; effortPercent?: number | null }): string {
-  if (typeof task.effortMinutes === "number" && task.effortMinutes > 0) {
-    return formatEffortDuration(task.effortMinutes);
-  }
-
-  if (typeof task.effortPercent === "number" && task.effortPercent > 0) {
-    // Convert legacy 8h day percentage: 100% = 480m (8h), 50% = 240m (4h), 15% ≈ 60m (1h)
-    const convertedMinutes = Math.round((task.effortPercent / 100) * 480);
-    return formatEffortDuration(convertedMinutes);
-  }
-
-  return "0 phút";
+export function formatTaskEffort(task: { effortMinutes?: number | null }): string {
+  return formatEffortDuration(task.effortMinutes);
 }
 
 /**
- * Convert minutes to percentage of an 8-hour workday (for backward-compatible capacity calculations).
+ * Convert minutes to percentage of an 8-hour workday (for progress-bar widths only).
  * E.g., 60m = ~13%, 120m = 25%, 240m = 50%, 480m = 100%.
  */
 export function minutesToWorkdayPercent(minutes: number): number {
   if (!minutes || minutes <= 0) return 0;
   return Math.round((minutes / 480) * 100);
-}
-
-/**
- * Convert percentage to minutes based on an 8-hour workday.
- */
-export function workdayPercentToMinutes(percent: number): number {
-  if (!percent || percent <= 0) return 0;
-  return Math.round((percent / 100) * 480);
 }
 
 /**

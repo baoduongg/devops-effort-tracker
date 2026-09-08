@@ -8,7 +8,7 @@ export interface Member {
   skills: string[];
   status: MemberStatus;
   currentTaskId: string | null;
-  effortPercent: number;
+  effortMinutes: number;
   role?: "leader" | "devops";
   updatedAt: string;
 }

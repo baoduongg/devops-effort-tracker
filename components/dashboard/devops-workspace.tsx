@@ -27,6 +27,7 @@ import { TaskCreateModal } from "@/components/tasks/task-create-modal";
 import { updateTask } from "@/services/tasks.service";
 import { updateMember } from "@/services/members.service";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
+import { formatEffortDuration, formatTaskEffort } from "@/lib/effort";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Member, MemberStatus } from "@/types/member";
 import type { Project } from "@/types/project";
@@ -64,15 +65,15 @@ export function DevOpsWorkspace({
   const doneTasks = useMemo(() => myTasks.filter((t) => t.status === "done"), [myTasks]);
   const overdueTasks = useMemo(() => myTasks.filter(isOverdue), [myTasks]);
 
-  const totalEffort = useMemo(() => {
-    return inProgressTasks.reduce((sum, t) => sum + t.effortPercent, 0);
+  const totalEffortMinutes = useMemo(() => {
+    return inProgressTasks.reduce((sum, t) => sum + t.effortMinutes, 0);
   }, [inProgressTasks]);
 
   const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
   // Teammates available for pairing / collaboration
   const availableTeammates = useMemo(() => {
-    return members.filter((m) => m.id !== memberId && (m.effortPercent || 0) < 60);
+    return members.filter((m) => m.id !== memberId && (m.effortMinutes || 0) < 288);
   }, [members, memberId]);
 
   async function handleToggleStatus(task: Task, nextStatus: TaskStatus): Promise<void> {
@@ -82,15 +83,15 @@ export function DevOpsWorkspace({
       if (memberId) {
         const updatedTasks = myTasks.map((t) => (t.id === task.id ? { ...t, status: nextStatus } : t));
         const activeTasks = updatedTasks.filter((t) => t.status === "in_progress");
-        const newTotalEffort = activeTasks.reduce((sum, t) => sum + t.effortPercent, 0);
+        const newTotalEffortMinutes = activeTasks.reduce((sum, t) => sum + t.effortMinutes, 0);
         const newStatus: MemberStatus =
-          activeTasks.length === 0 || newTotalEffort === 0
+          activeTasks.length === 0 || newTotalEffortMinutes === 0
             ? "available"
-            : newTotalEffort > 100
+            : newTotalEffortMinutes > 480
               ? "overloaded"
               : "busy";
         await updateMember(memberId, {
-          effortPercent: newTotalEffort,
+          effortMinutes: newTotalEffortMinutes,
           status: newStatus,
           currentTaskId: activeTasks[0]?.id || null,
         });
@@ -140,32 +141,32 @@ export function DevOpsWorkspace({
                 Mức tải hiện tại
               </span>
               <span
-                className={`text-xs font-bold px-2 py-0.5 rounded-full border ${totalEffort > 100
+                className={`text-xs font-bold px-2 py-0.5 rounded-full border ${totalEffortMinutes > 480
                   ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
-                  : totalEffort >= 60
+                  : totalEffortMinutes >= 288
                     ? "bg-sky-500/10 text-sky-400 border-sky-500/25"
                     : "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
                   }`}
               >
-                {totalEffort > 100 ? "Quá tải" : totalEffort >= 60 ? "Vừa tải" : "Rảnh việc"}
+                {totalEffortMinutes > 480 ? "Quá tải" : totalEffortMinutes >= 288 ? "Vừa tải" : "Rảnh việc"}
               </span>
             </div>
 
             <div className="flex items-baseline gap-2">
               <span
-                className={`text-2xl font-black ${totalEffort > 100 ? "text-rose-400" : totalEffort >= 60 ? "text-sky-300" : "text-emerald-400"
+                className={`text-2xl font-black ${totalEffortMinutes > 480 ? "text-rose-400" : totalEffortMinutes >= 288 ? "text-sky-300" : "text-emerald-400"
                   }`}
               >
-                {totalEffort}%
+                {formatEffortDuration(totalEffortMinutes)}
               </span>
-              <span className="text-xs text-neutral-500 font-medium">/ 100% dung lượng</span>
+              <span className="text-xs text-neutral-500 font-medium">/ 8h dung lượng</span>
             </div>
 
             <div className="w-full h-2 rounded-full bg-white/[0.06] overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all ${totalEffort > 100 ? "bg-rose-500" : totalEffort >= 60 ? "bg-sky-500" : "bg-emerald-500"
+                className={`h-full rounded-full transition-all ${totalEffortMinutes > 480 ? "bg-rose-500" : totalEffortMinutes >= 288 ? "bg-sky-500" : "bg-emerald-500"
                   }`}
-                style={{ width: `${Math.min(totalEffort, 100)}%` }}
+                style={{ width: `${Math.min((totalEffortMinutes / 480) * 100, 100)}%` }}
               />
             </div>
           </div>
@@ -183,7 +184,7 @@ export function DevOpsWorkspace({
               <span className="text-xs text-neutral-500">nhiệm vụ active</span>
             </div>
             <span className="text-[11px] text-neutral-400">
-              {inProgressTasks.length === 0 ? "Chưa có task nào đang chạy" : `Tổng cộng ${totalEffort}% effort`}
+              {inProgressTasks.length === 0 ? "Chưa có task nào đang chạy" : `Tổng cộng ${formatEffortDuration(totalEffortMinutes)} effort`}
             </span>
           </div>
         </Card>
@@ -320,7 +321,7 @@ export function DevOpsWorkspace({
 
                         <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-sky-500/15 text-sky-300 border border-sky-500/25 flex items-center gap-1">
                           <Layers size={12} />
-                          {task.effortPercent}% Effort
+                          {formatTaskEffort(task)}
                         </span>
                       </div>
 
@@ -407,7 +408,7 @@ export function DevOpsWorkspace({
                         </span>
 
                         <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-300 border border-purple-500/25">
-                          {task.effortPercent}% dự kiến
+                          {formatTaskEffort(task)}
                         </span>
                       </div>
 
@@ -471,7 +472,7 @@ export function DevOpsWorkspace({
                         </span>
 
                         <span className="text-xs font-semibold text-neutral-400">
-                          {task.effortPercent}% effort
+                          {formatTaskEffort(task)}
                         </span>
                       </div>
 
@@ -540,7 +541,7 @@ export function DevOpsWorkspace({
                     </HStack>
 
                     <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      {mate.effortPercent || 0}% tải
+                      {formatEffortDuration(mate.effortMinutes)} tải
                     </span>
                   </div>
                 ))}

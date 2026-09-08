@@ -41,7 +41,7 @@ export function MemberForm({
   const [skills, setSkills] = useState((initialValues?.skills ?? []).join(", "));
   const [role, setRole] = useState<"leader" | "devops">(initialValues?.role ?? "devops");
   const [status, setStatus] = useState<MemberStatus>(initialValues?.status ?? "available");
-  const [effortPercent, setEffortPercent] = useState(initialValues?.effortPercent ?? 0);
+  const [effortMinutes, setEffortMinutes] = useState(initialValues?.effortMinutes ?? 0);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
@@ -55,7 +55,7 @@ export function MemberForm({
         skills: skills.split(",").map((s) => s.trim()).filter(Boolean),
         status,
         currentTaskId: initialValues?.currentTaskId ?? null,
-        effortPercent,
+        effortMinutes,
         role,
       });
     } finally {
@@ -88,7 +88,15 @@ export function MemberForm({
             value={status}
             onChange={(v) => setStatus(v as MemberStatus)}
           />
-          <NumberInput label="Mức tải %" min={0} max={200} value={effortPercent} onChange={setEffortPercent} />
+          <NumberInput
+            label="Mức tải (phút)"
+            min={0}
+            max={4800}
+            step={15}
+            units="phút"
+            value={effortMinutes}
+            onChange={(v) => setEffortMinutes(v ?? 0)}
+          />
         </Grid>
         <HStack gap={3} justify="end" className="pt-2">
           {onCancel && (
