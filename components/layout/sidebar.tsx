@@ -6,6 +6,7 @@ import {
   LayoutGrid,
   Users,
   FolderGit2,
+  ListChecks,
   MessagesSquare,
   Bell,
   LogOut,
@@ -54,6 +55,11 @@ export function Sidebar(): React.JSX.Element {
       icon: Users,
     },
     {
+      href: "/tasks",
+      label: "Danh sách Task",
+      icon: ListChecks,
+    },
+    {
       href: "/chat",
       label: isLeader ? "AI Ask (Leader)" : "AI Log Work",
       icon: MessagesSquare,
@@ -94,7 +100,7 @@ export function Sidebar(): React.JSX.Element {
             <VStack gap={2}>
               {/* Role Indicator & Quick Switcher */}
 
-              <div className="flex items-center justify-between p-2 rounded-xl bg-white/[0.03] border border-white/[0.07]">
+              {/* <div className="flex items-center justify-between p-2 rounded-xl bg-white/[0.03] border border-white/[0.07]">
                 <div className="flex items-center gap-1.5">
                   <span
                     className={`p-1 rounded-md text-[11px] flex items-center gap-1 font-semibold ${
@@ -118,7 +124,7 @@ export function Sidebar(): React.JSX.Element {
                   <ArrowLeftRight size={11} className={switchingRole ? "animate-spin" : ""} />
                   <span>Đổi sang {isLeader ? "DevOps" : "Leader"}</span>
                 </button>
-              </div>
+              </div> */}
 
               {/* User Identity & Sign Out */}
               <HStack gap={2} vAlign="center">

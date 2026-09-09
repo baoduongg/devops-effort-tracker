@@ -29,20 +29,33 @@ import {
   Trash2,
 } from "lucide-react";
 import { ModeToggle } from "@/components/chat/mode-toggle";
+import { ProviderToggle } from "@/components/chat/provider-toggle";
 import { ChatThread } from "@/components/chat/chat-thread";
 import { SlashCommandPopup } from "@/components/chat/slash-command-popup";
 import { CommandTemplateModal } from "@/components/chat/command-template-modal";
 import { useChatStore } from "@/store/chat.store";
 import { useAuthStore } from "@/store/auth.store";
 import { useMembersStore } from "@/store/members.store";
-import { createTask, getTasksByMember } from "@/services/tasks.service";
+import { createTask, getTasksByMember, updateTask, deleteTask } from "@/services/tasks.service";
 import { getProjectByName, createProject, getProjects } from "@/services/projects.service";
-import { getMembers, updateMember, findBestSuitableMember, findMemberByName } from "@/services/members.service";
+import {
+  getMembers,
+  updateMember,
+  findBestSuitableMember,
+  findMemberByName,
+  syncMemberEffortStatus,
+} from "@/services/members.service";
 import { confirmChatLog, getChatLogsByMember, chatLogsToMessages } from "@/services/chatLogs.service";
+import { createTaskChangeLog } from "@/services/taskChangeLogs.service";
 import { notifyTaskCreated } from "@/services/chatops.service";
 import { getAvailableSlashCommands, resolveSlashCommand, SLASH_COMMANDS, type SlashCommand } from "@/lib/slash-commands";
-import { isTaskCreationIntent } from "@/lib/intent";
-import type { FormattedEntry } from "@/types/chat";
+import {
+  isTaskCreationIntent,
+  isTaskUpdateIntent,
+  isTaskDeleteIntent,
+  looksLikeSelfLogEntry,
+} from "@/lib/intent";
+import type { FormattedEntry, TaskChangeProposal } from "@/types/chat";
 import type { Member, MemberStatus } from "@/types/member";
 import type { Project } from "@/types/project";
 
@@ -122,10 +135,13 @@ const LEADER_PROMPT_SUGGESTIONS = [
 export function ChatBox(): React.JSX.Element {
   const mode = useChatStore((state) => state.mode);
   const setMode = useChatStore((state) => state.setMode);
+  const aiProvider = useChatStore((state) => state.aiProvider);
+  const setAiProvider = useChatStore((state) => state.setAiProvider);
   const messages = useChatStore((state) => state.messagesByMode[mode]);
   const setMessages = useChatStore((state) => state.setMessages);
   const appendMessage = useChatStore((state) => state.appendMessage);
   const updateEntryConfirmed = useChatStore((state) => state.updateEntryConfirmed);
+  const updateProposalConfirmed = useChatStore((state) => state.updateProposalConfirmed);
   const user = useAuthStore((state) => state.user);
 
   const [text, setText] = useState("");
@@ -308,12 +324,26 @@ export function ChatBox(): React.JSX.Element {
     setError(null);
 
     try {
-      if (mode === "devops" && (currentImageUrl || isTaskCreationIntent(currentText))) {
+      // ISSUE-13: devops mode defaults to self-logging (format-entry) for natural log sentences.
+      // F-12/ISSUE-16: inverted the fallback — mistaking a QUESTION for a create command is worse
+      // (bogus task, wrong assignee) than the reverse (user just retypes it), so devops text only
+      // routes to format-entry on a clear positive signal (explicit creation intent, an image, or
+      // a recognizable "did/doing X" log sentence via looksLikeSelfLogEntry). Explicit update/delete
+      // commands still go through answer-query so F-02 can deny devops from mutating tasks. Anything
+      // uncertain (not matching any of the above) now defaults to Q&A instead of format-entry.
+      const looksLikeMutationCommand = isTaskUpdateIntent(currentText) || isTaskDeleteIntent(currentText);
+      if (
+        mode === "devops" &&
+        !looksLikeMutationCommand &&
+        (currentImageUrl || isTaskCreationIntent(currentText) || looksLikeSelfLogEntry(currentText))
+      ) {
         const res = await axios.post("/api/ai/format-entry", {
           memberId: user?.memberId || user?.uid || "leader",
+          askerMemberName: user?.displayName || null,
           text: currentText,
           userInput: currentText,
           imageUrl: currentImageUrl,
+          provider: aiProvider,
         });
         const { entry, chatLogId, message } = res.data;
         if (message) {
@@ -336,8 +366,15 @@ export function ChatBox(): React.JSX.Element {
           query: currentText,
           memberId: user?.memberId || user?.uid || (mode === "devops" ? "" : "leader"),
           mode,
+          // ISSUE-14/ISSUE-17: `mode` is only the UI tab selection (which route/prompt to use) and
+          // does not reflect who is actually asking — a real devops user switching to the "Ask" tab
+          // still sends mode:"leader". `askerRole` is the asker's real account role (fixed per login,
+          // independent of tab), used server-side for identity/permission checks like self-query
+          // detection and filtering leader accounts out of member suggestion lists.
+          askerRole: user?.role,
+          provider: aiProvider,
         });
-        const { answer, entry, chatLogId } = res.data;
+        const { answer, entry, proposal, clarification, chatLogId } = res.data;
         if (entry) {
           if (answer) {
             appendMessage(mode, {
@@ -352,6 +389,28 @@ export function ChatBox(): React.JSX.Element {
             entry,
             chatLogId: chatLogId || generateMessageId("log"),
             confirmed: false,
+          });
+        } else if (proposal) {
+          if (answer) {
+            appendMessage(mode, {
+              id: generateMessageId("ai-text"),
+              role: "ai-answer",
+              text: answer,
+            });
+          }
+          appendMessage(mode, {
+            id: generateMessageId("ai-proposal"),
+            role: "ai-proposal",
+            proposal,
+            chatLogId: chatLogId || generateMessageId("log"),
+            confirmed: false,
+          });
+        } else if (clarification) {
+          appendMessage(mode, {
+            id: generateMessageId("ai-clarification"),
+            role: "ai-clarification",
+            text: answer || "",
+            clarification,
           });
         } else {
           appendMessage(mode, {
@@ -469,7 +528,137 @@ export function ChatBox(): React.JSX.Element {
         console.warn("Could not update chat log confirmation:", logErr);
       }
       updateEntryConfirmed(mode, chatLogId, true);
+
+      // F-09/AC-03-2: audit trail is only for leader-issued create commands via chat (answer-query),
+      // not devops's own work-log entries via format-entry — those aren't a "leader ra lệnh" action.
+      if (mode === "leader") {
+        try {
+          await createTaskChangeLog({
+            actorUid: user?.uid ?? "",
+            actorName: user?.displayName ?? "Leader",
+            action: "create",
+            taskId,
+            taskTitle: entry.title,
+            proposedChanges: { ...entry },
+            appliedChanges: { ...entry, assigneeName: memberName },
+            status: "confirmed",
+            chatLogId,
+          });
+        } catch (auditErr) {
+          console.warn("Could not write taskChangeLogs for create confirm:", auditErr);
+        }
+      }
     }
+  }
+
+  async function handleConfirmProposal(
+    chatLogId: string,
+    proposal: TaskChangeProposal,
+    appliedChanges: TaskChangeProposal["changes"],
+  ): Promise<void> {
+    const allMembers = members.length > 0 ? members : await getMembers();
+
+    if (proposal.action === "delete") {
+      await deleteTask(proposal.taskId);
+      const currentMember = allMembers.find((m) => m.name === proposal.taskSnapshot.assigneeName);
+      if (currentMember) {
+        await syncMemberEffortStatus(currentMember.id);
+      }
+    } else {
+      // ISSUE-07: dùng appliedChanges (bản leader đã sửa) để apply thật, proposal.changes (bản AI
+      // đề xuất ban đầu, không đổi) chỉ dùng để ghi taskChangeLogs.proposedChanges bên dưới.
+      const changes = appliedChanges;
+      const taskPatch: Record<string, unknown> = {};
+      if (changes.title !== undefined) taskPatch.title = changes.title;
+      if (changes.status !== undefined) taskPatch.status = changes.status;
+      if (changes.startDate !== undefined) taskPatch.startDate = changes.startDate;
+      if (changes.endDate !== undefined) taskPatch.endDate = changes.endDate;
+      if (changes.effortMinutes !== undefined) taskPatch.effortMinutes = changes.effortMinutes;
+
+      if (changes.projectName !== undefined) {
+        let project = await getProjectByName(changes.projectName);
+        if (!project) {
+          const projectId = await createProject({
+            name: changes.projectName,
+            description: `Dự án ${changes.projectName}`,
+            color: "#6366f1",
+          });
+          project = { id: projectId, name: changes.projectName, description: "", color: "#6366f1", createdAt: new Date().toISOString() };
+        }
+        taskPatch.projectId = project.id;
+      }
+
+      let newMemberId: string | null | undefined;
+      if (changes.assigneeName === null) {
+        // Chủ ý bỏ người phụ trách (unassign) — không tìm kiếm theo tên, không phải lỗi.
+        newMemberId = null;
+        taskPatch.memberId = null;
+      } else if (changes.assigneeName !== undefined) {
+        const matched = findMemberByName(allMembers, changes.assigneeName);
+        if (!matched) {
+          setError(`Không tìm thấy nhân sự "${changes.assigneeName}" trong danh sách thành viên. Vui lòng kiểm tra lại tên trước khi xác nhận.`);
+          throw new Error("assignee not found");
+        }
+        newMemberId = matched.id;
+        taskPatch.memberId = matched.id;
+      }
+
+      await updateTask(proposal.taskId, taskPatch);
+
+      // F-04/PM decision: resync Member.effortMinutes/status for every member touched, using the
+      // same formula as task creation (handleConfirmEntry) — old assignee (if reassigned) too.
+      // newMemberId is a real member id only on reassignment; null (unassign) or undefined (no
+      // assignee change) both fall through to resyncing the previous/current assignee below.
+      if (newMemberId) {
+        const previousMemberId = allMembers.find((m) => m.name === proposal.taskSnapshot.assigneeName)?.id;
+        if (previousMemberId && previousMemberId !== newMemberId) {
+          await syncMemberEffortStatus(previousMemberId);
+        }
+        await syncMemberEffortStatus(newMemberId);
+      } else {
+        const currentMember = allMembers.find((m) => m.name === proposal.taskSnapshot.assigneeName);
+        if (currentMember) {
+          await syncMemberEffortStatus(currentMember.id);
+        }
+      }
+    }
+
+    try {
+      await confirmChatLog(chatLogId);
+    } catch (logErr) {
+      console.warn("Could not update chat log confirmation:", logErr);
+    }
+    updateProposalConfirmed(mode, chatLogId, true);
+
+    await createTaskChangeLog({
+      actorUid: user?.uid ?? "",
+      actorName: user?.displayName ?? "Leader",
+      action: proposal.action,
+      taskId: proposal.taskId,
+      taskTitle: proposal.taskSnapshot.title,
+      proposedChanges: proposal.changes,
+      appliedChanges: proposal.action === "delete" ? {} : appliedChanges,
+      status: "confirmed",
+      chatLogId,
+    });
+  }
+
+  async function handleCancelProposal(chatLogId: string, proposal: TaskChangeProposal): Promise<void> {
+    await createTaskChangeLog({
+      actorUid: user?.uid ?? "",
+      actorName: user?.displayName ?? "Leader",
+      action: proposal.action,
+      taskId: proposal.taskId,
+      taskTitle: proposal.taskSnapshot.title,
+      proposedChanges: proposal.changes,
+      appliedChanges: {},
+      status: "cancelled",
+      chatLogId,
+    });
+  }
+
+  function handleSelectClarificationCandidate(label: string): void {
+    setText(label);
   }
 
   const suggestions = mode === "devops" ? DEVOPS_PROMPT_SUGGESTIONS : LEADER_PROMPT_SUGGESTIONS;
@@ -494,7 +683,10 @@ export function ChatBox(): React.JSX.Element {
   return (
     <VStack gap={2} height="100%" className="h-full min-h-0 flex-1 overflow-hidden">
       <StackItem size="static">
-        <ModeToggle />
+        <HStack gap={2} vAlign="center" hAlign="between">
+          <ModeToggle />
+          <ProviderToggle />
+        </HStack>
       </StackItem>
 
       {/* Quick Prompt Suggestions when chat is empty or fresh */}
@@ -528,7 +720,16 @@ export function ChatBox(): React.JSX.Element {
       )}
 
       <StackItem size="fill" isScrollable className="min-h-0 pr-1">
-        <ChatThread mode={mode} messages={messages} loading={loadingHistory} thinking={thinking} onConfirmEntry={handleConfirmEntry} />
+        <ChatThread
+          mode={mode}
+          messages={messages}
+          loading={loadingHistory}
+          thinking={thinking}
+          onConfirmEntry={handleConfirmEntry}
+          onConfirmProposal={handleConfirmProposal}
+          onCancelProposal={handleCancelProposal}
+          onSelectClarificationCandidate={handleSelectClarificationCandidate}
+        />
       </StackItem>
 
       {error && (

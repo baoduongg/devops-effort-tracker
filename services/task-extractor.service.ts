@@ -1,4 +1,4 @@
-import { callNvidiaText, callNvidiaVision } from "@/services/nvidia.service";
+import { callAiText, callAiVision, type AiProvider } from "@/services/ai-provider.service";
 import { formattedEntrySchema } from "@/lib/schemas";
 import { getMembers, findBestSuitableMember, findMemberByName } from "@/services/members.service";
 import { formatEffortDuration } from "@/lib/effort";
@@ -9,7 +9,7 @@ function formatDate(d: Date): string {
   return formatDateLocal(d);
 }
 
-export function getTaskExtractionSystemPrompt(teamMembersContext = ""): string {
+export function getTaskExtractionSystemPrompt(teamMembersContext = "", hasAskerMemberName = false): string {
   const now = new Date();
   const dayNames = ["Chủ Nhật", "Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
   const dayOfWeek = now.getDay();
@@ -52,7 +52,11 @@ EXTRACTION & INFERENCE RULES:
      * Ignore people mentioned as absent/off/on leave (e.g. "Tùng off", "nghỉ") — do NOT assign to them.
      * Ignore requesters/managers in the chat headers unless they are doing the work themselves.
    - Match with known team members list if available.
-   - If no specific assignee is found or mentioned, pick the most suitable engineer from the KNOWN DEVOPS TEAM MEMBERS list whose role is NOT Leader (only pick DevOps engineers), matching skills and availability. NEVER assign to a Leader unless explicitly instructed.
+   - ${
+     hasAskerMemberName
+       ? "If no specific assignee is found or mentioned in the text, return null for \"assigneeName\". Do NOT pick or guess a name yourself — the calling system already knows who is chatting and will default to them."
+       : "If no specific assignee is found or mentioned, pick the most suitable engineer from the KNOWN DEVOPS TEAM MEMBERS list whose role is NOT Leader (only pick DevOps engineers), matching skills and availability. NEVER assign to a Leader unless explicitly instructed."
+   }
 5. "startDate" and "endDate": Strictly YYYY-MM-DD format based on the calendar rules above (e.g. today is ${todayStr}).
    - "startDate": Starting date of the task. Default to ${todayStr} if unspecified.
    - "endDate": Task deadline / completion date.
@@ -134,7 +138,9 @@ export interface ExtractTaskResult {
 
 export async function extractTaskEntryFromInput(
   inputText: string,
-  imageUrl?: string | null
+  imageUrl?: string | null,
+  provider?: AiProvider | null,
+  askerMemberName?: string | null
 ): Promise<ExtractTaskResult | null> {
   let teamMembersContext = "";
   let allMembers: import("@/types/member").Member[] = [];
@@ -147,7 +153,10 @@ export async function extractTaskEntryFromInput(
     console.warn("Could not load team members for AI grounding:", err);
   }
 
-  const systemPrompt = getTaskExtractionSystemPrompt(teamMembersContext);
+  // ISSUE-18: when askerMemberName is known (devops self-logging), the AI must not hallucinate an
+  // assignee — leave it null so the askerMemberName fallback below actually runs. Auto-suggestion
+  // stays enabled for the leader-create branch (no askerMemberName, F-06).
+  const systemPrompt = getTaskExtractionSystemPrompt(teamMembersContext, Boolean(askerMemberName));
 
   try {
     const visionPrompt = `${systemPrompt}
@@ -163,17 +172,18 @@ Carefully inspect all text, messages, timestamps, and usernames in this screensh
 ${inputText ? `Additional user note: ${inputText}\n` : ""}Return ONLY the JSON object.`;
 
     const raw = imageUrl
-      ? await callNvidiaVision(visionPrompt, imageUrl)
-      : await callNvidiaText(systemPrompt, inputText);
+      ? await callAiVision(visionPrompt, imageUrl, provider)
+      : await callAiText(systemPrompt, inputText, provider);
 
     const jsonCandidate = extractJsonFromAiText(raw);
     let parsed = formattedEntrySchema.safeParse(jsonCandidate);
 
     if (!parsed.success) {
       console.warn("Initial format-entry parse failed, retrying with text model correction...", raw);
-      const retryRaw = await callNvidiaText(
+      const retryRaw = await callAiText(
         systemPrompt,
-        `The previous response was not valid JSON or was missing fields.\nRaw response: "${raw}"\nOriginal text: "${inputText || "Screenshot analysis"}"\nReturn ONLY the single JSON object starting with { and ending with }.`
+        `The previous response was not valid JSON or was missing fields.\nRaw response: "${raw}"\nOriginal text: "${inputText || "Screenshot analysis"}"\nReturn ONLY the single JSON object starting with { and ending with }.`,
+        provider
       );
       const retryCandidate = extractJsonFromAiText(retryRaw);
       parsed = formattedEntrySchema.safeParse(retryCandidate);
@@ -225,8 +235,20 @@ ${inputText ? `Additional user note: ${inputText}\n` : ""}Return ONLY the JSON o
             notificationMessage = `⚠️ **Lưu ý:** Không tìm thấy nhân sự **"${rawAssignee}"** trong danh sách thành viên. Vui lòng bấm **Chỉnh sửa** để chọn người thực hiện.`;
           }
         }
+      } else if (askerMemberName) {
+        // F-12/ISSUE-16: devops self-logging (format-entry) with no assignee mentioned defaults to
+        // the person actually chatting, not a skill-based auto-suggestion across the whole team —
+        // findBestSuitableMember stays reserved for the leader/answer-query create branch (F-06),
+        // which still calls this function without an askerMemberName.
+        const self = findMemberByName(allMembers, askerMemberName);
+        if (self) {
+          data.assigneeName = self.name;
+        } else {
+          data.assigneeName = askerMemberName;
+        }
       } else {
-        // No assignee specified in input -> auto-suggest best available member
+        // No assignee specified in input, and no asker identity known (e.g. leader create branch)
+        // -> auto-suggest best available member (unchanged, F-06).
         const suitable = findBestSuitableMember(allMembers, data.title, data.projectName);
         if (suitable) {
           data.assigneeName = suitable.name;

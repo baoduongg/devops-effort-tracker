@@ -1,5 +1,6 @@
 import {
   signInAnonymously,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
   type User,
@@ -26,6 +27,10 @@ export async function signInWithGoogle(): Promise<void> {
 
 export async function signInAnon(): Promise<void> {
   await signInAnonymously(auth);
+}
+
+export async function signInWithEmailPassword(email: string, password: string): Promise<void> {
+  await signInWithEmailAndPassword(auth, email, password);
 }
 
 export async function signOutUser(): Promise<void> {
@@ -104,6 +109,10 @@ export async function linkOrCreateUser(firebaseUser: User): Promise<AppUser> {
         status: "available",
         currentTaskId: null,
         effortMinutes: 0,
+        // F-11/ISSUE-15: role must be synced from AppUser.role at creation time, otherwise
+        // resolveIsLeader() (answer-query route) can never identify real leaders (matched.role
+        // stays undefined forever) and blocks them like devops.
+        role: appUser.role,
         updatedAt: Timestamp.now(),
       });
     }

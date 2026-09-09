@@ -56,26 +56,10 @@ function CommandTemplateForm({
   onInsertToChat,
   onSubmitPrompt,
 }: CommandTemplateFormProps): React.JSX.Element {
-  const defaultMember = useMemo(() => {
-    if (members.length === 0) return "";
-    const firstEngineer = members.find((m) => m.role !== "leader") || members[0];
-    return firstEngineer.name;
-  }, [members]);
-
-  const defaultNewMember = useMemo(() => {
-    if (members.length < 2) return defaultMember;
-    const second = members.filter((m) => m.role !== "leader")[1] || members[1];
-    return second?.name || defaultMember;
-  }, [members, defaultMember]);
-
-  const defaultProject = useMemo(() => {
-    return projects.length > 0 ? projects[0].name : "";
-  }, [projects]);
-
   const [taskTitle, setTaskTitle] = useState("");
-  const [selectedMemberName, setSelectedMemberName] = useState(defaultMember);
-  const [newAssigneeName, setNewAssigneeName] = useState(defaultNewMember);
-  const [selectedProjectName, setSelectedProjectName] = useState(defaultProject);
+  const [selectedMemberName, setSelectedMemberName] = useState("");
+  const [newAssigneeName, setNewAssigneeName] = useState("");
+  const [selectedProjectName, setSelectedProjectName] = useState("");
   const [effortMinutes, setEffortMinutes] = useState<number>(
     command.id === "coord-add" ? 120 : 60
   );
@@ -97,14 +81,14 @@ function CommandTemplateForm({
 
   const memberOptions = useMemo(() => {
     return members.map((m) => ({
-      value: m.name,
+      value: m.id,
       label: `${m.name} (${m.role === "leader" ? "Leader" : m.status || "DevOps"})`,
     }));
   }, [members]);
 
   const projectOptions = useMemo(() => {
     return projects.map((p) => ({
-      value: p.name,
+      value: p.id,
       label: p.name,
     }));
   }, [projects]);
@@ -114,9 +98,9 @@ function CommandTemplateForm({
   // Dynamically generate natural language prompt based on current command and form values
   const generatedPrompt = useMemo(() => {
     const title = taskTitle.trim() || "[Tên công việc]";
-    const member = selectedMemberName.trim() || "[Tên nhân sự]";
-    const newMember = newAssigneeName.trim() || "[Người mới]";
-    const proj = selectedProjectName.trim() || "[Tên dự án]";
+    const member = members.find((m) => m.id === selectedMemberName)?.name || "[Tên nhân sự]";
+    const newMember = members.find((m) => m.id === newAssigneeName)?.name || "[Người mới]";
+    const proj = projects.find((p) => p.id === selectedProjectName)?.name || "[Tên dự án]";
     const duration = durationStr;
 
     switch (command.id) {
@@ -175,6 +159,8 @@ function CommandTemplateForm({
     selectedMemberName,
     newAssigneeName,
     selectedProjectName,
+    members,
+    projects,
     durationStr,
     timeframe,
     status,

@@ -31,7 +31,32 @@ export function isInformationalQuery(text: string): boolean {
     return true;
   }
 
+  // F-12/ISSUE-16: "task/việc/công việc của tôi/của [tên] ... là gì/có gì/gồm gì" — a question
+  // with no "?" and no keyword above (e.g. "task của tôi hôm nay là gì"), previously fell through
+  // to the default mutation-intent branch in chat-box.tsx and got mistaken for a log-entry command.
+  if (/\b(task|việc|công việc)\b.*\b(là gì|có gì|gồm gì)\s*$/i.test(q)) {
+    return true;
+  }
+
   return false;
+}
+
+/**
+ * F-12/ISSUE-16: positive signal that a devops sentence is logging work already done/in progress
+ * (has an action verb describing work, not a question) — e.g. "Fix lỗi connect AWS bên service
+ * Hook, 30 phút". Used by chat-box.tsx as the ONLY thing that defaults devops input to
+ * format-entry (create task); anything that doesn't match this defaults to Q&A instead, per spec
+ * rev 2 rule "mistaking a question for a create command is worse than the reverse".
+ */
+export function looksLikeSelfLogEntry(text: string): boolean {
+  const q = text.trim().toLowerCase();
+  if (!q) return false;
+  if (isInformationalQuery(q)) return false;
+
+  const logActionVerbs =
+    /\b(fix|sửa lỗi|xử lý|deploy|triển khai|cài đặt|setup|config|cấu hình|build|release|update|nâng cấp|khắc phục|hoàn thành|đã làm|đang làm|làm xong|troubleshoot|debug|viết|refactor|test|kiểm thử|migrate|monitor|giám sát|log)\b/i;
+
+  return logActionVerbs.test(q);
 }
 
 /**
@@ -68,4 +93,63 @@ export function isTaskCreationIntent(query: string): boolean {
   ];
 
   return actionPatterns.some((p) => p.test(q));
+}
+
+/**
+ * Checks if a user prompt is an imperative directive to update/change an existing task
+ * (e.g. status, dates, assignee, description).
+ */
+export function isTaskUpdateIntent(query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+
+  const updatePrefixes = [
+    /^(sửa|đổi|cập nhật|chuyển|update|edit|change)\s+(task|việc|công việc|nhiệm vụ|trạng thái|ngày|người phụ trách|assignee)/i,
+    /^(hãy|vui lòng|nhờ|phiền)\s+(sửa|đổi|cập nhật|chuyển)\s+(task|việc|công việc|nhiệm vụ)/i,
+  ];
+
+  if (updatePrefixes.some((p) => p.test(q))) {
+    return true;
+  }
+
+  // If it is an informational query (e.g. "Nếu tôi đổi trạng thái task này thì effort có
+  // tính lại không?"), it is NOT an update command.
+  if (isInformationalQuery(q)) {
+    return false;
+  }
+
+  const updateMiddlePatterns = [
+    /(?:sửa|đổi|cập nhật|chuyển)\s+(?:task|việc|công việc|nhiệm vụ)\s+.+?\s+(?:sang|thành|của|cho)\s+/i,
+    /(?:đổi|chuyển)\s+(?:trạng thái|ngày|người phụ trách|assignee)\s+(?:task|của|cho)?/i,
+  ];
+
+  return updateMiddlePatterns.some((p) => p.test(q));
+}
+
+/**
+ * Checks if a user prompt is an imperative directive to delete/remove an existing task.
+ */
+export function isTaskDeleteIntent(query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+
+  const deletePrefixes = [
+    /^(xóa|hủy|bỏ|xoá)\s+(task|việc|công việc|nhiệm vụ)/i,
+    /^(hãy|vui lòng|nhờ|phiền)\s+(xóa|hủy|bỏ|xoá)\s+(task|việc|công việc|nhiệm vụ)/i,
+    /^(delete|remove|cancel)\s+(task|work)/i,
+  ];
+
+  if (deletePrefixes.some((p) => p.test(q))) {
+    return true;
+  }
+
+  // If it is an informational query (e.g. "Task nào của Huy đã bị xóa tuần trước?"), it is NOT
+  // a delete command.
+  if (isInformationalQuery(q)) {
+    return false;
+  }
+
+  const deleteMiddlePatterns = [/(?:xóa|hủy|bỏ|xoá)\s+(?:task|việc|công việc|nhiệm vụ)\s+.+?\s+(?:của|cho)\s+/i];
+
+  return deleteMiddlePatterns.some((p) => p.test(q));
 }

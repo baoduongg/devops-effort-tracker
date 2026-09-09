@@ -8,14 +8,35 @@ import { Card } from "@astryxdesign/core/Card";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
-import { signInWithGoogle, signInAnon } from "@/services/auth.service";
+import { TextInput } from "@astryxdesign/core/TextInput";
+import { Divider } from "@astryxdesign/core/Divider";
+import { signInWithGoogle, signInAnon, signInWithEmailPassword } from "@/services/auth.service";
 import { useAuthStore } from "@/store/auth.store";
+
+function firebaseLoginErrorMessage(error: unknown): string {
+  const code = (error as { code?: string })?.code;
+  switch (code) {
+    case "auth/invalid-email":
+      return "Email không hợp lệ.";
+    case "auth/user-disabled":
+      return "Tài khoản đã bị vô hiệu hóa.";
+    case "auth/invalid-credential":
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+      return "Email hoặc mật khẩu không đúng.";
+    default:
+      return "Đăng nhập thất bại. Vui lòng thử lại.";
+  }
+}
 
 export default function LoginPage(): React.JSX.Element {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const loading = useAuthStore((state) => state.loading);
   const [authenticating, setAuthenticating] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && user) {
@@ -36,6 +57,22 @@ export default function LoginPage(): React.JSX.Element {
     setAuthenticating(true);
     try {
       await signInAnon();
+    } finally {
+      setAuthenticating(false);
+    }
+  }
+
+  async function handleEmailPasswordSignIn(): Promise<void> {
+    if (!email || !password) {
+      setLoginError("Vui lòng nhập email và mật khẩu.");
+      return;
+    }
+    setLoginError(null);
+    setAuthenticating(true);
+    try {
+      await signInWithEmailPassword(email, password);
+    } catch (error) {
+      setLoginError(firebaseLoginErrorMessage(error));
     } finally {
       setAuthenticating(false);
     }
@@ -63,12 +100,45 @@ export default function LoginPage(): React.JSX.Element {
               </Text>
             </VStack>
 
+            {/* Email/password login */}
+            <VStack gap={3} width="100%">
+              <TextInput
+                type="email"
+                label="Email"
+                value={email}
+                onChange={setEmail}
+                placeholder="ban@congty.com"
+                isDisabled={authenticating}
+                width="100%"
+              />
+              <TextInput
+                type="password"
+                label="Mật khẩu"
+                value={password}
+                onChange={setPassword}
+                placeholder="Nhập mật khẩu"
+                isDisabled={authenticating}
+                onEnter={handleEmailPasswordSignIn}
+                status={loginError ? { type: "error", message: loginError } : undefined}
+                width="100%"
+              />
+              <Button
+                label={authenticating ? "Đang xử lý..." : "Đăng nhập"}
+                onClick={handleEmailPasswordSignIn}
+                variant="primary"
+                width="100%"
+                isDisabled={authenticating}
+              />
+            </VStack>
+
+            <Divider label="hoặc" isFullBleed />
+
             {/* Actions */}
             <VStack gap={2} width="100%">
               <Button
                 label={authenticating ? "Đang xử lý..." : "Đăng nhập với Google"}
                 onClick={handleGoogleSignIn}
-                variant="primary"
+                variant="secondary"
                 width="100%"
                 isDisabled={authenticating}
               />

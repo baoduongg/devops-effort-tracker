@@ -72,16 +72,16 @@ export function TaskCreateModal({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Compute effective projectId & memberId based on user selection or defaults
+  // Effective projectId & memberId: only what the user explicitly picked (or an explicit default prop), never auto-picked from the list
   const currentProjectId = useMemo(() => {
     if (isCreatingNewProject) return "";
     if (projectId && projects.some((p) => p.id === projectId)) return projectId;
-    return defaultProjectId || (projects[0]?.id ?? "");
+    return defaultProjectId || "";
   }, [isCreatingNewProject, projectId, projects, defaultProjectId]);
 
   const currentMemberId = useMemo(() => {
     if (memberId && members.some((m) => m.id === memberId)) return memberId;
-    return defaultMemberId || (members[0]?.id ?? "");
+    return defaultMemberId || "";
   }, [memberId, members, defaultMemberId]);
 
   const memberOptions = useMemo(() => {

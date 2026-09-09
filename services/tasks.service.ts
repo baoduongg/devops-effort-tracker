@@ -3,6 +3,7 @@ import {
   getDocs,
   addDoc,
   updateDoc,
+  deleteDoc,
   doc,
   query,
   where,
@@ -93,5 +94,9 @@ export async function updateTask(id: string, input: Partial<TaskInput>): Promise
     payload.endDate = input.endDate ? Timestamp.fromDate(new Date(input.endDate)) : null;
   }
   await updateDoc(doc(db, "tasks", id), payload);
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  await deleteDoc(doc(db, "tasks", id));
 }
 

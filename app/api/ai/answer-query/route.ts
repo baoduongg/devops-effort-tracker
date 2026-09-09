@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { callNvidiaText } from "@/services/nvidia.service";
+import { callAiText } from "@/services/ai-provider.service";
 import { buildGroundingSnapshot, GroundingSnapshot } from "@/services/grounding.service";
 import { createChatLog } from "@/services/chatLogs.service";
 import { extractTaskEntryFromInput } from "@/services/task-extractor.service";
-import { getMembers, findMemberByName } from "@/services/members.service";
-import { isTaskCreationIntent } from "@/lib/intent";
+import { extractTaskMutationFromInput } from "@/services/task-mutation-extractor.service";
+import { getMembers, findMemberByName, findBestSuitableMember } from "@/services/members.service";
+import { getAllTaskChangeLogs, getTaskChangeLogsByActor } from "@/services/taskChangeLogs.service";
+import { isTaskCreationIntent, isTaskUpdateIntent, isTaskDeleteIntent } from "@/lib/intent";
 import { formatEffortDuration } from "@/lib/effort";
 import type { Member } from "@/types/member";
+import type { ClarificationRequest } from "@/types/chat";
 
 const SYSTEM_PROMPT = `Bạn là Trợ lý AI Quản lý Nguồn lực & Điều phối Nhân sự DevOps (DevOps Effort & Resource Assistant).
 Nhiệm vụ của bạn là giải đáp câu hỏi của Leader / Quản lý một cách CHUYÊN NGHIỆP, RÕ RÀNG, TRỰC QUAN và CHÍNH XÁC dựa trên dữ liệu thực tế được cung cấp.
@@ -47,7 +50,10 @@ QUY TẮC BẮT BUỘC KHI TRẢ LỜI:
 
 5. TÍNH CHÍNH XÁC & GIỚI HẠN THỰC THI (GROUNDING & TASK CREATION):
    - Chỉ sử dụng số liệu có trong dữ liệu đính kèm. Không suy đoán hay tự bịa số liệu.
-   - TUYỆT ĐỐI KHÔNG tự khẳng định rằng 'Đã gán task vào cơ sở dữ liệu' hoặc 'Đã thêm task vào danh sách plannedTasks' trong văn bản trả lời thuần túy khi chưa qua bước xác nhận thẻ công việc.`;
+   - TUYỆT ĐỐI KHÔNG tự khẳng định rằng 'Đã gán task vào cơ sở dữ liệu' hoặc 'Đã thêm task vào danh sách plannedTasks' trong văn bản trả lời thuần túy khi chưa qua bước xác nhận thẻ công việc.
+   - Dùng đúng các trường tính sẵn "overdueTasks", "freeMembers", "busyMembers", "overloadedMembers", "projectProgress" trong dữ liệu đính kèm khi câu hỏi liên quan (trễ hạn / ai rảnh / ai quá tải / tiến độ dự án) thay vì tự suy luận lại từ danh sách thô.
+   - Nếu câu hỏi có NHIỀU Ý (vd vừa hỏi ai rảnh vừa hỏi task nào trễ), PHẢI trả lời đủ TẤT CẢ các ý trong cùng một câu trả lời, không được chỉ trả lời ý đầu rồi bỏ qua ý sau.
+   - Nếu câu hỏi KHÔNG liên quan tới effort/task/team/dự án (vd thời tiết, kiến thức chung ngoài hệ thống), từ chối lịch sự và nêu rõ đây là hệ thống quản lý task/effort, không trả lời nội dung ngoài phạm vi đó.`;
 
 const MEMBER_QUERY_PATTERN =
   /(?:thông tin|tình hình|task|công việc|tiến độ|kế hoạch|status|effort|tải công việc|báo cáo)\s+(?:công việc\s+)?(?:của|về)\s+(?:thành viên|nhân sự|member|bạn|anh|chị|em|chú|bác)?\s*([^?.,!]+)|(?:thành viên|nhân sự|member)\s+([^?.,!]+?)(?:\s+(?:đang làm gì|làm gì|có task gì|đang phụ trách gì|bận không|rảnh không|effort bao nhiêu|như thế nào|ra sao|hiện tại|trong tuần))?$|(?:tra cứu|xem|kiểm tra|tìm|check)\s+(?:thông tin\s+)?(?:thành viên|nhân sự|member)\s+([^?.,!]+)|^\/(?:status|member|nhansu)\s+(.+)$/i;
@@ -76,6 +82,21 @@ function cleanMemberNameTarget(raw: string): string {
     .trim();
 }
 
+const FIRST_PERSON_PATTERN = /\b(của tôi|của mình|bản thân|tôi|mình)\b/i;
+
+/**
+ * ISSUE-14: "tôi"/"mình"/"của tôi" used to be treated as a GENERAL_TEAM_KEYWORD (no specific
+ * target), so a devops asking about themselves fell through to the generic team Q&A with no
+ * identity context. When the asker has a real resolvable member (not leader mode's generic
+ * "leader" placeholder), map the pronoun straight to that member instead of treating it as
+ * "no specific member" / requiring a name lookup.
+ */
+function detectSelfQueryTarget(query: string, askerRole: "leader" | "devops", currentMemberId: string, allMembers: Member[]): Member | null {
+  if (!FIRST_PERSON_PATTERN.test(query)) return null;
+  if (askerRole !== "devops" || !currentMemberId || currentMemberId === "leader") return null;
+  return allMembers.find((m) => m.id === currentMemberId) ?? null;
+}
+
 function detectMemberQueryTarget(query: string): { isMemberQuery: boolean; rawTarget: string | null; isPlaceholder: boolean } {
   const q = query.trim();
 
@@ -95,14 +116,21 @@ function detectMemberQueryTarget(query: string): { isMemberQuery: boolean; rawTa
   return { isMemberQuery: true, rawTarget: target, isPlaceholder: false };
 }
 
-function renderMemberList(members: Member[], snapshotMembers?: GroundingSnapshot["members"]): string {
-  if (!members || members.length === 0) {
+/**
+ * F-12/ISSUE-16(c): when rendering the "here are the members you can pick from" list for a devops
+ * asker, leader accounts must be filtered out — devops should only see themselves/peers, never a
+ * leader offered as a valid lookup/assignment target. `forMode` is the identity of the person the
+ * list is being shown to, not the member being described.
+ */
+function renderMemberList(members: Member[], snapshotMembers?: GroundingSnapshot["members"], forMode: "leader" | "devops" = "leader"): string {
+  const visibleMembers = forMode === "devops" ? members.filter((m) => m.role !== "leader") : members;
+  if (!visibleMembers || visibleMembers.length === 0) {
     return "- *(Chưa có thành viên nào được đăng ký trong hệ thống)*";
   }
 
   const snapshotMap = new Map((snapshotMembers || []).map((m) => [m.name.toLowerCase(), m]));
 
-  return members
+  return visibleMembers
     .map((m) => {
       const snap = snapshotMap.get(m.name.toLowerCase());
       const effortMinutes = snap ? snap.totalEffortMinutes : (m.effortMinutes ?? 0);
@@ -114,28 +142,226 @@ function renderMemberList(members: Member[], snapshotMembers?: GroundingSnapshot
     .join("\n");
 }
 
+/**
+ * Resolves the real `role` from Firestore for the given memberId, so the route doesn't blindly
+ * trust the client-supplied `mode`. Falls back to trusting `mode` when memberId can't be resolved
+ * (e.g. leader's placeholder memberId="leader") — documented assumption, see spec "Phân quyền".
+ */
+async function resolveIsLeader(mode: "leader" | "devops", memberId: string, allMembers: Member[]): Promise<boolean> {
+  if (!memberId || memberId === "leader") {
+    return mode === "leader";
+  }
+  const matched = allMembers.find((m) => m.id === memberId);
+  if (!matched) {
+    return mode === "leader";
+  }
+  return matched.role === "leader";
+}
+
+const AUDIT_QUERY_PATTERN =
+  /(vừa nãy|vừa rồi).*(đổi|sửa|xóa|xoá).*(qua chat|task)|(?:tôi|leader)\s+(?:vừa|đã)\s+(?:đổi|sửa|xóa|xoá).*task/i;
+
+function renderTaskChangeAudit(logs: Awaited<ReturnType<typeof getAllTaskChangeLogs>>): string {
+  if (logs.length === 0) {
+    return "Bạn chưa thực hiện thay đổi (sửa/xóa) task nào qua chat trong hệ thống.";
+  }
+  const actionLabel: Record<string, string> = { create: "Tạo", update: "Sửa", delete: "Xóa" };
+  const statusLabel: Record<string, string> = { confirmed: "đã xác nhận", cancelled: "đã hủy" };
+  const lines = logs
+    .slice(0, 20)
+    .map(
+      (l) =>
+        `- **${actionLabel[l.action] ?? l.action}** task **${l.taskTitle}** — ${statusLabel[l.status] ?? l.status} lúc ${new Date(l.createdAt).toLocaleString("vi-VN")}`
+    );
+  return `📋 **Lịch sử thay đổi task qua chat:**\n${lines.join("\n")}`;
+}
+
+function renderClarificationAnswer(clarification: ClarificationRequest): string {
+  switch (clarification.reason) {
+    case "missing_field":
+      return "Bạn chưa nói rõ muốn đổi thông tin gì (trạng thái/ngày/người phụ trách/mô tả/effort). Vui lòng bổ sung rõ trước khi tôi soạn đề xuất.";
+    case "no_match":
+      return clarification.candidates && clarification.candidates.length > 0
+        ? `Không tìm thấy task/nhân sự khớp với yêu cầu. Danh sách hiện có:\n${clarification.candidates.map((c) => `- ${c.label}`).join("\n")}`
+        : "Không tìm thấy task/nhân sự nào khớp với yêu cầu của bạn. Vui lòng kiểm tra lại tên.";
+    case "ambiguous_match":
+      return `Có nhiều task khớp với yêu cầu, vui lòng chọn rõ:\n${(clarification.candidates ?? []).map((c) => `- ${c.label}`).join("\n")}`;
+    case "target_is_leader":
+      return `Không thể giao/sửa task cho tài khoản có vai trò Leader — task chỉ dành cho kỹ sư DevOps.${
+        clarification.candidates && clarification.candidates.length > 0
+          ? ` Gợi ý: ${clarification.candidates.map((c) => c.label).join(", ")}.`
+          : ""
+      }`;
+    default:
+      return "Cần bạn xác nhận rõ hơn trước khi tiếp tục.";
+  }
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const body = await request.json();
-  const { question, query, memberId, mode } = body as {
+  const { question, query, memberId, mode, askerRole, provider } = body as {
     question?: string;
     query?: string;
     memberId?: string;
     mode?: "leader" | "devops";
+    askerRole?: "leader" | "devops";
+    provider?: "claude" | "nvidia";
   };
   const userQuery = (question ?? query ?? "").trim();
   const currentMode = mode || "leader";
   const currentMemberId = memberId || (currentMode === "devops" ? "" : "leader");
+  // ISSUE-14/ISSUE-17: `currentMode` is the UI tab (routing only) and can differ from who is really
+  // asking (e.g. a devops user on the "Ask" tab still sends mode:"leader"). `askerRole` is the
+  // asker's real account role, fixed per login — use it for identity/permission checks below.
+  // Falls back to currentMode when the client didn't send it (e.g. older client), same as before.
+  const currentAskerRole = askerRole || currentMode;
 
   if (!userQuery) {
     return NextResponse.json({ error: "question is required" }, { status: 400 });
   }
 
   try {
-    // 1. Check if user is asking to create / assign / plan a task
-    if (isTaskCreationIntent(userQuery)) {
-      const result = await extractTaskEntryFromInput(userQuery);
+    const allMembersForRoleCheck = await getMembers();
+    const isLeader = await resolveIsLeader(currentMode, currentMemberId, allMembersForRoleCheck);
+
+    const isDeleteIntent = isTaskDeleteIntent(userQuery);
+    const isUpdateIntent = !isDeleteIntent && isTaskUpdateIntent(userQuery);
+    const isCreateIntent = !isDeleteIntent && !isUpdateIntent && isTaskCreationIntent(userQuery);
+
+    // 0. F-02: block devops from create/update/delete, even on their own tasks — checked before
+    // calling any extractor/AI so no chatLogs proposal / taskChangeLogs is ever created for it.
+    if ((isDeleteIntent || isUpdateIntent || isCreateIntent) && !isLeader) {
+      const answer =
+        "⚠️ Bạn không đủ quyền để thêm/sửa/xóa task qua chat. Hành động này chỉ dành cho Leader. Vui lòng dùng cách ghi log công việc tự nhiên hiện có, hoặc nhờ Leader thực hiện thay đổi này.";
+      const chatLogId = await createChatLog({
+        memberId: currentMemberId || "leader",
+        mode: currentMode,
+        rawInput: userQuery,
+        imageUrl: null,
+        aiResponse: { answer },
+        confirmed: true,
+      });
+      return NextResponse.json({ answer, chatLogId });
+    }
+
+    // 1. Delete intent (checked first, per F-01 order: delete -> update -> create -> query)
+    if (isDeleteIntent) {
+      const result = await extractTaskMutationFromInput(userQuery, "delete", provider);
+      if (result.clarification) {
+        const answer = renderClarificationAnswer(result.clarification);
+        const chatLogId = await createChatLog({
+          memberId: currentMemberId || "leader",
+          mode: currentMode,
+          rawInput: userQuery,
+          imageUrl: null,
+          aiResponse: { answer, clarification: result.clarification },
+          confirmed: false,
+        });
+        return NextResponse.json({ answer, clarification: result.clarification, chatLogId });
+      }
+      if (result.proposal) {
+        const answer = `Đang định **xóa vĩnh viễn** task **${result.proposal.taskSnapshot.title}**. Vui lòng kiểm tra kỹ thông tin bên dưới và bấm **Xác nhận** nếu chắc chắn.`;
+        const chatLogId = await createChatLog({
+          memberId: currentMemberId || "leader",
+          mode: currentMode,
+          rawInput: userQuery,
+          imageUrl: null,
+          aiResponse: { answer, proposal: result.proposal },
+          confirmed: false,
+        });
+        return NextResponse.json({ answer, proposal: result.proposal, chatLogId });
+      }
+    }
+
+    // 2. Update intent
+    if (isUpdateIntent) {
+      const result = await extractTaskMutationFromInput(userQuery, "update", provider);
+      if (result.clarification) {
+        const answer = renderClarificationAnswer(result.clarification);
+        const chatLogId = await createChatLog({
+          memberId: currentMemberId || "leader",
+          mode: currentMode,
+          rawInput: userQuery,
+          imageUrl: null,
+          aiResponse: { answer, clarification: result.clarification },
+          confirmed: false,
+        });
+        return NextResponse.json({ answer, clarification: result.clarification, chatLogId });
+      }
+      if (result.proposal) {
+        const answer = `Đang định **sửa** task **${result.proposal.taskSnapshot.title}**. Vui lòng kiểm tra thay đổi bên dưới và bấm **Xác nhận** để lưu.`;
+        const chatLogId = await createChatLog({
+          memberId: currentMemberId || "leader",
+          mode: currentMode,
+          rawInput: userQuery,
+          imageUrl: null,
+          aiResponse: { answer, proposal: result.proposal },
+          confirmed: false,
+        });
+        return NextResponse.json({ answer, proposal: result.proposal, chatLogId });
+      }
+    }
+
+    // 3. Create intent (existing behavior, reused as-is — task-extractor.service.ts unchanged).
+    // F-06: for leader commands here, missing project/effort must ask back instead of the
+    // extractor's own default-60-minutes behavior (that default is kept for devops format-entry).
+    if (isCreateIntent) {
+      const mentionsProject = /(?:dự án|du an|project)\s+\S/i.test(userQuery);
+      const mentionsEffort = /(\d+(?:[.,]\d+)?\s*(?:phút|p\b|tiếng|giờ|h\b|ngày|%))/i.test(userQuery);
+
+      if (!mentionsProject) {
+        const clarification: ClarificationRequest = { reason: "missing_field", missingFields: ["projectName"] };
+        const answer = "Task này thuộc **dự án nào**? Vui lòng cho biết tên dự án trước khi tôi soạn đề xuất.";
+        const chatLogId = await createChatLog({
+          memberId: currentMemberId || "leader",
+          mode: currentMode,
+          rawInput: userQuery,
+          imageUrl: null,
+          aiResponse: { answer, clarification },
+          confirmed: false,
+        });
+        return NextResponse.json({ answer, clarification, chatLogId });
+      }
+
+      if (!mentionsEffort) {
+        const clarification: ClarificationRequest = { reason: "missing_field", missingFields: ["effortMinutes"] };
+        const answer = "Bạn dự kiến **effort** (thời lượng) cho task này là bao nhiêu? Vui lòng cho biết cụ thể (vd: 2 tiếng, 4 tiếng, 1 ngày).";
+        const chatLogId = await createChatLog({
+          memberId: currentMemberId || "leader",
+          mode: currentMode,
+          rawInput: userQuery,
+          imageUrl: null,
+          aiResponse: { answer, clarification },
+          confirmed: false,
+        });
+        return NextResponse.json({ answer, clarification, chatLogId });
+      }
+
+      const result = await extractTaskEntryFromInput(userQuery, null, provider);
       if (result && result.entry) {
         const { entry, notificationMessage } = result;
+
+        if (entry.assigneeName) {
+          const matchedAssignee = findMemberByName(allMembersForRoleCheck, entry.assigneeName);
+          if (matchedAssignee?.role === "leader") {
+            const suggestion = findBestSuitableMember(allMembersForRoleCheck, entry.title, entry.projectName);
+            const clarification: ClarificationRequest = {
+              reason: "target_is_leader",
+              candidates: suggestion ? [{ id: suggestion.id, label: suggestion.name }] : [],
+            };
+            const answer = renderClarificationAnswer(clarification);
+            const chatLogId = await createChatLog({
+              memberId: currentMemberId || "leader",
+              mode: currentMode,
+              rawInput: userQuery,
+              imageUrl: null,
+              aiResponse: { answer, clarification },
+              confirmed: false,
+            });
+            return NextResponse.json({ answer, clarification, chatLogId });
+          }
+        }
+
         const assigneeText = entry.assigneeName ? `cho **${entry.assigneeName}**` : "";
         const projectText = entry.projectName ? `thuộc dự án **${entry.projectName}**` : "";
         const effortText = entry.effortMinutes ? ` (${formatEffortDuration(entry.effortMinutes)} Effort)` : "";
@@ -157,14 +383,44 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    // 2. Load members & grounding snapshot from Firestore
-    const [snapshot, allMembers] = await Promise.all([buildGroundingSnapshot(), getMembers()]);
+    // 4. Load members & grounding snapshot from Firestore
+    // ISSUE-17: build the snapshot pre-filtered for devops askers so the free-text Q&A branch
+    // (which serializes the whole snapshot into the AI prompt below) never leaks leader members.
+    const [snapshot, allMembers] = [
+      await buildGroundingSnapshot(currentAskerRole === "devops"),
+      allMembersForRoleCheck,
+    ];
 
-    // 3. Check if user is specifically querying information of a member
-    const memberQueryCheck = detectMemberQueryTarget(userQuery);
+    // ISSUE-14: resolve first-person pronouns ("tôi"/"mình"/"của tôi") to the asker's own member
+    // name before anything else treats the query as a generic/team-wide question — swaps the
+    // pronoun for the real name so the rest of the flow (member-query detection + grounded Q&A)
+    // answers scoped to that member, same as if they'd typed their own name.
+    const selfMember = detectSelfQueryTarget(userQuery, currentAskerRole, currentMemberId, allMembers);
+    const effectiveQuery = selfMember ? userQuery.replace(FIRST_PERSON_PATTERN, selfMember.name) : userQuery;
+
+    // 4a. F-08/AC-08-6: audit trail question is answered directly from taskChangeLogs, no AI.
+    if (AUDIT_QUERY_PATTERN.test(userQuery)) {
+      const logs =
+        currentMode === "leader" && currentMemberId === "leader"
+          ? await getAllTaskChangeLogs()
+          : await getTaskChangeLogsByActor(currentMemberId || "leader");
+      const answer = renderTaskChangeAudit(logs);
+      const chatLogId = await createChatLog({
+        memberId: currentMemberId || "leader",
+        mode: currentMode,
+        rawInput: userQuery,
+        imageUrl: null,
+        aiResponse: { answer },
+        confirmed: true,
+      });
+      return NextResponse.json({ answer, chatLogId });
+    }
+
+    // 5. Check if user is specifically querying information of a member
+    const memberQueryCheck = detectMemberQueryTarget(effectiveQuery);
     if (memberQueryCheck.isMemberQuery) {
       if (memberQueryCheck.isPlaceholder) {
-        const answer = `⚠️ **Chưa nhập tên thành viên cần tra cứu**\n\nVui lòng nhập tên thành viên cụ thể (Ví dụ: \`/status Bảo\` hoặc \`Tình hình công việc của Bảo ra sao?\`).\n\n📋 **Danh sách thành viên hiện có trong team:**\n${renderMemberList(allMembers, snapshot.members)}`;
+        const answer = `⚠️ **Chưa nhập tên thành viên cần tra cứu**\n\nVui lòng nhập tên thành viên cụ thể (Ví dụ: \`/status Bảo\` hoặc \`Tình hình công việc của Bảo ra sao?\`).\n\n📋 **Danh sách thành viên hiện có trong team:**\n${renderMemberList(allMembers, snapshot.members, currentAskerRole)}`;
 
         const chatLogId = await createChatLog({
           memberId: currentMemberId || "leader",
@@ -181,7 +437,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       if (memberQueryCheck.rawTarget) {
         const matchedMember = findMemberByName(allMembers, memberQueryCheck.rawTarget);
         if (!matchedMember) {
-          const answer = `⚠️ **Không tìm thấy thành viên: "${memberQueryCheck.rawTarget}"**\n\nNhân sự **"${memberQueryCheck.rawTarget}"** không tồn tại trong danh sách đội ngũ của hệ thống.\n\n📋 **Danh sách thành viên hiện có trong team:**\n${renderMemberList(allMembers, snapshot.members)}\n\n💡 *Vui lòng kiểm tra lại chính tả hoặc chọn một thành viên trong danh sách trên để tra cứu.*`;
+          const answer = `⚠️ **Không tìm thấy thành viên: "${memberQueryCheck.rawTarget}"**\n\nNhân sự **"${memberQueryCheck.rawTarget}"** không tồn tại trong danh sách đội ngũ của hệ thống.\n\n📋 **Danh sách thành viên hiện có trong team:**\n${renderMemberList(allMembers, snapshot.members, currentAskerRole)}\n\n💡 *Vui lòng kiểm tra lại chính tả hoặc chọn một thành viên trong danh sách trên để tra cứu.*`;
 
           const chatLogId = await createChatLog({
             memberId: currentMemberId || "leader",
@@ -198,9 +454,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // 4. Standard Q&A flow with grounding
-    const answer = await callNvidiaText(
+    const answer = await callAiText(
       `${SYSTEM_PROMPT}\n\nDỮ LIỆU THỜI GIAN THỰC (REALTIME DATABASE):\n${JSON.stringify(snapshot, null, 2)}`,
-      userQuery
+      effectiveQuery,
+      provider
     );
 
     const chatLogId = await createChatLog({
@@ -215,7 +472,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ answer, chatLogId });
   } catch (error) {
     console.error("answer-query error:", error);
-    return NextResponse.json({ error: "Failed to reach NVIDIA AI service" }, { status: 502 });
+    return NextResponse.json({ error: "Failed to reach AI service" }, { status: 502 });
   }
 }
 

@@ -2,6 +2,7 @@ import { getMembers } from "@/services/members.service";
 import { getAllTasks } from "@/services/tasks.service";
 import { getProjects } from "@/services/projects.service";
 import { formatTaskEffort } from "@/lib/effort";
+import { isOverdue, daysOverdue } from "@/lib/overdue";
 
 export interface GroundingSnapshot {
   members: Array<{
@@ -20,10 +21,25 @@ export interface GroundingSnapshot {
     assignedMembers: string[];
     activeTaskCount: number;
   }>;
+  /** F-08: pre-computed fields so the model never has to re-derive these from raw lists. */
+  overdueTasks: Array<{ title: string; project: string; memberName: string; endDate: string; daysOverdue: number }>;
+  freeMembers: string[];
+  busyMembers: string[];
+  overloadedMembers: string[];
+  projectProgress: Array<{ name: string; planned: number; inProgress: number; done: number }>;
 }
 
-export async function buildGroundingSnapshot(): Promise<GroundingSnapshot> {
-  const [members, tasks, projects] = await Promise.all([getMembers(), getAllTasks(), getProjects()]);
+/**
+ * ISSUE-17: `excludeLeaders` filters out `role === "leader"` members BEFORE any derived field
+ * (memberData, freeMembers/busyMembers/overloadedMembers, project assignedMembers, overdueTasks)
+ * is computed, so a devops asker's free-text Q&A prompt (which serializes the whole snapshot
+ * verbatim) never sees leader names — not just the 2 hand-rendered `renderMemberList()` call
+ * sites fixed in rev 11. Pass `true` when the real asker (`askerRole`) is "devops"; leaders keep
+ * seeing the full team including other leaders.
+ */
+export async function buildGroundingSnapshot(excludeLeaders = false): Promise<GroundingSnapshot> {
+  const [allMembers, tasks, projects] = await Promise.all([getMembers(), getAllTasks(), getProjects()]);
+  const members = excludeLeaders ? allMembers.filter((m) => m.role !== "leader") : allMembers;
 
   const memberById = new Map(members.map((m) => [m.id, m]));
   const projectById = new Map(projects.map((p) => [p.id, p]));
@@ -73,9 +89,38 @@ export async function buildGroundingSnapshot(): Promise<GroundingSnapshot> {
     };
   });
 
+  const overdueTasks = tasks
+    .filter(isOverdue)
+    .map((t) => ({
+      title: t.title,
+      project: projectById.get(t.projectId)?.name ?? "Unknown",
+      memberName: memberById.get(t.memberId)?.name ?? "Unknown",
+      endDate: t.endDate as string,
+      daysOverdue: daysOverdue(t.endDate as string),
+    }));
+
+  const freeMembers = memberData.filter((m) => m.status === "available").map((m) => m.name);
+  const busyMembers = memberData.filter((m) => m.status === "busy").map((m) => m.name);
+  const overloadedMembers = memberData.filter((m) => m.status === "overloaded").map((m) => m.name);
+
+  const projectProgress = projects.map((p) => {
+    const pTasks = tasks.filter((t) => t.projectId === p.id);
+    return {
+      name: p.name,
+      planned: pTasks.filter((t) => t.status === "planned").length,
+      inProgress: pTasks.filter((t) => t.status === "in_progress").length,
+      done: pTasks.filter((t) => t.status === "done").length,
+    };
+  });
+
   return {
     members: memberData,
     projects: projectData,
+    overdueTasks,
+    freeMembers,
+    busyMembers,
+    overloadedMembers,
+    projectProgress,
   };
 }
 

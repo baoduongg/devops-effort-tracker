@@ -1,9 +1,10 @@
 import React from "react";
-import { Clock, Calendar, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Clock, Calendar, CheckCircle2, AlertTriangle, Pencil, Trash2 } from "lucide-react";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Card } from "@astryxdesign/core/Card";
 import { Grid } from "@astryxdesign/core/Grid";
+import { IconButton } from "@astryxdesign/core/IconButton";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
 import { formatTaskEffort, formatEffortDuration } from "@/lib/effort";
 import type { Task } from "@/types/task";
@@ -12,6 +13,43 @@ import type { Project } from "@/types/project";
 interface MemberTaskBreakdownProps {
   tasks: Task[];
   projects: Project[];
+  canManage?: boolean;
+  onEditTask?: (task: Task) => void;
+  onDeleteTask?: (task: Task) => void;
+}
+
+function TaskActions({
+  task,
+  canManage,
+  onEditTask,
+  onDeleteTask,
+}: {
+  task: Task;
+  canManage?: boolean;
+  onEditTask?: (task: Task) => void;
+  onDeleteTask?: (task: Task) => void;
+}): React.JSX.Element | null {
+  if (!canManage) return null;
+  return (
+    <HStack gap={0.5}>
+      <IconButton
+        label="Sửa task"
+        icon={<Pencil size={13} />}
+        variant="ghost"
+        size="sm"
+        onClick={() => onEditTask?.(task)}
+        tooltip="Sửa task"
+      />
+      <IconButton
+        label="Xóa task"
+        icon={<Trash2 size={13} />}
+        variant="ghost"
+        size="sm"
+        onClick={() => onDeleteTask?.(task)}
+        tooltip="Xóa task"
+      />
+    </HStack>
+  );
 }
 
 function formatDate(dateStr: string | null): string {
@@ -20,7 +58,13 @@ function formatDate(dateStr: string | null): string {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
-export function MemberTaskBreakdown({ tasks, projects }: MemberTaskBreakdownProps): React.JSX.Element {
+export function MemberTaskBreakdown({
+  tasks,
+  projects,
+  canManage,
+  onEditTask,
+  onDeleteTask,
+}: MemberTaskBreakdownProps): React.JSX.Element {
   const projectMap = new Map(projects.map((p) => [p.id, p]));
 
   const inProgressTasks = tasks.filter((t) => t.status === "in_progress");
@@ -93,9 +137,12 @@ export function MemberTaskBreakdown({ tasks, projects }: MemberTaskBreakdownProp
                         </Text>
                       </div>
 
-                      <span className="text-xs font-bold px-2 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30 flex-shrink-0">
-                        {formatTaskEffort(task)}
-                      </span>
+                      <div className="flex items-start gap-1 flex-shrink-0">
+                        <span className="text-xs font-bold px-2 py-1 rounded-lg bg-sky-500/20 text-sky-300 border border-sky-500/30">
+                          {formatTaskEffort(task)}
+                        </span>
+                        <TaskActions task={task} canManage={canManage} onEditTask={onEditTask} onDeleteTask={onDeleteTask} />
+                      </div>
                     </div>
 
                     {task.description && (
@@ -172,9 +219,12 @@ export function MemberTaskBreakdown({ tasks, projects }: MemberTaskBreakdownProp
                         </Text>
                       </div>
 
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/20 font-semibold flex-shrink-0">
-                        {formatTaskEffort(task)}
-                      </span>
+                      <div className="flex items-start gap-1 flex-shrink-0">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/20 font-semibold">
+                          {formatTaskEffort(task)}
+                        </span>
+                        <TaskActions task={task} canManage={canManage} onEditTask={onEditTask} onDeleteTask={onDeleteTask} />
+                      </div>
                     </div>
 
                     {task.description && (
@@ -231,9 +281,12 @@ export function MemberTaskBreakdown({ tasks, projects }: MemberTaskBreakdownProp
                       <span className="truncate text-neutral-300">{task.title}</span>
                     </div>
 
-                    <span className="text-neutral-500 text-[11px] flex-shrink-0">
-                      {formatDate(task.updatedAt)}
-                    </span>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className="text-neutral-500 text-[11px]">
+                        {formatDate(task.updatedAt)}
+                      </span>
+                      <TaskActions task={task} canManage={canManage} onEditTask={onEditTask} onDeleteTask={onDeleteTask} />
+                    </div>
                   </div>
                 );
               })}

@@ -4,11 +4,16 @@ import { NavIcon } from "@astryxdesign/core/NavIcon";
 import { Markdown } from "@astryxdesign/core/Markdown";
 import { Text } from "@astryxdesign/core/Text";
 import { EntryCard } from "@/components/chat/entry-card";
-import type { ChatMessage as ChatMessageType, FormattedEntry } from "@/types/chat";
+import { ProposalCard } from "@/components/chat/proposal-card";
+import { ClarificationCard } from "@/components/chat/clarification-card";
+import type { ChatMessage as ChatMessageType, FormattedEntry, TaskChangeProposal } from "@/types/chat";
 
 interface MessageBubbleProps {
   message: ChatMessageType;
   onConfirmEntry: (chatLogId: string, entry: FormattedEntry) => Promise<void>;
+  onConfirmProposal: (chatLogId: string, proposal: TaskChangeProposal, appliedChanges: TaskChangeProposal["changes"]) => Promise<void>;
+  onCancelProposal: (chatLogId: string, proposal: TaskChangeProposal) => Promise<void>;
+  onSelectClarificationCandidate: (label: string) => void;
 }
 
 function cleanAiText(text: string): string {
@@ -20,7 +25,13 @@ function cleanAiText(text: string): string {
     .trim();
 }
 
-export function MessageBubble({ message, onConfirmEntry }: MessageBubbleProps): React.JSX.Element {
+export function MessageBubble({
+  message,
+  onConfirmEntry,
+  onConfirmProposal,
+  onCancelProposal,
+  onSelectClarificationCandidate,
+}: MessageBubbleProps): React.JSX.Element {
   if (message.role === "user") {
     return (
       <ChatMessage sender="user">
@@ -43,12 +54,29 @@ export function MessageBubble({ message, onConfirmEntry }: MessageBubbleProps): 
             <Markdown density="compact" autolink="gfm">{cleanAiText(message.text || "")}</Markdown>
           </div>
         </ChatMessageBubble>
-      ) : (
+      ) : message.role === "ai-entry" ? (
         <ChatMessageBubble variant="ghost" width="100%">
           <EntryCard
             entry={message.entry}
             confirmed={message.confirmed}
             onConfirm={(entry) => onConfirmEntry(message.chatLogId, entry)}
+          />
+        </ChatMessageBubble>
+      ) : message.role === "ai-proposal" ? (
+        <ChatMessageBubble variant="ghost" width="100%">
+          <ProposalCard
+            proposal={message.proposal}
+            confirmed={message.confirmed}
+            onConfirm={(proposal, appliedChanges) => onConfirmProposal(message.chatLogId, proposal, appliedChanges)}
+            onCancel={(proposal) => onCancelProposal(message.chatLogId, proposal)}
+          />
+        </ChatMessageBubble>
+      ) : (
+        <ChatMessageBubble variant="ghost" width="100%">
+          <ClarificationCard
+            text={cleanAiText(message.text || "")}
+            clarification={message.clarification}
+            onSelectCandidate={onSelectClarificationCandidate}
           />
         </ChatMessageBubble>
       )}

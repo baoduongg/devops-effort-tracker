@@ -4,11 +4,13 @@ import { createChatLog } from "@/services/chatLogs.service";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const body = await request.json();
-  const { text, userInput, imageUrl, memberId } = body as {
+  const { text, userInput, imageUrl, memberId, askerMemberName, provider } = body as {
     text?: string;
     userInput?: string;
     imageUrl?: string | null;
     memberId?: string;
+    askerMemberName?: string | null;
+    provider?: "claude" | "nvidia";
   };
 
   const inputText = (text ?? userInput ?? "").trim();
@@ -18,7 +20,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const result = await extractTaskEntryFromInput(inputText, imageUrl);
+    const result = await extractTaskEntryFromInput(inputText, imageUrl, provider, askerMemberName ?? null);
 
     if (!result || !result.entry) {
       return NextResponse.json({ error: "AI could not produce a valid structured entry" }, { status: 502 });
@@ -38,6 +40,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ chatLogId, entry, message: notificationMessage });
   } catch (error) {
     console.error("format-entry error:", error);
-    return NextResponse.json({ error: "Failed to reach NVIDIA AI service" }, { status: 502 });
+    return NextResponse.json({ error: "Failed to reach AI service" }, { status: 502 });
   }
 }

@@ -10,7 +10,8 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Member, MemberInput } from "@/types/member";
+import type { Member, MemberInput, MemberStatus } from "@/types/member";
+import { getTasksByMember } from "@/services/tasks.service";
 
 import { toIsoString } from "@/lib/date";
 
@@ -58,6 +59,27 @@ export async function updateMember(id: string, input: Partial<MemberInput>): Pro
 
 export async function deleteMember(id: string): Promise<void> {
   await deleteDoc(doc(db, "members", id));
+}
+
+/**
+ * Recomputes `Member.effortMinutes`/`status`/`currentTaskId` from real tasks, using the exact same
+ * formula as `handleConfirmEntry` (chat-box.tsx) for creating a task. Reused after task
+ * update/delete via chat so the member's aggregate stays in sync (PM decision, spec rev 1).
+ */
+export async function syncMemberEffortStatus(memberId: string): Promise<void> {
+  if (!memberId) return;
+  const tasks = await getTasksByMember(memberId);
+  const activeTasks = tasks.filter((t) => t.status === "in_progress");
+  const totalEffortMinutes = activeTasks.reduce((sum, t) => sum + (t.effortMinutes || 0), 0);
+  const activeCount = activeTasks.length;
+  const newStatus: MemberStatus =
+    activeCount === 0 || totalEffortMinutes === 0 ? "available" : totalEffortMinutes > 480 ? "overloaded" : "busy";
+
+  await updateMember(memberId, {
+    currentTaskId: activeTasks[0]?.id || null,
+    effortMinutes: totalEffortMinutes,
+    status: newStatus,
+  });
 }
 
 export function subscribeMembers(callback: (members: Member[]) => void): () => void {
@@ -113,9 +135,12 @@ export function findMemberByName(allMembers: Member[], targetName?: string | nul
   let bestMatch: Member | null = null;
   let maxMatchedWords = 0;
 
+  // ISSUE-11: only match when a member's word CONTAINS the query word (typo/partial name typed by
+  // the user), not the reverse — `w.includes(mw)` let a long made-up query "contain" a short real
+  // name fragment (e.g. "nguyen") as a substring, false-matching to a real member.
   for (const m of allMembers) {
     const mWords = normalize(m.name).split(" ").filter((w) => w.length > 1);
-    const matchedCount = queryWords.filter((w) => mWords.some((mw) => mw.includes(w) || w.includes(mw))).length;
+    const matchedCount = queryWords.filter((w) => mWords.some((mw) => mw.includes(w))).length;
     if (matchedCount > maxMatchedWords && matchedCount >= 1) {
       maxMatchedWords = matchedCount;
       bestMatch = m;

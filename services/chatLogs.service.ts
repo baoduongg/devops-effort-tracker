@@ -1,7 +1,15 @@
 import { collection, doc, addDoc, updateDoc, query, where, orderBy, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toIsoString } from "@/lib/date";
-import type { ChatLog, ChatMessage, ChatMode, FormattedEntry, AiResponsePayload } from "@/types/chat";
+import type {
+  ChatLog,
+  ChatMessage,
+  ChatMode,
+  FormattedEntry,
+  AiResponsePayload,
+  TaskChangeProposal,
+  ClarificationRequest,
+} from "@/types/chat";
 
 const chatLogsCol = collection(db, "chatLogs");
 
@@ -54,7 +62,29 @@ export function chatLogsToMessages(logs: ChatLog[]): ChatMessage[] {
     const resp = log.aiResponse as Record<string, unknown>;
 
     if (resp && typeof resp === "object") {
-      if ("entry" in resp && resp.entry) {
+      if ("proposal" in resp && resp.proposal) {
+        if ("answer" in resp && typeof resp.answer === "string" && resp.answer) {
+          messages.push({
+            role: "ai-answer",
+            id: `${log.id}-ai-answer`,
+            text: resp.answer,
+          });
+        }
+        messages.push({
+          role: "ai-proposal",
+          id: `${log.id}-ai-proposal`,
+          chatLogId: log.id,
+          proposal: resp.proposal as TaskChangeProposal,
+          confirmed: log.confirmed,
+        });
+      } else if ("clarification" in resp && resp.clarification) {
+        messages.push({
+          role: "ai-clarification",
+          id: `${log.id}-ai-clarification`,
+          text: typeof resp.answer === "string" ? resp.answer : "",
+          clarification: resp.clarification as ClarificationRequest,
+        });
+      } else if ("entry" in resp && resp.entry) {
         if ("answer" in resp && typeof resp.answer === "string" && resp.answer) {
           messages.push({
             role: "ai-answer",

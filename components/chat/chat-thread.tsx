@@ -10,7 +10,7 @@ import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { VStack } from "@astryxdesign/core/Stack";
 import { MessageBubble } from "@/components/chat/message-bubble";
-import type { ChatMessage as ChatMessageType, ChatMode, FormattedEntry } from "@/types/chat";
+import type { ChatMessage as ChatMessageType, ChatMode, FormattedEntry, TaskChangeProposal } from "@/types/chat";
 
 interface ChatThreadProps {
   mode: ChatMode;
@@ -18,6 +18,9 @@ interface ChatThreadProps {
   loading: boolean;
   thinking: boolean;
   onConfirmEntry: (chatLogId: string, entry: FormattedEntry) => Promise<void>;
+  onConfirmProposal: (chatLogId: string, proposal: TaskChangeProposal, appliedChanges: TaskChangeProposal["changes"]) => Promise<void>;
+  onCancelProposal: (chatLogId: string, proposal: TaskChangeProposal) => Promise<void>;
+  onSelectClarificationCandidate: (label: string) => void;
 }
 
 const EMPTY_STATE = {
@@ -25,7 +28,16 @@ const EMPTY_STATE = {
   leader: { icon: Search, text: "Ask about team workload, capacity, or project status." },
 };
 
-export function ChatThread({ mode, messages, loading, thinking, onConfirmEntry }: ChatThreadProps): React.JSX.Element {
+export function ChatThread({
+  mode,
+  messages,
+  loading,
+  thinking,
+  onConfirmEntry,
+  onConfirmProposal,
+  onCancelProposal,
+  onSelectClarificationCandidate,
+}: ChatThreadProps): React.JSX.Element {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -63,7 +75,14 @@ export function ChatThread({ mode, messages, loading, thinking, onConfirmEntry }
       }
     >
       {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} onConfirmEntry={onConfirmEntry} />
+        <MessageBubble
+          key={message.id}
+          message={message}
+          onConfirmEntry={onConfirmEntry}
+          onConfirmProposal={onConfirmProposal}
+          onCancelProposal={onCancelProposal}
+          onSelectClarificationCandidate={onSelectClarificationCandidate}
+        />
       ))}
       {thinking && (
         <ChatMessage sender="assistant" avatar={<NavIcon icon={<Sparkles size={14} strokeWidth={2} />} />}>

@@ -22,11 +22,13 @@ import { Button } from "@astryxdesign/core/Button";
 import { Card } from "@astryxdesign/core/Card";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { AlertDialog } from "@astryxdesign/core/AlertDialog";
 import { MemberForm } from "@/components/members/member-form";
 import { MemberTimelineGantt } from "@/components/members/member-timeline-gantt";
 import { MemberTaskBreakdown } from "@/components/members/member-task-breakdown";
-import { getMember, updateMember } from "@/services/members.service";
-import { getTasksByMember } from "@/services/tasks.service";
+import { TaskEditModal } from "@/components/tasks/task-edit-modal";
+import { getMember, updateMember, syncMemberEffortStatus } from "@/services/members.service";
+import { getTasksByMember, deleteTask } from "@/services/tasks.service";
 import { getProjects } from "@/services/projects.service";
 import { useAuthStore } from "@/store/auth.store";
 import { isOverdue } from "@/lib/overdue";
@@ -92,6 +94,14 @@ export default function MemberDetailPage(): React.JSX.Element {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [deletingTask, setDeletingTask] = useState<Task | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  async function reloadTasks(): Promise<void> {
+    const t = await getTasksByMember(params.memberId);
+    setTasks(t);
+  }
 
   useEffect(() => {
     async function load(): Promise<void> {
@@ -119,6 +129,29 @@ export default function MemberDetailPage(): React.JSX.Element {
     const updated = await getMember(params.memberId);
     setMember(updated);
     setIsEditOpen(false);
+  }
+
+  async function handleTaskUpdated(): Promise<void> {
+    await reloadTasks();
+    const updated = await getMember(params.memberId);
+    setMember(updated);
+  }
+
+  async function handleConfirmDeleteTask(): Promise<void> {
+    if (!deletingTask) return;
+    setIsDeleting(true);
+    try {
+      await deleteTask(deletingTask.id);
+      await syncMemberEffortStatus(deletingTask.memberId);
+      await reloadTasks();
+      const updated = await getMember(params.memberId);
+      setMember(updated);
+      setDeletingTask(null);
+    } catch (error) {
+      console.error("Failed to delete task:", error);
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   const inProgressTasks = useMemo(() => tasks.filter((t) => t.status === "in_progress"), [tasks]);
@@ -281,8 +314,35 @@ export default function MemberDetailPage(): React.JSX.Element {
       {/* Section 2: Detailed Task Breakdown (Active / Upcoming / Done) */}
       <VStack gap={3}>
         <Heading level={3}>Tình hình phân bổ nhiệm vụ</Heading>
-        <MemberTaskBreakdown tasks={tasks} projects={projects} />
+        <MemberTaskBreakdown
+          tasks={tasks}
+          projects={projects}
+          canManage={user?.role === "leader"}
+          onEditTask={setEditingTask}
+          onDeleteTask={setDeletingTask}
+        />
       </VStack>
+
+      {/* Edit Task Modal */}
+      <TaskEditModal
+        isOpen={Boolean(editingTask)}
+        onOpenChange={(open) => !open && setEditingTask(null)}
+        task={editingTask}
+        projects={projects}
+        members={member ? [member] : []}
+        onTaskUpdated={handleTaskUpdated}
+      />
+
+      {/* Delete Task Confirmation */}
+      <AlertDialog
+        isOpen={Boolean(deletingTask)}
+        onOpenChange={(open) => !open && setDeletingTask(null)}
+        title="Xóa task này?"
+        description={`Task "${deletingTask?.title ?? ""}" sẽ bị xóa vĩnh viễn và không thể khôi phục.`}
+        actionLabel="Xóa task"
+        onAction={handleConfirmDeleteTask}
+        isActionLoading={isDeleting}
+      />
 
       {/* Edit Member Info Modal Dialog */}
       <Dialog
