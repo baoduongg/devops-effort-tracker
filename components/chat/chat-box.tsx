@@ -543,7 +543,11 @@ export function ChatBox(): React.JSX.Element {
       if (mode === "leader") {
         try {
           await createTaskChangeLog({
-            actorUid: user?.uid ?? "",
+            // ISSUE-10: actorUid must match the identifier the audit query (answer-query route)
+            // looks up by — that route receives `memberId: user?.memberId || user?.uid || ...`
+            // (see the answer-query axios call below), so writes here use the same precedence
+            // instead of always `user.uid`, otherwise a real leader's memberId never matches.
+            actorUid: user?.memberId || user?.uid || "",
             actorName: user?.displayName ?? "Leader",
             action: "create",
             taskId,
@@ -640,7 +644,9 @@ export function ChatBox(): React.JSX.Element {
     updateProposalConfirmed(mode, chatLogId, true);
 
     await createTaskChangeLog({
-      actorUid: user?.uid ?? "",
+      // ISSUE-10: see comment on the "create" call site above — must match the identifier
+      // answer-query's audit query looks up by (user.memberId when present, not user.uid).
+      actorUid: user?.memberId || user?.uid || "",
       actorName: user?.displayName ?? "Leader",
       action: proposal.action,
       taskId: proposal.taskId,
@@ -654,7 +660,7 @@ export function ChatBox(): React.JSX.Element {
 
   async function handleCancelProposal(chatLogId: string, proposal: TaskChangeProposal): Promise<void> {
     await createTaskChangeLog({
-      actorUid: user?.uid ?? "",
+      actorUid: user?.memberId || user?.uid || "",
       actorName: user?.displayName ?? "Leader",
       action: proposal.action,
       taskId: proposal.taskId,
