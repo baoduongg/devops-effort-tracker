@@ -30,16 +30,17 @@ export interface GroundingSnapshot {
 }
 
 /**
- * ISSUE-17: `excludeLeaders` filters out `role === "leader"` members BEFORE any derived field
+ * ISSUE-17/FB-CHAT-04: `restrictToMemberId` scopes the snapshot BEFORE any derived field
  * (memberData, freeMembers/busyMembers/overloadedMembers, project assignedMembers, overdueTasks)
  * is computed, so a devops asker's free-text Q&A prompt (which serializes the whole snapshot
- * verbatim) never sees leader names — not just the 2 hand-rendered `renderMemberList()` call
- * sites fixed in rev 11. Pass `true` when the real asker (`askerRole`) is "devops"; leaders keep
- * seeing the full team including other leaders.
+ * verbatim) never sees any other member's data — not just leaders (rev 11/17), but peer devops
+ * too (requirements.md: "devops hỏi về bản thân là chính... không mở rộng quyền tra cứu sang
+ * dữ liệu người khác"). Pass the asker's own memberId when `askerRole` is "devops"; leaders keep
+ * seeing the full team (pass undefined/omit).
  */
-export async function buildGroundingSnapshot(excludeLeaders = false): Promise<GroundingSnapshot> {
+export async function buildGroundingSnapshot(restrictToMemberId?: string): Promise<GroundingSnapshot> {
   const [allMembers, tasks, projects] = await Promise.all([getMembers(), getAllTasks(), getProjects()]);
-  const members = excludeLeaders ? allMembers.filter((m) => m.role !== "leader") : allMembers;
+  const members = restrictToMemberId ? allMembers.filter((m) => m.id === restrictToMemberId) : allMembers;
 
   const memberById = new Map(members.map((m) => [m.id, m]));
   const projectById = new Map(projects.map((p) => [p.id, p]));

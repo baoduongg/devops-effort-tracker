@@ -1,3 +1,25 @@
+# PM Feedback — 2026-09-09 (lần 5, xác nhận fix FB-CHAT-04/FB-CHAT-03 — QC rev 14 PASS)
+
+## Kết luận: ACCEPT
+
+Vòng preview này chỉ tập trung xác nhận lại bằng chính tay 2 vấn đề đã ghi ở feedback lần 4 (FB-CHAT-04, FB-CHAT-03), sau khi QC đã verify PASS ở rev 14. Đăng nhập cả devops thật (`dev@test.com`) và leader thật (`admin@test.com`), gõ tay trực tiếp vào ô chat (không dùng lại text/session cũ — có sign out/sign in lại giữa 2 role để đảm bảo đúng phiên).
+
+## Đạt
+
+- **FB-CHAT-04 (devops hỏi chéo bị lộ thông tin đồng nghiệp) — đã hết.** Đăng nhập `dev@test.com`, `/chat` tab Ask, gõ tay đúng câu đã fail trước: `"Dương Bảo đang làm task gì vậy?"`. Kết quả nhận được: `"⚠️ Không tìm thấy thành viên Dương Bảo trong danh sách đội ngũ của hệ thống. Thành viên hiện có: dev@test.com — Kỹ sư DevOps, đang sẵn sàng, 0 phút effort."` — không còn lộ bất kỳ chi tiết task/effort/dự án nào của Dương Bảo, và danh sách "thành viên hiện có" cũng chỉ liệt kê chính người hỏi, không còn liệt kê đồng nghiệp khác để dò tiếp. Khớp đúng kỳ vọng "devops không mở rộng quyền tra cứu sang người khác".
+- **FB-CHAT-03 (gợi ý câu lệnh nhanh sai phạm vi) — đã hết.** Cùng phiên `dev@test.com`, tab Ask, phần "Gợi ý câu lệnh nhanh" giờ chỉ còn 3 câu đúng phạm vi bản thân: "Task của tôi hôm nay có gì?", "Tôi còn effort trống bao nhiêu?", "Tiến độ các task của tôi hiện tại thế nào?" — không còn 3 câu phạm vi toàn team ("Ai trong team đang rảnh...", "Tổng hợp task trễ hạn...", "Tình hình phân bổ effort team...") từng mời devops thử hỏi ngoài quyền.
+- **Regression leader — không bị ảnh hưởng.** Đăng nhập `admin@test.com` (sidebar đúng "Quản lý (Leader View)"), `/chat` tab Ask: (a) gợi ý câu lệnh nhanh vẫn đúng phạm vi team như cũ (3 câu team-wide, không đổi so với trước); (b) gõ tay lại đúng câu `"Dương Bảo đang làm task gì vậy?"` — leader vẫn nhận được đầy đủ chi tiết: trạng thái, tổng effort (180 phút/3 giờ), bảng 3 task đang làm (tên task, dự án Phoenix CI/CD, effort, hạn hoàn thành) và phần kết luận/đề xuất. Đúng như spec — chỉ leader mới tra cứu chi tiết người khác được.
+
+## Chưa đạt / cần sửa
+
+Không có. Cả 2 vấn đề của lần feedback trước đã được xác nhận đóng bằng thao tác tay thật, không có regression phát sinh.
+
+## Yêu cầu mới phát sinh
+
+Không có.
+
+---
+
 # PM Feedback — 2026-09-09 (lần 4, preview lại sau fix P0 — QC rev 13 PASS 12/12 AC)
 
 ## Kết luận: ACCEPT (kèm 1 vấn đề mới cần theo dõi, không phải blocker)

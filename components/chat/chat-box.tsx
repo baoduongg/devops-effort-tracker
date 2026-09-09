@@ -132,6 +132,15 @@ const LEADER_PROMPT_SUGGESTIONS = [
   "Tình hình phân bổ Effort của team theo từng dự án như thế nào?",
 ];
 
+// FB-CHAT-03: a devops account switching to the "Ask" tab still has askerRole "devops" — the
+// team-wide LEADER_PROMPT_SUGGESTIONS would invite them to try questions outside their permitted
+// scope (self only, see requirements.md). Keep these scoped to "me".
+const DEVOPS_ASK_PROMPT_SUGGESTIONS = [
+  "Task của tôi hôm nay có gì?",
+  "Tôi còn effort trống bao nhiêu?",
+  "Tiến độ các task của tôi hiện tại thế nào?",
+];
+
 export function ChatBox(): React.JSX.Element {
   const mode = useChatStore((state) => state.mode);
   const setMode = useChatStore((state) => state.setMode);
@@ -661,7 +670,15 @@ export function ChatBox(): React.JSX.Element {
     setText(label);
   }
 
-  const suggestions = mode === "devops" ? DEVOPS_PROMPT_SUGGESTIONS : LEADER_PROMPT_SUGGESTIONS;
+  // FB-CHAT-03: suggestions must follow the real account role (user?.role), not the active tab
+  // (`mode`) — a devops account on the "Ask" tab (mode === "leader") must still see self-scoped
+  // suggestions, never the team-wide leader ones.
+  const suggestions =
+    mode === "devops"
+      ? DEVOPS_PROMPT_SUGGESTIONS
+      : user?.role === "devops"
+        ? DEVOPS_ASK_PROMPT_SUGGESTIONS
+        : LEADER_PROMPT_SUGGESTIONS;
 
   // Key quick commands for the current mode, styled by id and sourced from SLASH_COMMANDS
   const quickPillCommands = useMemo(() => {

@@ -384,10 +384,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // 4. Load members & grounding snapshot from Firestore
-    // ISSUE-17: build the snapshot pre-filtered for devops askers so the free-text Q&A branch
-    // (which serializes the whole snapshot into the AI prompt below) never leaks leader members.
+    // ISSUE-17/FB-CHAT-04: build the snapshot pre-filtered for devops askers (scoped down to just
+    // their own member) so the free-text Q&A branch (which serializes the whole snapshot into the
+    // AI prompt below) never leaks any other member's data — leader or peer devops.
     const [snapshot, allMembers] = [
-      await buildGroundingSnapshot(currentAskerRole === "devops"),
+      await buildGroundingSnapshot(currentAskerRole === "devops" ? currentMemberId : undefined),
       allMembersForRoleCheck,
     ];
 
@@ -448,6 +449,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             confirmed: true,
           });
 
+          return NextResponse.json({ answer, chatLogId });
+        }
+
+        // FB-CHAT-04: requirements.md — devops chỉ được tra cứu về bản thân, không mở rộng quyền
+        // tra cứu sang dữ liệu người khác (kể cả đồng nghiệp devops khác, không chỉ leader).
+        if (currentAskerRole === "devops" && matchedMember.id !== currentMemberId) {
+          const answer =
+            "🔒 Bạn chỉ có thể tra cứu thông tin của chính mình qua Chat AI. Vui lòng liên hệ Leader nếu cần xem thông tin của thành viên khác.";
+          const chatLogId = await createChatLog({
+            memberId: currentMemberId || "leader",
+            mode: currentMode,
+            rawInput: userQuery,
+            imageUrl: null,
+            aiResponse: { answer },
+            confirmed: true,
+          });
           return NextResponse.json({ answer, chatLogId });
         }
       }
