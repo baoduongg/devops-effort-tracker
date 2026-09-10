@@ -12,9 +12,6 @@ import {
   LogOut,
   Activity,
   Database,
-  Shield,
-  Code2,
-  ArrowLeftRight,
 } from "lucide-react";
 import { NavIcon } from "@astryxdesign/core/NavIcon";
 import { SideNav, SideNavHeading, SideNavItem, SideNavSection } from "@astryxdesign/core/SideNav";
@@ -22,6 +19,7 @@ import { Avatar } from "@astryxdesign/core/Avatar";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, VStack, StackItem } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
+import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { useAuthStore } from "@/store/auth.store";
 import { signOutUser, updateUserRole } from "@/services/auth.service";
 import { DataManagerDialog } from "@/components/dev/data-manager-dialog";
@@ -95,39 +93,48 @@ export function Sidebar(): React.JSX.Element {
             headingHref="/dashboard"
           />
         }
+        topContent={
+          <VStack gap={2} className="px-2 pt-1">
+            <SegmentedControl
+              label="Chuyển vai trò"
+              value={isLeader ? "leader" : "devops"}
+              onChange={() => {
+                if (switchingRole) return;
+                void handleToggleRole();
+              }}
+              layout="fill"
+              size="sm"
+              isDisabled={switchingRole}
+            >
+              <SegmentedControlItem value="leader" label="Leader" />
+              <SegmentedControlItem value="devops" label="DevOps" />
+            </SegmentedControl>
+            <Text
+              type="supporting"
+              className="text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)]"
+            >
+              {isLeader ? "LEADER VIEW" : "DEVOPS VIEW"}
+            </Text>
+          </VStack>
+        }
         footer={
           user && (
-            <VStack gap={2}>
-              {/* Role Indicator & Quick Switcher */}
+            <VStack gap={3}>
+              <VStack
+                gap={1}
+                className="p-3 rounded-lg bg-[var(--color-accent-muted)] border border-[var(--color-accent)]"
+              >
+                <Text weight="semibold" className="text-[13px] text-[var(--color-accent)]">
+                  {isLeader ? "Ask / Command" : "Log Work"}
+                </Text>
+                <Text type="supporting" className="text-[11.5px]">
+                  {isLeader
+                    ? "Query the roster or propose task changes."
+                    : "Describe what you finished; I file it."}
+                </Text>
+              </VStack>
 
-              {/* <div className="flex items-center justify-between p-2 rounded-xl bg-white/[0.03] border border-white/[0.07]">
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`p-1 rounded-md text-[11px] flex items-center gap-1 font-semibold ${
-                      isLeader
-                        ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
-                        : "bg-sky-500/20 text-sky-300 border border-sky-500/30"
-                    }`}
-                  >
-                    {isLeader ? <Shield size={11} /> : <Code2 size={11} />}
-                    <span>{isLeader ? "LEADER" : "DEVOPS"}</span>
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleToggleRole}
-                  disabled={switchingRole}
-                  title="Chuyển đổi vai trò Leader <-> DevOps"
-                  className="px-2 py-1 rounded-lg text-[11px] font-medium bg-white/[0.04] hover:bg-white/[0.08] text-neutral-300 hover:text-white border border-white/[0.08] transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                >
-                  <ArrowLeftRight size={11} className={switchingRole ? "animate-spin" : ""} />
-                  <span>Đổi sang {isLeader ? "DevOps" : "Leader"}</span>
-                </button>
-              </div> */}
-
-              {/* User Identity & Sign Out */}
-              <HStack gap={2} vAlign="center">
+              <HStack gap={2} vAlign="center" className="pt-2 border-t border-[var(--color-border)]">
                 <Avatar name={user.displayName} src={user.photoURL ?? undefined} size="sm" tooltip={false} />
                 <StackItem size="fill">
                   <VStack gap={0}>
@@ -179,5 +186,3 @@ export function Sidebar(): React.JSX.Element {
     </>
   );
 }
-
-
