@@ -352,7 +352,7 @@
     line-height: var(--text-display-3-leading);
   }
 
-  .astryx-side-nav-item.true {
+  .astryx-side-nav-item.selected {
     background: linear-gradient(90deg, rgba(61,123,255,0.18), rgba(61,123,255,0.05));
     border-color: rgba(61,123,255,0.30);
     color: #EAF0FF;

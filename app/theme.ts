@@ -49,7 +49,7 @@ export const appTheme = defineTheme({
   },
   components: {
     "side-nav-item": {
-      "selected:true": {
+      selected: {
         background: "linear-gradient(90deg, rgba(61,123,255,0.18), rgba(61,123,255,0.05))",
         borderColor: "rgba(61,123,255,0.30)",
         color: "#EAF0FF",
