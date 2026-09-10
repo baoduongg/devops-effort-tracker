@@ -45,6 +45,11 @@ function demo() {
   const lanes = new Set(triple.map((t) => t.lane));
   console.assert(lanes.size === 3, "three mutually-overlapping items get 3 distinct lanes");
 
+  // Same-day-adjacent items (one's end equals the next's start) still share
+  // day index 4, so with inclusive day-index ranges they must get separate lanes.
+  const adjacent = assignLanes([{ start: 2, end: 4 }, { start: 4, end: 6 }]);
+  console.assert(adjacent[0].lane !== adjacent[1].lane, "same-day-adjacent items (end==start) get different lanes");
+
   // A later item that only overlaps the first can reuse the second lane once it's free.
   const reuse = assignLanes([
     { start: 0, end: 2 },
