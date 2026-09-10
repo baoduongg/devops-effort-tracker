@@ -40,7 +40,7 @@ export function OverdueTasksList({ tasks, members, projects }: OverdueTasksListP
         </StackItem>
         <Button
           label={isOpen ? "Hide" : "Show"}
-          icon={<ChevronDown size={14} className={isOpen ? "rotate-180" : ""} style={{ transition: "transform 180ms" }} />}
+          icon={<ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />}
           variant="ghost"
           size="sm"
           onClick={() => setIsOpen((prev) => !prev)}
