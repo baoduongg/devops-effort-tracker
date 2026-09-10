@@ -119,7 +119,7 @@ export function Sidebar(): React.JSX.Element {
             <VStack gap={3}>
               <VStack
                 gap={1}
-                className="p-3 rounded-lg bg-accent/[0.07] border border-accent/25"
+                className="p-3 rounded-lg bg-accent/5 border border-accent/25"
               >
                 <Text weight="semibold" size="sm" color="accent">
                   {isLeader ? "Ask / Command" : "Log Work"}
