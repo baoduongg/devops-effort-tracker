@@ -14,7 +14,7 @@ import {
   Sparkles,
   Plus,
 } from "lucide-react";
-import { VStack, HStack } from "@astryxdesign/core/Stack";
+import { VStack, HStack, StackItem } from "@astryxdesign/core/Stack";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
@@ -25,6 +25,7 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { Selector } from "@astryxdesign/core/Selector";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { Card } from "@astryxdesign/core/Card";
+import { StatCard } from "@/components/dashboard/stat-card";
 import { subscribeMembers } from "@/services/members.service";
 import { getProjects } from "@/services/projects.service";
 import { subscribeAllTasks } from "@/services/tasks.service";
@@ -270,31 +271,30 @@ export default function DashboardPage(): React.JSX.Element {
     <VStack gap={5}>
       {/* If DevOps is viewing team mode, show a return button banner */}
       {user?.role === "devops" && devopsViewMode === "team" && (
-        <div className="p-2.5 px-3.5 rounded-xl bg-sky-500/10 border border-sky-500/25 flex items-center justify-between text-xs text-sky-200">
-          <span>Bạn đang xem góc nhìn điều hành toàn đội DevOps.</span>
+        <HStack gap={3} vAlign="center" className="p-2.5 px-3.5 rounded-xl bg-accent/10 border border-accent/25 justify-between text-xs">
+          <Text size="xsm" color="accent">Bạn đang xem góc nhìn điều hành toàn đội DevOps.</Text>
           <Button
             label="Quay lại Dashboard"
             variant="secondary"
             size="sm"
             onClick={() => setDevopsViewMode("personal")}
           />
-
-        </div>
+        </HStack>
       )}
 
       {/* Header: Title, Description & View Switcher */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-1 border-b border-white/[0.06]">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <span className="p-1.5 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-1 border-b border-border">
+        <VStack gap={1}>
+          <HStack gap={2} vAlign="center">
+            <span className="p-1.5 rounded-lg bg-accent/10 text-accent border border-accent/20">
               <Sparkles size={16} />
             </span>
             <Heading level={1}>DevOps Effort Hub</Heading>
-          </div>
+          </HStack>
           <Text type="supporting">
             Bảng điều khiển phân bổ nguồn lực, theo dõi tải công việc và kế hoạch sprint của team DevOps.
           </Text>
-        </div>
+        </VStack>
 
         <HStack gap={2} vAlign="center">
           <Button
@@ -318,134 +318,68 @@ export default function DashboardPage(): React.JSX.Element {
       {/* Unified Executive KPI & Quick Filter Bar */}
       {!loading && members.length > 0 && (
         <Card elevation="low">
-
           <VStack gap={3}>
             {/* KPI Metric Chips */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
-              {/* All Members */}
               <button
                 type="button"
                 onClick={() => {
                   setSelectedCapacity("all");
                   setShowOverdueOnly(false);
                 }}
-                className={`p-2.5 px-3 rounded-xl border text-left transition-all flex items-center justify-between ${
-                  selectedCapacity === "all" && !showOverdueOnly
-                    ? "bg-sky-500/15 border-sky-500/40 ring-1 ring-sky-500/30 text-white shadow-sm"
-                    : "bg-white/[0.02] border-white/[0.06] text-neutral-300 hover:bg-white/[0.05]"
-                }`}
+                className="text-left"
               >
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-white/[0.05] text-neutral-400">
-                    <Users size={14} />
-                  </span>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] text-neutral-400 font-medium">Tổng DevOps</span>
-                    <span className="text-base font-bold text-neutral-100">{displayMembers.length}</span>
-                  </div>
-                </div>
+                <StatCard label="Tổng DevOps" value={String(displayMembers.length)} icon={Users} tone="primary" />
               </button>
 
-              {/* Ready / Available */}
               <button
                 type="button"
                 onClick={() => {
                   setSelectedCapacity(selectedCapacity === "available" && !showOverdueOnly ? "all" : "available");
                   setShowOverdueOnly(false);
                 }}
-                className={`p-2.5 px-3 rounded-xl border text-left transition-all flex items-center justify-between ${
-                  selectedCapacity === "available" && !showOverdueOnly
-                    ? "bg-emerald-500/15 border-emerald-500/40 ring-1 ring-emerald-500/30 text-white shadow-sm"
-                    : "bg-white/[0.02] border-white/[0.06] text-neutral-300 hover:bg-emerald-500/10"
-                }`}
+                className="text-left"
               >
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-                    <CheckCircle2 size={14} />
-                  </span>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] text-emerald-400/90 font-medium">Trống việc / Rảnh</span>
-                    <span className="text-base font-bold text-emerald-300">{availableMembersCount}</span>
-                  </div>
-                </div>
+                <StatCard label="Trống việc / Rảnh" value={String(availableMembersCount)} icon={CheckCircle2} tone="success" />
               </button>
 
-              {/* Balanced / Working */}
               <button
                 type="button"
                 onClick={() => {
                   setSelectedCapacity(selectedCapacity === "working" && !showOverdueOnly ? "all" : "working");
                   setShowOverdueOnly(false);
                 }}
-                className={`p-2.5 px-3 rounded-xl border text-left transition-all flex items-center justify-between ${
-                  selectedCapacity === "working" && !showOverdueOnly
-                    ? "bg-sky-500/15 border-sky-500/40 ring-1 ring-sky-500/30 text-white shadow-sm"
-                    : "bg-white/[0.02] border-white/[0.06] text-neutral-300 hover:bg-sky-500/10"
-                }`}
+                className="text-left"
               >
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-sky-500/10 text-sky-400">
-                    <Clock size={14} />
-                  </span>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] text-sky-400 font-medium">Vừa tải (50-100%)</span>
-                    <span className="text-base font-bold text-sky-200">{activeWorkingCount}</span>
-                  </div>
-                </div>
+                <StatCard label="Vừa tải (50-100%)" value={String(activeWorkingCount)} icon={Clock} tone="primary" />
               </button>
 
-              {/* Overloaded */}
               <button
                 type="button"
                 onClick={() => {
                   setSelectedCapacity(selectedCapacity === "overloaded" && !showOverdueOnly ? "all" : "overloaded");
                   setShowOverdueOnly(false);
                 }}
-                className={`p-2.5 px-3 rounded-xl border text-left transition-all flex items-center justify-between ${
-                  selectedCapacity === "overloaded" && !showOverdueOnly
-                    ? "bg-rose-500/15 border-rose-500/40 ring-1 ring-rose-500/30 text-white shadow-sm"
-                    : "bg-white/[0.02] border-white/[0.06] text-neutral-300 hover:bg-rose-500/10"
-                }`}
+                className="text-left"
               >
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400">
-                    <AlertTriangle size={14} />
-                  </span>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] text-rose-400 font-medium">Quá tải (&gt;100%)</span>
-                    <span className="text-base font-bold text-rose-300">{overloadedCount}</span>
-                  </div>
-                </div>
+                <StatCard label="Quá tải (>100%)" value={String(overloadedCount)} icon={AlertTriangle} tone="destructive" />
               </button>
 
-              {/* Overdue */}
               <button
                 type="button"
                 onClick={() => {
                   setShowOverdueOnly((prev) => !prev);
                   setSelectedCapacity("all");
                 }}
-                className={`p-2.5 px-3 rounded-xl border text-left transition-all flex items-center justify-between ${
-                  showOverdueOnly
-                    ? "bg-amber-500/20 border-amber-500/50 ring-1 ring-amber-500/40 text-white shadow-sm"
-                    : "bg-white/[0.02] border-white/[0.06] text-neutral-300 hover:bg-amber-500/10"
-                }`}
+                className="text-left"
               >
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
-                    <AlertTriangle size={14} />
-                  </span>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] text-amber-400 font-medium">Trễ hạn</span>
-                    <span className="text-base font-bold text-amber-300">{overdueTasks.length}</span>
-                  </div>
-                </div>
+                <StatCard label="Trễ hạn" value={String(overdueTasks.length)} icon={AlertTriangle} tone="warning" />
               </button>
             </div>
 
             {/* Filter Search & Project Controls */}
-            <div className="flex flex-col sm:flex-row items-center gap-3 pt-1 border-t border-white/[0.06]">
-              <div className="flex-1 w-full">
+            <HStack gap={3} vAlign="center" wrap="wrap" className="pt-1 border-t border-border">
+              <StackItem size="fill">
                 <TextInput
                   label="Tìm kiếm DevOps"
                   isLabelHidden
@@ -455,7 +389,7 @@ export default function DashboardPage(): React.JSX.Element {
                   startIcon={Search}
                   hasClear
                 />
-              </div>
+              </StackItem>
 
               <div className="w-full sm:w-64">
                 <Selector
@@ -480,7 +414,7 @@ export default function DashboardPage(): React.JSX.Element {
                   }}
                 />
               )}
-            </div>
+            </HStack>
           </VStack>
         </Card>
       )}
