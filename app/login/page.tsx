@@ -199,7 +199,7 @@ export default function LoginPage(): React.JSX.Element {
             </VStack>
 
             <HStack width="100%" hAlign="end">
-              <Text type="supporting" className="text-[12.5px]">
+              <Text type="supporting">
                 Quên mật khẩu?
               </Text>
             </HStack>
@@ -234,9 +234,11 @@ export default function LoginPage(): React.JSX.Element {
               />
             </VStack>
 
-            <HStack gap={1.5} vAlign="center" className="text-[11px] text-disabled pt-1">
+            <HStack gap={1.5} vAlign="center" className="pt-1">
               <ShieldCheck size={13} className="text-success" />
-              <span>Bảo mật dữ liệu Firebase &amp; AI Grounding</span>
+              <Text type="supporting" size="3xs" color="disabled">
+                Bảo mật dữ liệu Firebase &amp; AI Grounding
+              </Text>
             </HStack>
           </VStack>
         </Card>
