@@ -2,10 +2,16 @@ import { Token } from "@astryxdesign/core/Token";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
 import type { MemberStatus } from "@/types/member";
 
-const statusVariant: Record<MemberStatus, "success" | "warning" | "error"> = {
+const statusSemanticVariant: Record<MemberStatus, "success" | "warning" | "error"> = {
   available: "success",
   busy: "warning",
   overloaded: "error",
+};
+
+const statusTokenColor: Record<MemberStatus, "green" | "yellow" | "red"> = {
+  available: "green",
+  busy: "yellow",
+  overloaded: "red",
 };
 
 const statusLabels: Record<MemberStatus, string> = {
@@ -18,7 +24,8 @@ export function StatusBadge({ status }: { status: MemberStatus }): React.JSX.Ele
   return (
     <Token
       label={statusLabels[status]}
-      icon={<StatusDot variant={statusVariant[status]} label={statusLabels[status]} />}
+      color={statusTokenColor[status]}
+      icon={<StatusDot variant={statusSemanticVariant[status]} label={statusLabels[status]} />}
     />
   );
 }
