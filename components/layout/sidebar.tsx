@@ -109,7 +109,7 @@ export function Sidebar(): React.JSX.Element {
               <SegmentedControlItem value="leader" label="Leader" />
               <SegmentedControlItem value="devops" label="DevOps" />
             </SegmentedControl>
-            <Text type="supporting" className="text-[10px] uppercase tracking-wide text-secondary">
+            <Text type="supporting" size="xsm" color="secondary" className="uppercase tracking-wide">
               {isLeader ? "LEADER VIEW" : "DEVOPS VIEW"}
             </Text>
           </VStack>
@@ -121,10 +121,10 @@ export function Sidebar(): React.JSX.Element {
                 gap={1}
                 className="p-3 rounded-lg bg-accent/[0.07] border border-accent/25"
               >
-                <Text weight="semibold" className="text-[13px] text-accent">
+                <Text weight="semibold" size="sm" color="accent">
                   {isLeader ? "Ask / Command" : "Log Work"}
                 </Text>
-                <Text type="supporting" className="text-[11.5px]">
+                <Text type="supporting" size="sm">
                   {isLeader
                     ? "Query the roster or propose task changes."
                     : "Describe what you finished; I file it."}
@@ -138,7 +138,7 @@ export function Sidebar(): React.JSX.Element {
                     <Text weight="semibold" maxLines={1}>
                       {user.displayName}
                     </Text>
-                    <Text type="supporting" maxLines={1} className="text-[11px]">
+                    <Text type="supporting" maxLines={1} size="sm">
                       {user.email}
                     </Text>
                   </VStack>
