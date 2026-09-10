@@ -1,11 +1,12 @@
 import React from "react";
 import Link from "next/link";
 import { FolderGit2, Users, Layers, CheckCircle2, Clock } from "lucide-react";
-import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { HStack, VStack, StackItem } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Avatar } from "@astryxdesign/core/Avatar";
 import { Card } from "@astryxdesign/core/Card";
 import { formatTaskEffort, formatEffortDuration } from "@/lib/effort";
+import { getProjectColor } from "@/lib/project-colors";
 import type { Member } from "@/types/member";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -38,7 +39,7 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
           effort,
         }));
 
-        const projColor = project.color || "#38bdf8";
+        const projColor = getProjectColor(project.color);
 
         return (
           <Card key={project.id} elevation="low">
@@ -76,53 +77,50 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
               </div>
 
               {/* Assigned DevOps Engineers */}
-              <div className="bg-white/[0.02] p-3 rounded-xl border border-white/[0.05] flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <HStack gap={1} vAlign="center">
-                    <Users size={13} className="text-neutral-400" />
-
-                    <span className="text-xs font-semibold text-neutral-300">
-                      Nhân sự phân bổ ({assignedMembers.length})
-                    </span>
-                  </HStack>
-                </div>
+              <div className="bg-surface p-3 rounded-xl border border-border flex flex-col gap-2">
+                <HStack gap={1} vAlign="center">
+                  <Users size={13} className="text-secondary" />
+                  <Text type="supporting" size="xsm" className="font-semibold">
+                    Nhân sự phân bổ ({assignedMembers.length})
+                  </Text>
+                </HStack>
 
                 {assignedMembers.length === 0 ? (
-                  <span className="text-xs text-neutral-500 italic">
+                  <Text type="supporting" size="xsm" className="text-disabled italic">
                     Chưa có nhân sự DevOps nào được gán task.
-                  </span>
+                  </Text>
                 ) : (
-                  <div className="flex flex-col gap-1.5">
+                  <VStack gap={1.5}>
                     {assignedMembers.map(({ member, effort }) => {
                       if (!member) return null;
                       return (
-                        <div key={member.id} className="flex items-center justify-between text-xs py-0.5">
-                          <HStack gap={2} vAlign="center">
-                            <Avatar name={member.name} src={member.photoURL ?? undefined} size="xsm" tooltip={false} />
-                            <Link href={`/members/${member.id}`} className="hover:underline text-neutral-200">
+                        <HStack key={member.id} gap={2} vAlign="center" className="text-xs py-0.5">
+                          <Avatar name={member.name} src={member.photoURL ?? undefined} size="xsm" tooltip={false} />
+                          <StackItem size="fill">
+                            <Link href={`/members/${member.id}`} className="hover:underline text-primary">
                               {member.name}
                             </Link>
-                          </HStack>
-                          <span className="font-semibold text-sky-400">{formatEffortDuration(effort)} effort</span>
-                        </div>
+                          </StackItem>
+                          <span className="font-semibold text-accent">{formatEffortDuration(effort)} effort</span>
+                        </HStack>
                       );
                     })}
-                  </div>
+                  </VStack>
                 )}
               </div>
 
               {/* Tasks List */}
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+              <VStack gap={2}>
+                <Text type="supporting" size="xsm" className="font-semibold uppercase tracking-wider">
                   Nhiệm vụ dự án
-                </span>
+                </Text>
 
                 {projectTasks.length === 0 ? (
-                  <span className="text-xs text-neutral-500 italic">
+                  <Text type="supporting" size="xsm" className="text-disabled italic">
                     Chưa có task nào được ghi nhận cho dự án này.
-                  </span>
+                  </Text>
                 ) : (
-                  <div className="flex flex-col gap-1.5">
+                  <VStack gap={1.5}>
                     {projectTasks.slice(0, 3).map((task) => {
                       const assignee = memberMap.get(task.memberId);
                       const isDone = task.status === "done";
@@ -131,32 +129,36 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
                       return (
                         <div
                           key={task.id}
-                          className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] flex items-center justify-between text-xs"
+                          className="p-2 rounded-lg bg-surface border border-border flex items-center justify-between text-xs"
                         >
                           <div className="flex items-center gap-2 truncate min-w-0">
                             {isDone ? (
-                              <CheckCircle2 size={13} className="text-emerald-400 flex-shrink-0" />
+                              <CheckCircle2 size={13} className="text-success flex-shrink-0" />
                             ) : isPlanned ? (
                               <Clock size={13} className="text-purple-400 flex-shrink-0" />
                             ) : (
-                              <span className="w-2 h-2 rounded-full bg-sky-400 flex-shrink-0" />
+                              // ponytail: project color has no Astryx StatusDot support (semantic variants only) — sanctioned hand-rolled dot, same exception as pm-team-roster.tsx
+                              <span
+                                className="w-2 h-2 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: projColor }}
+                              />
                             )}
-                            <span className="truncate text-neutral-200">{task.title}</span>
+                            <span className="truncate text-primary">{task.title}</span>
                           </div>
-                          <span className="text-neutral-400 text-[11px] ml-2 flex-shrink-0">
+                          <span className="text-secondary text-[11px] ml-2 flex-shrink-0">
                             {assignee?.name.split(" ")[0] ?? "Unassigned"} ({formatTaskEffort(task)})
                           </span>
                         </div>
                       );
                     })}
                     {projectTasks.length > 3 && (
-                      <span className="text-center text-[11px] text-neutral-400 pt-1">
+                      <Text type="supporting" size="xsm" className="text-center pt-1">
                         +{projectTasks.length - 3} task khác
-                      </span>
+                      </Text>
                     )}
-                  </div>
+                  </VStack>
                 )}
-              </div>
+              </VStack>
             </VStack>
           </Card>
         );
