@@ -63,8 +63,8 @@ function toDayIndexRange(
   const rawEnd = Math.round((taskEnd.getTime() - windowStart.getTime()) / MS_PER_DAY);
 
   return {
-    start: Math.max(0, rawStart),
-    end: Math.min(dayCount - 1, rawEnd),
+    start: Math.max(0, Math.min(dayCount - 1, rawStart)),
+    end: Math.max(0, Math.min(dayCount - 1, rawEnd)),
   };
 }
 
@@ -255,13 +255,12 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
                               onClick={() => setSelectedTask({ task, memberName: member.name })}
                               className={`absolute h-[22px] rounded-md px-2 text-xs flex items-center gap-1 cursor-pointer transition-transform hover:scale-[1.01] z-10 ${
                                 isPlanned ? "border border-dashed border-white/50 opacity-85" : "border border-white/10"
-                              } ${isDone ? "opacity-50 grayscale" : ""}`}
+                              } ${isDone ? "opacity-50 grayscale" : "text-body"}`}
                               style={{
                                 left: `${leftPct}%`,
                                 width: `${widthPct}%`,
                                 top: lane * 26 + 2,
                                 backgroundColor: color,
-                                color: isDone ? undefined : "#08090C",
                               }}
                               title={`${task.title} · ${project?.name ?? "Project"} · ${formatTaskEffort(task)}`}
                             >
