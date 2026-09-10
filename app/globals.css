@@ -9,8 +9,6 @@
   }
 
   body {
-    background-color: #090d14;
-    color: #e2e8f0;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
