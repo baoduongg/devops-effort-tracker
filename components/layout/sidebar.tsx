@@ -109,10 +109,7 @@ export function Sidebar(): React.JSX.Element {
               <SegmentedControlItem value="leader" label="Leader" />
               <SegmentedControlItem value="devops" label="DevOps" />
             </SegmentedControl>
-            <Text
-              type="supporting"
-              className="text-[10px] uppercase tracking-wide text-[var(--color-text-secondary)]"
-            >
+            <Text type="supporting" className="text-[10px] uppercase tracking-wide text-secondary">
               {isLeader ? "LEADER VIEW" : "DEVOPS VIEW"}
             </Text>
           </VStack>
@@ -122,9 +119,9 @@ export function Sidebar(): React.JSX.Element {
             <VStack gap={3}>
               <VStack
                 gap={1}
-                className="p-3 rounded-lg bg-[var(--color-accent-muted)] border border-[var(--color-accent)]"
+                className="p-3 rounded-lg bg-accent/[0.07] border border-accent/25"
               >
-                <Text weight="semibold" className="text-[13px] text-[var(--color-accent)]">
+                <Text weight="semibold" className="text-[13px] text-accent">
                   {isLeader ? "Ask / Command" : "Log Work"}
                 </Text>
                 <Text type="supporting" className="text-[11.5px]">
@@ -134,7 +131,7 @@ export function Sidebar(): React.JSX.Element {
                 </Text>
               </VStack>
 
-              <HStack gap={2} vAlign="center" className="pt-2 border-t border-[var(--color-border)]">
+              <HStack gap={2} vAlign="center" className="pt-2 border-t border-border">
                 <Avatar name={user.displayName} src={user.photoURL ?? undefined} size="sm" tooltip={false} />
                 <StackItem size="fill">
                   <VStack gap={0}>
