@@ -7,9 +7,10 @@ interface Ranged {
  * First-fit lane packing: each item joins the lowest-numbered lane whose
  * last-placed item doesn't overlap it. Items are packed in start-order so
  * packing is deterministic regardless of input order.
+ * @returns items sorted by ascending start day, each tagged with its lane index — NOT in original input order.
  */
 export function assignLanes<T extends Ranged>(items: T[]): (T & { lane: number })[] {
-  const sorted = [...items].sort((a, b) => a.start - b.start);
+  const sorted = [...items].sort((a, b) => a.start - b.start || a.end - b.end);
   const laneEnds: number[] = []; // laneEnds[i] = end day of the last item placed in lane i
   const result: (T & { lane: number })[] = [];
 

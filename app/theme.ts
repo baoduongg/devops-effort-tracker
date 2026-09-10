@@ -31,6 +31,8 @@ export const appTheme = defineTheme({
     "--color-text-primary": "#E9ECF2",
     "--color-text-secondary": "#8B93A6",
     "--color-text-disabled": "#5C6478",
+    "--color-icon-primary": "#E9ECF2",
+    "--color-icon-secondary": "#8B93A6",
     "--color-border": "rgba(255,255,255,0.07)",
     "--color-border-emphasized": "rgba(255,255,255,0.10)",
     "--color-success": "#2FD98A",
