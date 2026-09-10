@@ -210,6 +210,13 @@ export const devopsTrackerTheme = {
         "fontSize": "var(--text-display-3-size)",
         "lineHeight": "var(--text-display-3-leading)"
       }
+    },
+    "side-nav-item": {
+      "selected:true": {
+        "background": "linear-gradient(90deg, rgba(61,123,255,0.18), rgba(61,123,255,0.05))",
+        "borderColor": "rgba(61,123,255,0.30)",
+        "color": "#EAF0FF"
+      }
     }
   },
   __onDark: {
