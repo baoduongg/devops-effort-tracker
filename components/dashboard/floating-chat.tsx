@@ -9,6 +9,7 @@ import { IconButton } from "@astryxdesign/core/IconButton";
 import { Button } from "@astryxdesign/core/Button";
 import { Text } from "@astryxdesign/core/Text";
 import { Icon } from "@astryxdesign/core/Icon";
+import { Divider } from "@astryxdesign/core/Divider";
 import { ChatBox } from "@/components/chat/chat-box";
 
 export function FloatingChat(): React.JSX.Element {
@@ -26,14 +27,7 @@ export function FloatingChat(): React.JSX.Element {
 
   if (!isOpen) {
     return (
-      <div
-        style={{
-          position: "fixed",
-          bottom: 24,
-          right: 24,
-          zIndex: 100,
-        }}
-      >
+      <div className="fixed bottom-6 right-6 z-[100]">
         <Button
           variant="primary"
           size="lg"
@@ -47,20 +41,7 @@ export function FloatingChat(): React.JSX.Element {
   }
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        bottom: 24,
-        right: 24,
-        zIndex: 100,
-        width: 420,
-        maxWidth: "calc(100vw - 32px)",
-        height: 620,
-        maxHeight: "calc(100vh - 48px)",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
+    <div className="fixed bottom-6 right-6 z-[100] w-[420px] max-w-[calc(100vw-32px)] h-[620px] max-h-[calc(100vh-48px)] flex flex-col">
       <Card elevation="high" width="100%" height="100%">
         <VStack gap={3} height="100%">
           {/* Header */}
@@ -69,7 +50,7 @@ export function FloatingChat(): React.JSX.Element {
             <VStack gap={0}>
               <Text weight="semibold">AI Assistant</Text>
               <Text type="supporting" color="secondary">
-                Quick Task & Capacity Logging
+                Quick Task &amp; Capacity Logging
               </Text>
             </VStack>
             <StackItem size="fill" />
@@ -90,13 +71,11 @@ export function FloatingChat(): React.JSX.Element {
             />
           </HStack>
 
-          {/* Divider */}
-          <div style={{ height: 1, backgroundColor: "var(--color-border)", margin: "0 -8px" }} />
+          <Divider isFullBleed />
 
-          {/* Chat content */}
-          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <StackItem size="fill" isScrollable>
             <ChatBox />
-          </div>
+          </StackItem>
         </VStack>
       </Card>
     </div>
