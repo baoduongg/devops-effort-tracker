@@ -18,6 +18,8 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "app/devops-tracker.d.ts",
+      "app/devops-tracker.variants.d.ts",
     ],
   },
 ];
