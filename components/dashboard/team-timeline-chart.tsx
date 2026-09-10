@@ -18,10 +18,13 @@ import { Avatar } from "@astryxdesign/core/Avatar";
 import { Text } from "@astryxdesign/core/Text";
 import { Card } from "@astryxdesign/core/Card";
 import { Button } from "@astryxdesign/core/Button";
+import { Badge } from "@astryxdesign/core/Badge";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
 import { formatTaskEffort } from "@/lib/effort";
 import { parseDateLocal, calculateDefaultEndDate } from "@/lib/date";
+import { assignLanes } from "@/lib/gantt-lanes";
+import { getProjectColor } from "@/lib/project-colors";
 import type { Member } from "@/types/member";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -45,21 +48,38 @@ function calculateDays(startDate: string, endDate: string | null, effortMinutes?
   return Math.max(1, Math.round((end - start) / (24 * 60 * 60 * 1000)) + 1);
 }
 
-const STATUS_LABELS: Record<TaskStatus, { label: string; colorClass: string; bgClass: string }> = {
+/** Converts a task's real date range into inclusive day-index offsets within the visible window (0 = first visible day). Clamps to the window bounds. */
+function toDayIndexRange(
+  task: Task,
+  windowStart: Date,
+  dayCount: number
+): { start: number; end: number } {
+  const taskStart = parseDateLocal(task.startDate);
+  const resolvedEndStr = task.endDate || calculateDefaultEndDate(task.startDate, task.effortMinutes);
+  const taskEnd = parseDateLocal(resolvedEndStr);
+
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const rawStart = Math.round((taskStart.getTime() - windowStart.getTime()) / MS_PER_DAY);
+  const rawEnd = Math.round((taskEnd.getTime() - windowStart.getTime()) / MS_PER_DAY);
+
+  return {
+    start: Math.max(0, rawStart),
+    end: Math.min(dayCount - 1, rawEnd),
+  };
+}
+
+const STATUS_LABELS: Record<TaskStatus, { label: string; variant: "info" | "purple" | "success" }> = {
   in_progress: {
     label: "Đang thực hiện",
-    colorClass: "text-sky-400 border-sky-500/30",
-    bgClass: "bg-sky-500/10",
+    variant: "info",
   },
   planned: {
     label: "Kế hoạch",
-    colorClass: "text-purple-400 border-purple-500/30",
-    bgClass: "bg-purple-500/10",
+    variant: "purple",
   },
   done: {
     label: "Đã hoàn thành",
-    colorClass: "text-emerald-400 border-emerald-500/30",
-    bgClass: "bg-emerald-500/10",
+    variant: "success",
   },
 };
 
@@ -85,7 +105,6 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
 
   const windowStartMs = days[0].getTime();
   const windowEndMs = days[days.length - 1].getTime() + 24 * 60 * 60 * 1000;
-  const totalWindowDuration = windowEndMs - windowStartMs;
 
   const selectedProject = selectedTask ? projectMap.get(selectedTask.task.projectId) : null;
   const selectedTaskOverdue = selectedTask ? isOverdue(selectedTask.task) : false;
@@ -93,24 +112,26 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
     selectedTask && selectedTaskOverdue && selectedTask.task.endDate
       ? daysOverdue(selectedTask.task.endDate)
       : 0;
+  const selectedProjectColor = getProjectColor(selectedProject?.color);
+  const selectedStatusInfo = selectedTask ? STATUS_LABELS[selectedTask.task.status] : null;
 
   return (
     <Card elevation="low">
       <VStack gap={4}>
         {/* Timeline Header & Navigation */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.06] pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
           <HStack gap={2} vAlign="center">
-            <span className="p-1.5 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20">
+            <span className="p-1.5 rounded-lg bg-accent/10 text-accent border border-accent/20">
               <CalendarIcon size={16} />
             </span>
             <div className="flex flex-col">
               <Text weight="semibold" size="base">
                 Lịch trình Phân bổ & Tiến độ
               </Text>
-              <span className="text-xs text-neutral-400">
+              <Text type="supporting" size="xsm">
                 {days[0].toLocaleDateString("vi-VN", { month: "short", day: "numeric" })} -{" "}
                 {days[days.length - 1].toLocaleDateString("vi-VN", { month: "short", day: "numeric", year: "numeric" })}
-              </span>
+              </Text>
             </div>
           </HStack>
 
@@ -142,8 +163,10 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
         <div className="overflow-x-auto">
           <div className="min-w-[820px]">
             {/* Days Header */}
-            <div className="grid grid-cols-[220px_1fr] border-b border-white/[0.08] pb-2">
-              <div className="text-xs font-semibold text-neutral-400 px-3 uppercase tracking-wider">DevOps Member</div>
+            <div className="grid grid-cols-[220px_1fr] border-b border-border pb-2">
+              <Text type="supporting" size="xsm" weight="semibold" className="px-3 uppercase tracking-wider">
+                DevOps Member
+              </Text>
               <div className="grid grid-cols-14 gap-1 text-center">
                 {days.map((day, idx) => {
                   const isToday = day.toDateString() === new Date().toDateString();
@@ -153,10 +176,10 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
                       key={idx}
                       className={`text-xs py-1.5 rounded-lg flex flex-col items-center justify-center transition-all ${
                         isToday
-                          ? "bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40 shadow-sm"
+                          ? "bg-accent/20 text-accent font-bold border border-accent/40 shadow-sm"
                           : isWeekend
-                          ? "text-neutral-500 bg-white/[0.01]"
-                          : "text-neutral-300 bg-white/[0.02]"
+                          ? "text-secondary bg-surface"
+                          : "text-primary bg-surface"
                       }`}
                     >
                       <span className="text-[10px] uppercase font-semibold opacity-70">
@@ -170,7 +193,7 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
             </div>
 
             {/* Member Timeline Rows */}
-            <div className="divide-y divide-white/[0.05]">
+            <VStack gap={0} className="divide-y divide-border">
               {members.map((member) => {
                 const memberTasks = tasks.filter((t) => {
                   if (t.memberId !== member.id) return false;
@@ -181,132 +204,115 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
                   return taskEnd >= windowStartMs && taskStart <= windowEndMs;
                 });
 
+                const dayRanges = memberTasks.map((t) => ({
+                  task: t,
+                  ...toDayIndexRange(t, days[0], days.length),
+                }));
+                const lanes = assignLanes(dayRanges);
+                const laneCount = Math.max(1, ...lanes.map((l) => l.lane + 1));
+                const rowHeight = laneCount * 26;
+
                 return (
-                  <div key={member.id} className="grid grid-cols-[220px_1fr] py-3 items-center">
-                    {/* Member Info */}
-                    <div className="px-3 flex items-center gap-2.5">
+                  <HStack key={member.id} gap={0} vAlign="center" className="py-3" style={{ minHeight: rowHeight + 12 }}>
+                    <div className="w-[220px] flex-shrink-0 px-3 flex items-center gap-2.5">
                       <Avatar name={member.name} src={member.photoURL ?? undefined} size="sm" tooltip={false} />
                       <div className="truncate">
-                        <Link href={`/members/${member.id}`} className="hover:underline font-medium text-neutral-200">
+                        <Link href={`/members/${member.id}`}>
                           <Text weight="medium" size="sm" maxLines={1}>
                             {member.name}
                           </Text>
                         </Link>
-                        <span className="text-[11px] text-neutral-400">
+                        <Text type="supporting" size="xsm">
                           {memberTasks.length} task{memberTasks.length === 1 ? "" : "s"} trong kỳ
-                        </span>
+                        </Text>
                       </div>
                     </div>
 
-                    {/* Timeline Bar Area */}
-                    <div className="relative min-h-[56px] bg-white/[0.015] rounded-xl border border-white/[0.04] overflow-hidden flex flex-col justify-center gap-1.5 p-1.5">
-                      {/* Grid background day lines */}
+                    <div className="relative flex-1 rounded-xl bg-surface border border-border overflow-hidden" style={{ minHeight: rowHeight }}>
                       <div className="absolute inset-0 grid grid-cols-14 pointer-events-none">
                         {days.map((d, i) => {
                           const isToday = d.toDateString() === new Date().toDateString();
-                          return (
-                            <div
-                              key={i}
-                              className={`border-r border-white/[0.03] h-full ${
-                                isToday ? "bg-sky-500/[0.08]" : ""
-                              }`}
-                            />
-                          );
+                          return <div key={i} className={`border-r border-border h-full ${isToday ? "bg-accent/[0.08]" : ""}`} />;
                         })}
                       </div>
 
-                      {memberTasks.length === 0 ? (
-                        <div className="text-center relative z-10 py-1">
-                          <span className="text-xs text-neutral-500 italic">Chưa có task trong khoảng này</span>
-                        </div>
+                      {lanes.length === 0 ? (
+                        <Text type="supporting" size="xsm" className="relative z-10 text-center py-1 block">
+                          Chưa có task trong khoảng này
+                        </Text>
                       ) : (
-                        memberTasks.map((task) => {
+                        lanes.map(({ task, start, end, lane }) => {
                           const project = projectMap.get(task.projectId);
                           const isDone = task.status === "done";
                           const isPlanned = task.status === "planned";
-                          const taskStart = parseDateLocal(task.startDate).getTime();
-                          const resolvedEndStr =
-                            task.endDate || calculateDefaultEndDate(task.startDate, task.effortMinutes);
-                          const taskEnd = parseDateLocal(resolvedEndStr).getTime() + 24 * 60 * 60 * 1000;
-
-                          // Calculate positioning percentage in the 14-day window
-                          const leftPct = Math.max(
-                            0,
-                            Math.min(100, ((taskStart - windowStartMs) / totalWindowDuration) * 100)
-                          );
-                          const rightPct = Math.max(
-                            0,
-                            Math.min(100, ((taskEnd - windowStartMs) / totalWindowDuration) * 100)
-                          );
-                          const widthPct = Math.max(7.14, rightPct - leftPct);
-
-                          // Hide if completely outside current window
-                          if (taskEnd < windowStartMs || taskStart > windowEndMs) return null;
-
-                          const color = project?.color ?? "#38bdf8";
+                          const color = getProjectColor(project?.color);
+                          const leftPct = (start / days.length) * 100;
+                          const widthPct = ((end - start + 1) / days.length) * 100;
 
                           return (
                             <div
                               key={task.id}
                               onClick={() => setSelectedTask({ task, memberName: member.name })}
-                              className={`h-7 rounded-lg px-2 text-xs flex items-center justify-between text-white shadow-sm transition-all z-10 cursor-pointer hover:scale-[1.01] hover:brightness-110 active:scale-[0.99] ${
+                              className={`absolute h-[22px] rounded-md px-2 text-xs flex items-center gap-1 cursor-pointer transition-transform hover:scale-[1.01] z-10 ${
                                 isPlanned ? "border border-dashed border-white/50 opacity-85" : "border border-white/10"
                               } ${isDone ? "opacity-50 grayscale" : ""}`}
                               style={{
-                                marginLeft: `${leftPct}%`,
+                                left: `${leftPct}%`,
                                 width: `${widthPct}%`,
+                                top: lane * 26 + 2,
                                 backgroundColor: color,
+                                color: isDone ? undefined : "#08090C",
                               }}
-                              title={`Nhấn để xem chi tiết: ${task.title} (${project?.name ?? "Project"}) | Effort: ${formatTaskEffort(task)}`}
+                              title={`${task.title} · ${project?.name ?? "Project"} · ${formatTaskEffort(task)}`}
                             >
-                              <div className="flex items-center gap-1 min-w-0 pr-1 truncate">
-                                {isDone && <CheckCircle2 size={11} className="flex-shrink-0" />}
-                                {isPlanned && <Clock size={11} className="flex-shrink-0 opacity-80" />}
-                                <span className="font-bold text-[10px] opacity-90 flex-shrink-0">
-                                  [{project?.name ?? "Project"}]
-                                </span>
-                                <span className="truncate font-medium text-[11px] drop-shadow-sm">
-                                  {task.title}
-                                </span>
-                              </div>
-                              <span className="text-[10px] ml-1 px-1 rounded bg-black/40 font-bold flex-shrink-0">
-                                {formatTaskEffort(task)}
-                              </span>
+                              {isDone && <CheckCircle2 size={11} className="flex-shrink-0" />}
+                              {isPlanned && <Clock size={11} className="flex-shrink-0 opacity-80" />}
+                              <span className="truncate font-medium text-[11px]">{task.title}</span>
                             </div>
                           );
                         })
                       )}
                     </div>
-                  </div>
+                  </HStack>
                 );
               })}
-            </div>
+            </VStack>
           </div>
         </div>
 
         {/* Legend */}
-        <div className="flex flex-wrap items-center gap-4 pt-3 border-t border-white/[0.06] text-xs text-neutral-400">
-          <span className="font-semibold text-neutral-300">Dự án:</span>
+        <HStack gap={4} wrap="wrap" vAlign="center" className="pt-3 border-t border-border">
+          <Text type="supporting" size="xsm" weight="semibold">
+            Dự án:
+          </Text>
           {projects.map((p) => (
-            <div key={p.id} className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color }} />
-              <span className="text-neutral-300">{p.name}</span>
-            </div>
+            <HStack key={p.id} gap={1.5} vAlign="center">
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getProjectColor(p.color) }} />
+              <Text size="xsm">{p.name}</Text>
+            </HStack>
           ))}
-          <span className="text-neutral-500">•</span>
-          <div className="flex items-center gap-1.5">
+          <Text type="supporting" size="xsm">
+            •
+          </Text>
+          <HStack gap={1.5} vAlign="center">
             <span className="w-3.5 h-2.5 rounded bg-sky-500" />
-            <span>Đang làm</span>
-          </div>
-          <div className="flex items-center gap-1.5">
+            <Text type="supporting" size="xsm">
+              Đang làm
+            </Text>
+          </HStack>
+          <HStack gap={1.5} vAlign="center">
             <span className="w-3.5 h-2.5 rounded bg-purple-500 border border-dashed border-white/60" />
-            <span>Kế hoạch</span>
-          </div>
-          <div className="flex items-center gap-1.5">
+            <Text type="supporting" size="xsm">
+              Kế hoạch
+            </Text>
+          </HStack>
+          <HStack gap={1.5} vAlign="center">
             <span className="w-3.5 h-2.5 rounded bg-neutral-600 opacity-50" />
-            <span>Đã xong</span>
-          </div>
-        </div>
+            <Text type="supporting" size="xsm">
+              Đã xong
+            </Text>
+          </HStack>
+        </HStack>
       </VStack>
 
       {/* Task Detail Modal Dialog */}
@@ -327,80 +333,76 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
             />
             <div className="p-5 flex flex-col gap-4">
               {/* Badges Overview */}
-              <div className="flex flex-wrap items-center gap-2">
+              <HStack gap={2} wrap="wrap" vAlign="center">
                 <span
                   className="px-2.5 py-1 rounded-lg text-xs font-bold border"
                   style={{
-                    backgroundColor: `${selectedProject?.color ?? "#38bdf8"}20`,
-                    color: selectedProject?.color ?? "#38bdf8",
-                    borderColor: `${selectedProject?.color ?? "#38bdf8"}40`,
+                    backgroundColor: `${selectedProjectColor}20`,
+                    color: selectedProjectColor,
+                    borderColor: `${selectedProjectColor}40`,
                   }}
                 >
                   {selectedProject?.name ?? "General"}
                 </span>
 
-                <span
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${
-                    STATUS_LABELS[selectedTask.task.status]?.bgClass ?? "bg-sky-500/10"
-                  } ${STATUS_LABELS[selectedTask.task.status]?.colorClass ?? "text-sky-400"}`}
-                >
-                  {STATUS_LABELS[selectedTask.task.status]?.label ?? selectedTask.task.status}
-                </span>
+                {selectedStatusInfo && <Badge variant={selectedStatusInfo.variant} label={selectedStatusInfo.label} />}
 
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-sky-500/15 text-sky-300 border border-sky-500/25 flex items-center gap-1">
-                  <Layers size={13} />
-                  {formatTaskEffort(selectedTask.task)} Effort
-                </span>
+                <Badge variant="blue" icon={<Layers size={13} />} label={`${formatTaskEffort(selectedTask.task)} Effort`} />
 
                 {selectedTaskOverdue && (
-                  <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center gap-1">
-                    <AlertTriangle size={13} />
-                    Trễ {selectedTaskOverdueDays} ngày
-                  </span>
+                  <Badge variant="error" icon={<AlertTriangle size={13} />} label={`Trễ ${selectedTaskOverdueDays} ngày`} />
                 )}
-              </div>
+              </HStack>
 
               {/* Task Details Card */}
-              <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex flex-col gap-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-neutral-400 flex items-center gap-1.5">
-                    <CalendarIcon size={14} className="text-sky-400" />
-                    Thời gian thực hiện:
-                  </span>
-                  <span className="font-semibold text-neutral-200">
+              <div className="p-3.5 rounded-xl bg-surface border border-border flex flex-col gap-3">
+                <HStack vAlign="center" justify="between" className="text-xs">
+                  <HStack gap={1.5} vAlign="center">
+                    <CalendarIcon size={14} className="text-accent" />
+                    <Text type="supporting" size="xsm">
+                      Thời gian thực hiện:
+                    </Text>
+                  </HStack>
+                  <Text size="xsm" weight="semibold">
                     {formatDateVN(selectedTask.task.startDate)}
                     {selectedTask.task.endDate ? ` → ${formatDateVN(selectedTask.task.endDate)}` : " (Chưa kết thúc)"}
                     {" "}
-                    <span className="text-neutral-400 font-normal">
+                    <Text as="span" type="supporting" size="xsm" color="inherit" weight="normal">
                       ({calculateDays(selectedTask.task.startDate, selectedTask.task.endDate)} ngày)
-                    </span>
-                  </span>
-                </div>
+                    </Text>
+                  </Text>
+                </HStack>
 
-                <div className="flex items-center justify-between text-xs pt-2 border-t border-white/[0.04]">
-                  <span className="text-neutral-400 flex items-center gap-1.5">
+                <HStack vAlign="center" justify="between" className="text-xs pt-2 border-t border-border">
+                  <HStack gap={1.5} vAlign="center">
                     <Sparkles size={14} className="text-purple-400" />
-                    Nguồn ghi nhận:
-                  </span>
-                  <span className="font-medium text-neutral-300">
+                    <Text type="supporting" size="xsm">
+                      Nguồn ghi nhận:
+                    </Text>
+                  </HStack>
+                  <Text size="xsm" weight="medium">
                     {selectedTask.task.source === "ai_chat" ? "Ghi nhận qua AI Assistant" : "Nhập thủ công"}
-                  </span>
-                </div>
+                  </Text>
+                </HStack>
               </div>
 
               {/* Description Section */}
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs font-semibold text-neutral-400 flex items-center gap-1">
-                  <Info size={13} />
-                  Mô tả chi tiết:
-                </span>
-                <div className="p-3 rounded-xl bg-white/[0.015] border border-white/[0.04] text-xs text-neutral-300 min-h-[60px] whitespace-pre-wrap leading-relaxed">
-                  {selectedTask.task.description ? selectedTask.task.description : "Chưa có mô tả chi tiết cho công việc này."}
+                <HStack gap={1} vAlign="center">
+                  <Info size={13} className="text-secondary" />
+                  <Text type="supporting" size="xsm" weight="semibold">
+                    Mô tả chi tiết:
+                  </Text>
+                </HStack>
+                <div className="p-3 rounded-xl bg-surface border border-border min-h-[60px]">
+                  <Text size="xsm" textWrap="pretty" className="whitespace-pre-wrap leading-relaxed">
+                    {selectedTask.task.description ? selectedTask.task.description : "Chưa có mô tả chi tiết cho công việc này."}
+                  </Text>
                 </div>
               </div>
 
               {/* Footer Actions */}
-              <div className="flex justify-end pt-2 border-t border-white/[0.06]">
+              <div className="flex justify-end pt-2 border-t border-border">
                 <Button
                   label="Đóng"
                   variant="secondary"
