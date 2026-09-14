@@ -107,7 +107,7 @@ export default function LandingPage(): React.JSX.Element {
             <div className="flex flex-col">
               <span className="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
                 DevOps Effort Hub
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-300 font-medium">
+                <span className="text-xs px-1.5 py-0.2 rounded-full bg-sky-500/15 border border-sky-400/30 text-sky-300 font-medium">
                   AI
                 </span>
               </span>
@@ -236,11 +236,11 @@ export default function LandingPage(): React.JSX.Element {
                   <div className="w-3 h-3 rounded-full bg-rose-500/80" />
                   <div className="w-3 h-3 rounded-full bg-amber-500/80" />
                   <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
-                  <span className="text-[11px] text-neutral-500 font-mono ml-2">devops-effort-tracker.internal</span>
+                  <span className="text-sm text-neutral-500 font-mono ml-2">devops-effort-tracker.internal</span>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-400 font-mono font-medium">
+                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 font-mono font-medium">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     <span>REALTIME SYNC ACTIVE</span>
                   </div>
@@ -260,7 +260,7 @@ export default function LandingPage(): React.JSX.Element {
                           </div>
                           <span className="text-sm font-semibold text-white">AI Work Logging Sandbox</span>
                         </div>
-                        <span className="text-[11px] px-2 py-0.5 rounded-md bg-white/[0.05] text-neutral-400 font-mono">
+                        <span className="text-sm px-2 py-0.5 rounded-md bg-white/[0.05] text-neutral-400 font-mono">
                           Llama-3.3-70B
                         </span>
                       </div>
@@ -278,7 +278,7 @@ export default function LandingPage(): React.JSX.Element {
                             setSimulatedPrompt(prompt);
                             handleSimulateAILog(prompt);
                           }}
-                          className="text-[11px] px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.06] hover:border-sky-500/30 text-neutral-300 hover:text-sky-300 transition-all text-left"
+                          className="text-sm px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.06] hover:border-sky-500/30 text-neutral-300 hover:text-sky-300 transition-all text-left"
                         >
                           ⚡ Fintech CI/CD (3.5h)
                         </button>
@@ -288,7 +288,7 @@ export default function LandingPage(): React.JSX.Element {
                             setSimulatedPrompt(prompt);
                             handleSimulateAILog(prompt);
                           }}
-                          className="text-[11px] px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.06] hover:border-sky-500/30 text-neutral-300 hover:text-sky-300 transition-all text-left"
+                          className="text-sm px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.06] hover:border-sky-500/30 text-neutral-300 hover:text-sky-300 transition-all text-left"
                         >
                           ☸️ K8s EKS Cluster (4h)
                         </button>
@@ -298,7 +298,7 @@ export default function LandingPage(): React.JSX.Element {
                             setSimulatedPrompt(prompt);
                             handleSimulateAILog(prompt);
                           }}
-                          className="text-[11px] px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.06] hover:border-sky-500/30 text-neutral-300 hover:text-sky-300 transition-all text-left"
+                          className="text-sm px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.06] hover:border-sky-500/30 text-neutral-300 hover:text-sky-300 transition-all text-left"
                         >
                           ☁️ Terraform VPC (2h15)
                         </button>
@@ -333,10 +333,10 @@ export default function LandingPage(): React.JSX.Element {
                       ) : parsedCard ? (
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-[11px] px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 font-medium">
+                            <span className="text-sm px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 border border-sky-500/30 font-medium">
                               {parsedCard.project}
                             </span>
-                            <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                            <span className="text-sm font-mono text-emerald-400 flex items-center gap-1">
                               <CheckCircle2 size={12} /> Đã trích xuất JSON
                             </span>
                           </div>
@@ -369,24 +369,24 @@ export default function LandingPage(): React.JSX.Element {
                           <Users size={14} className="text-sky-400" />
                           <span>Ma trận tải kỹ sư (Real-time Capacity)</span>
                         </div>
-                        <span className="text-[10px] text-emerald-400 font-mono">100% Đồng bộ</span>
+                        <span className="text-xs text-emerald-400 font-mono">100% Đồng bộ</span>
                       </div>
 
                       <div className="space-y-2.5">
                         {/* Member 1: Alex */}
                         <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-500 flex items-center justify-center text-[10px] font-bold text-white">
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-500 flex items-center justify-center text-xs font-bold text-white">
                               AN
                             </div>
                             <div className="min-w-0">
                               <div className="text-xs font-semibold text-white truncate">An Nguyen (Senior DevOps)</div>
-                              <div className="text-[10px] text-neutral-400 truncate">K8s · Terraform · AWS</div>
+                              <div className="text-xs text-neutral-400 truncate">K8s · Terraform · AWS</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-mono text-sky-300 font-semibold">320m / 480m</span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 font-medium">
+                            <span className="text-sm font-mono text-sky-300 font-semibold">320m / 480m</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 font-medium">
                               Vừa tải 67%
                             </span>
                           </div>
@@ -395,17 +395,17 @@ export default function LandingPage(): React.JSX.Element {
                         {/* Member 2: Minh */}
                         <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center text-[10px] font-bold text-white">
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center text-xs font-bold text-white">
                               MT
                             </div>
                             <div className="min-w-0">
                               <div className="text-xs font-semibold text-white truncate">Minh Tran (Cloud Eng)</div>
-                              <div className="text-[10px] text-neutral-400 truncate">CI/CD · Docker · GCP</div>
+                              <div className="text-xs text-neutral-400 truncate">CI/CD · Docker · GCP</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-mono text-emerald-300 font-semibold">0m / 480m</span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
+                            <span className="text-sm font-mono text-emerald-300 font-semibold">0m / 480m</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
                               Rảnh việc 🟢
                             </span>
                           </div>
@@ -414,17 +414,17 @@ export default function LandingPage(): React.JSX.Element {
                         {/* Member 3: Duc */}
                         <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] flex items-center justify-between gap-3">
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center text-[10px] font-bold text-white">
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center text-xs font-bold text-white">
                               DL
                             </div>
                             <div className="min-w-0">
                               <div className="text-xs font-semibold text-white truncate">Duc Le (SecOps)</div>
-                              <div className="text-[10px] text-neutral-400 truncate">Vault · Ansible · Linux</div>
+                              <div className="text-xs text-neutral-400 truncate">Vault · Ansible · Linux</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-[11px] font-mono text-rose-300 font-semibold">540m / 480m</span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-medium">
+                            <span className="text-sm font-mono text-rose-300 font-semibold">540m / 480m</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 font-medium">
                               Quá tải 112% ⚠️
                             </span>
                           </div>
@@ -440,7 +440,7 @@ export default function LandingPage(): React.JSX.Element {
                       </div>
                       <Link
                         href="/dashboard"
-                        className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1 font-medium"
+                        className="text-sm text-sky-400 hover:text-sky-300 flex items-center gap-1 font-medium"
                       >
                         <span>Mở toàn cảnh Gantt</span>
                         <ChevronRight size={12} />
@@ -688,27 +688,27 @@ export default function LandingPage(): React.JSX.Element {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 <div className="p-2.5 rounded-xl bg-black/40 border border-white/[0.06] flex items-center gap-2 text-xs">
                   <span className="font-mono text-sky-400 font-bold">/coord-assign</span>
-                  <span className="text-[11px] text-neutral-400 truncate">Giao task mới</span>
+                  <span className="text-sm text-neutral-400 truncate">Giao task mới</span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/40 border border-white/[0.06] flex items-center gap-2 text-xs">
                   <span className="font-mono text-rose-400 font-bold">/resource-overload</span>
-                  <span className="text-[11px] text-neutral-400 truncate">Kỹ sư quá tải</span>
+                  <span className="text-sm text-neutral-400 truncate">Kỹ sư quá tải</span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/40 border border-white/[0.06] flex items-center gap-2 text-xs">
                   <span className="font-mono text-emerald-400 font-bold">/resource-free</span>
-                  <span className="text-[11px] text-neutral-400 truncate">Kỹ sư đang rảnh</span>
+                  <span className="text-sm text-neutral-400 truncate">Kỹ sư đang rảnh</span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/40 border border-white/[0.06] flex items-center gap-2 text-xs">
                   <span className="font-mono text-amber-400 font-bold">/report-overdue</span>
-                  <span className="text-[11px] text-neutral-400 truncate">Báo cáo trễ hạn</span>
+                  <span className="text-sm text-neutral-400 truncate">Báo cáo trễ hạn</span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/40 border border-white/[0.06] flex items-center gap-2 text-xs">
                   <span className="font-mono text-purple-400 font-bold">/detail-project</span>
-                  <span className="text-[11px] text-neutral-400 truncate">Chi tiết dự án</span>
+                  <span className="text-sm text-neutral-400 truncate">Chi tiết dự án</span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-black/40 border border-white/[0.06] flex items-center gap-2 text-xs">
                   <span className="font-mono text-cyan-400 font-bold">/coord-log</span>
-                  <span className="text-[11px] text-neutral-400 truncate">Ghi log nhanh</span>
+                  <span className="text-sm text-neutral-400 truncate">Ghi log nhanh</span>
                 </div>
               </div>
             </div>
@@ -989,7 +989,7 @@ export default function LandingPage(): React.JSX.Element {
             </a>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-emerald-400 font-mono">
+          <div className="flex items-center gap-2 text-sm text-emerald-400 font-mono">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             <span>ALL SYSTEMS OPERATIONAL</span>
           </div>

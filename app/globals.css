@@ -78,3 +78,21 @@
   border: 1px solid rgba(244, 63, 94, 0.3);
   color: #fb7185;
 }
+
+@keyframes login-blob-float {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(4%, -6%) scale(1.12);
+  }
+}
+
+.login-blob {
+  animation: login-blob-float 14s ease-in-out infinite;
+}
+
+.login-blob-reverse {
+  animation: login-blob-float 19s ease-in-out infinite reverse;
+}

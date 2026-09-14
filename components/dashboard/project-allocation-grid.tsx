@@ -54,17 +54,17 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
                     <FolderGit2 size={18} style={{ color: projColor }} />
                   </div>
                   <div className="min-w-0">
-                    <Text weight="bold" size="base">
+                    <Text weight="semibold" size="lg">
                       {project.name}
                     </Text>
-                    <Text type="supporting" maxLines={1}>
+                    <Text type="supporting" size="sm" maxLines={1}>
                       {project.description || "Chưa có mô tả dự án"}
                     </Text>
                   </div>
                 </HStack>
 
                 <div
-                  className="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 flex-shrink-0"
+                  className="px-2.5 py-1 rounded-lg text-sm font-mono font-semibold flex items-center gap-1 flex-shrink-0"
                   style={{
                     backgroundColor: `${projColor}15`,
                     color: projColor,
@@ -80,13 +80,13 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
               <div className="bg-surface p-3 rounded-xl border border-border flex flex-col gap-2">
                 <HStack gap={1} vAlign="center">
                   <Users size={13} className="text-secondary" />
-                  <Text type="supporting" size="xsm" className="font-semibold">
+                  <Text type="supporting" size="sm" weight="semibold">
                     Nhân sự phân bổ ({assignedMembers.length})
                   </Text>
                 </HStack>
 
                 {assignedMembers.length === 0 ? (
-                  <Text type="supporting" size="xsm" className="text-disabled italic">
+                  <Text type="supporting" size="sm" className="text-disabled italic">
                     Chưa có nhân sự DevOps nào được gán task.
                   </Text>
                 ) : (
@@ -94,14 +94,16 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
                     {assignedMembers.map(({ member, effort }) => {
                       if (!member) return null;
                       return (
-                        <HStack key={member.id} gap={2} vAlign="center" className="text-xs py-0.5">
-                          <Avatar name={member.name} src={member.photoURL ?? undefined} size="xsm" tooltip={false} />
+                        <HStack key={member.id} gap={2} vAlign="center" className="py-0.5">
+                          <Avatar name={member.name} src={member.photoURL ?? undefined} size="sm" tooltip={false} />
                           <StackItem size="fill">
-                            <Link href={`/members/${member.id}`} className="hover:underline text-primary">
-                              {member.name}
+                            <Link href={`/members/${member.id}`} className="hover:underline">
+                              <Text size="sm">{member.name}</Text>
                             </Link>
                           </StackItem>
-                          <span className="font-semibold text-accent">{formatEffortDuration(effort)} effort</span>
+                          <Text type="code" size="sm" weight="semibold" color="accent">
+                            {formatEffortDuration(effort)} effort
+                          </Text>
                         </HStack>
                       );
                     })}
@@ -111,12 +113,12 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
 
               {/* Tasks List */}
               <VStack gap={2}>
-                <Text type="supporting" size="xsm" className="font-semibold uppercase tracking-wider">
+                <Text type="supporting" size="sm" weight="semibold" className="uppercase tracking-wider">
                   Nhiệm vụ dự án
                 </Text>
 
                 {projectTasks.length === 0 ? (
-                  <Text type="supporting" size="xsm" className="text-disabled italic">
+                  <Text type="supporting" size="sm" className="text-disabled italic">
                     Chưa có task nào được ghi nhận cho dự án này.
                   </Text>
                 ) : (
@@ -129,7 +131,7 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
                       return (
                         <div
                           key={task.id}
-                          className="p-2 rounded-lg bg-surface border border-border flex items-center justify-between text-xs"
+                          className="p-2 rounded-lg bg-surface border border-border flex items-center justify-between text-sm"
                         >
                           <div className="flex items-center gap-2 truncate min-w-0">
                             {isDone ? (
@@ -145,14 +147,14 @@ export function ProjectAllocationGrid({ projects, tasks, members }: ProjectAlloc
                             )}
                             <span className="truncate text-primary">{task.title}</span>
                           </div>
-                          <span className="text-secondary text-[11px] ml-2 flex-shrink-0">
+                          <span className="text-secondary text-sm font-mono ml-2 flex-shrink-0">
                             {assignee?.name.split(" ")[0] ?? "Unassigned"} ({formatTaskEffort(task)})
                           </span>
                         </div>
                       );
                     })}
                     {projectTasks.length > 3 && (
-                      <Text type="supporting" size="xsm" className="text-center pt-1">
+                      <Text type="supporting" size="sm" className="text-center pt-1">
                         +{projectTasks.length - 3} task khác
                       </Text>
                     )}

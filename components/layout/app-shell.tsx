@@ -14,6 +14,9 @@ export function AppShell({ children }: { children: React.ReactNode }): React.JSX
   const user = useAuthStore((state) => state.user);
   const loading = useAuthStore((state) => state.loading);
   const isPublicPage = pathname === "/login" || pathname === "/landing";
+  // Chat is a full-bleed 3-pane layout (sidebar + messages + composer) with its own internal
+  // spacing, so it opts out of the ambient page padding every other route uses.
+  const contentPadding = pathname === "/chat" ? 0 : 6;
 
   useEffect(() => {
     if (!isPublicPage && !loading && !user) {
@@ -27,14 +30,14 @@ export function AppShell({ children }: { children: React.ReactNode }): React.JSX
 
   if (loading || !user) {
     return (
-      <AstryxAppShell contentPadding={6} sideNav={<Sidebar />}>
+      <AstryxAppShell contentPadding={contentPadding} sideNav={<Sidebar />}>
         {null}
       </AstryxAppShell>
     );
   }
 
   return (
-    <AstryxAppShell contentPadding={6} sideNav={<Sidebar />}>
+    <AstryxAppShell contentPadding={contentPadding} sideNav={<Sidebar />}>
       {children}
     </AstryxAppShell>
   );

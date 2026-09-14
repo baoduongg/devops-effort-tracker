@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toIsoString, calculateDefaultEndDate, parseDateLocal, formatDateLocal } from "@/lib/date";
+import { effortPercentToMinutes } from "@/lib/effort";
 import type { Task, TaskInput } from "@/types/task";
 
 const tasksCol = collection(db, "tasks");
@@ -25,7 +26,7 @@ function toTask(id: string, data: Record<string, unknown>): Task {
     effortMinutes !== undefined
       ? effortMinutes
       : legacyEffortPercent !== undefined
-        ? Math.round((legacyEffortPercent / 100) * 480)
+        ? effortPercentToMinutes(legacyEffortPercent)
         : 60;
 
   return {
@@ -52,12 +53,6 @@ export async function getTasksByMember(memberId: string): Promise<Task[]> {
 
 export async function getAllTasks(): Promise<Task[]> {
   const snapshot = await getDocs(tasksCol);
-  return snapshot.docs.map((d) => toTask(d.id, d.data()));
-}
-
-export async function getAllActiveTasks(): Promise<Task[]> {
-  const q = query(tasksCol, where("status", "in", ["planned", "in_progress"]));
-  const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => toTask(d.id, d.data()));
 }
 

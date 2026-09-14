@@ -127,7 +127,7 @@ export function DataManagerDialog({ isOpen, onClose }: DataManagerDialogProps): 
             </div>
             <div>
               <div className="text-xs font-semibold text-neutral-200 group-hover:text-rose-300">Xóa Tasks</div>
-              <div className="text-[10px] text-neutral-500">Toàn bộ công việc</div>
+              <div className="text-xs text-neutral-500">Toàn bộ công việc</div>
             </div>
           </button>
 
@@ -143,7 +143,7 @@ export function DataManagerDialog({ isOpen, onClose }: DataManagerDialogProps): 
             </div>
             <div>
               <div className="text-xs font-semibold text-neutral-200 group-hover:text-rose-300">Xóa Members</div>
-              <div className="text-[10px] text-neutral-500">Danh sách thành viên</div>
+              <div className="text-xs text-neutral-500">Danh sách thành viên</div>
             </div>
           </button>
 
@@ -159,7 +159,7 @@ export function DataManagerDialog({ isOpen, onClose }: DataManagerDialogProps): 
             </div>
             <div>
               <div className="text-xs font-semibold text-neutral-200 group-hover:text-rose-300">Xóa Projects</div>
-              <div className="text-[10px] text-neutral-500">Dự án hệ thống</div>
+              <div className="text-xs text-neutral-500">Dự án hệ thống</div>
             </div>
           </button>
 
@@ -175,7 +175,7 @@ export function DataManagerDialog({ isOpen, onClose }: DataManagerDialogProps): 
             </div>
             <div>
               <div className="text-xs font-semibold text-neutral-200 group-hover:text-rose-300">Xóa Chat / Notif</div>
-              <div className="text-[10px] text-neutral-500">Lịch sử chat & thông báo</div>
+              <div className="text-xs text-neutral-500">Lịch sử chat & thông báo</div>
             </div>
           </button>
         </div>

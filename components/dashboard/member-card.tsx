@@ -3,11 +3,17 @@ import { HStack, VStack, StackItem } from "@astryxdesign/core/Stack";
 import { Avatar } from "@astryxdesign/core/Avatar";
 import { Text } from "@astryxdesign/core/Text";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
+import { Token } from "@astryxdesign/core/Token";
+import { IconButton } from "@astryxdesign/core/IconButton";
+import { Crown, Cpu, Trash2 } from "lucide-react";
 import { StatusBadge } from "@/components/dashboard/status-badge";
-import { formatTaskEffort, formatEffortDuration, minutesToWorkdayPercent } from "@/lib/effort";
-import type { Member, MemberStatus } from "@/types/member";
+import { formatTaskEffort, formatEffortDuration, minutesToWorkdayPercent, getEffortStatus } from "@/lib/effort";
+import { getProjectColor } from "@/lib/project-colors";
+import { sortByDateDesc } from "@/lib/date";
+import type { Member } from "@/types/member";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
+import type { UserRole } from "@/types/user";
 
 interface MemberCardProps {
   member: Member;
@@ -15,13 +21,13 @@ interface MemberCardProps {
   projectName?: string | null;
   tasks?: Task[];
   projects?: Project[];
+  /** When provided, renders a Leader/DevOps role token under the name (member-list use case). */
+  role?: UserRole;
+  /** When provided, renders skill tokens below the header (member-list use case). */
+  skills?: string[];
+  /** When provided, renders a delete IconButton in the card footer (member-list use case). */
+  onDelete?: () => void;
 }
-
-const effortVariant = (minutes: number): "error" | "warning" | "success" => {
-  if (minutes > 480) return "error";
-  if (minutes > 288) return "warning";
-  return "success";
-};
 
 export function MemberCard({
   member,
@@ -29,21 +35,23 @@ export function MemberCard({
   projectName,
   tasks = [],
   projects = [],
+  role,
+  skills,
+  onDelete,
 }: MemberCardProps): React.JSX.Element {
   const projectMap = new Map(projects.map((p) => [p.id, p]));
   const inProgressTasks = tasks.filter((t) => t.memberId === member.id && t.status === "in_progress");
   const plannedTasks = tasks.filter((t) => t.memberId === member.id && t.status === "planned");
   const doneTasks = tasks
     .filter((t) => t.memberId === member.id && t.status === "done")
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    .sort(sortByDateDesc("updatedAt"));
 
   const computedEffort =
     inProgressTasks.length > 0
       ? inProgressTasks.reduce((sum, t) => sum + t.effortMinutes, 0)
       : member.effortMinutes;
 
-  const derivedStatus: MemberStatus =
-    computedEffort > 480 ? "overloaded" : computedEffort > 288 ? "busy" : "available";
+  const effortStatus = getEffortStatus(computedEffort, inProgressTasks.length);
 
   return (
     <ClickableCard href={`/members/${member.id}`} label={member.name} elevation="low">
@@ -61,8 +69,28 @@ export function MemberCard({
               </Text>
             </VStack>
           </StackItem>
-          <StatusBadge status={derivedStatus} />
+          <StatusBadge status={effortStatus.status} />
         </HStack>
+
+        {role && (
+          <HStack gap={2} vAlign="center">
+            {role === "leader" ? (
+              <Token label="Trưởng nhóm (Leader)" color="orange" icon={<Crown size={12} />} />
+            ) : (
+              <Token label="Kỹ sư DevOps" color="blue" icon={<Cpu size={12} />} />
+            )}
+          </HStack>
+        )}
+
+        {skills && (
+          <div className="flex flex-wrap gap-1">
+            {skills.length > 0 ? (
+              skills.map((skill) => <Token key={skill} label={skill} size="sm" />)
+            ) : (
+              <Text type="supporting">Chưa cấu hình kỹ năng</Text>
+            )}
+          </div>
+        )}
 
         {/* Active Tasks list */}
         {inProgressTasks.length > 0 ? (
@@ -70,11 +98,11 @@ export function MemberCard({
             {inProgressTasks.slice(0, 2).map((t) => {
               const proj = projectMap.get(t.projectId);
               return (
-                <div key={t.id} className="flex items-center justify-between text-xs gap-1.5">
+                <div key={t.id} className="flex items-center justify-between text-sm gap-1.5">
                   <div className="flex items-center gap-1.5 truncate">
                     <span
                       className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: proj?.color ?? "#3b82f6" }}
+                      style={{ backgroundColor: getProjectColor(proj?.color) }}
                     />
                     <span className="font-semibold text-neutral-300 flex-shrink-0">
                       [{proj?.name ?? "General"}]
@@ -86,7 +114,7 @@ export function MemberCard({
               );
             })}
             {inProgressTasks.length > 2 && (
-              <span className="text-[11px] text-neutral-400">+{inProgressTasks.length - 2} more active tasks</span>
+              <span className="text-sm text-neutral-400">+{inProgressTasks.length - 2} more active tasks</span>
             )}
           </div>
         ) : doneTasks.length > 0 ? (
@@ -94,7 +122,7 @@ export function MemberCard({
             {doneTasks.slice(0, 2).map((t) => {
               const proj = projectMap.get(t.projectId);
               return (
-                <div key={t.id} className="flex items-center justify-between text-xs gap-1.5">
+                <div key={t.id} className="flex items-center justify-between text-sm gap-1.5">
                   <div className="flex items-center gap-1.5 truncate">
                     <span className="text-emerald-400 flex-shrink-0">✓</span>
                     <span className="font-semibold text-neutral-400 flex-shrink-0">
@@ -123,12 +151,28 @@ export function MemberCard({
           value={Math.min(minutesToWorkdayPercent(computedEffort), 100)}
           hasValueLabel
           formatValueLabel={() => formatEffortDuration(computedEffort)}
-          variant={effortVariant(computedEffort)}
+          variant={effortStatus.variant}
         />
 
-        <div className="flex items-center justify-between text-[11px] text-neutral-400 pt-1 border-t border-white/5">
+        <div className="flex items-center justify-between text-sm text-neutral-400 pt-1 border-t border-white/5">
           <span>{plannedTasks.length} upcoming queued</span>
-          <span>Updated {new Date(member.updatedAt).toLocaleDateString()}</span>
+          <HStack gap={2} vAlign="center">
+            <span>Updated {new Date(member.updatedAt).toLocaleDateString()}</span>
+            {onDelete && (
+              <IconButton
+                label="Xóa thành viên"
+                icon={<Trash2 size={15} strokeWidth={2} />}
+                variant="ghost"
+                size="sm"
+                tooltip="Xóa thành viên"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onDelete();
+                }}
+              />
+            )}
+          </HStack>
         </div>
       </VStack>
     </ClickableCard>

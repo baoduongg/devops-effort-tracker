@@ -113,11 +113,11 @@ export function SlashCommandPopup({
         <div className="flex items-center gap-2">
           <Zap size={13} className="text-sky-400" />
           <span className="text-xs font-semibold text-neutral-200">Lệnh nhanh</span>
-          <span className="text-[10px] text-neutral-400 font-medium">
+          <span className="text-xs text-neutral-400 font-medium">
             &bull; {mode === "devops" ? "DevOps" : "Leader"}
           </span>
           {searchQuery && (
-            <span className="text-[10px] font-mono text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+            <span className="text-xs font-mono text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
               {searchQuery}
             </span>
           )}
@@ -142,7 +142,7 @@ export function SlashCommandPopup({
             <p className="text-xs text-neutral-400">
               Không tìm thấy lệnh khớp với &ldquo;{searchQuery}&rdquo;
             </p>
-            <p className="text-[11px] text-neutral-500 mt-1">
+            <p className="text-sm text-neutral-500 mt-1">
               Thử gõ <span className="font-mono text-sky-400">/help</span> để xem danh sách lệnh
             </p>
           </div>
@@ -156,7 +156,7 @@ export function SlashCommandPopup({
             return (
               <div key={cmd.id}>
                 {showCategoryHeader && (
-                  <div className="px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-neutral-400 uppercase">
+                  <div className="px-2 pt-2 pb-1 text-xs font-semibold tracking-wider text-neutral-400 uppercase">
                     {CATEGORY_NAMES[cmd.category] || cmd.category}
                   </div>
                 )}
@@ -183,14 +183,14 @@ export function SlashCommandPopup({
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs font-bold text-sky-400 group-hover:text-sky-300">
+                        <span className="font-mono text-sm font-bold text-sky-400 group-hover:text-sky-300">
                           {cmd.command}
                         </span>
-                        <span className="text-xs font-medium text-neutral-200 truncate">
+                        <span className="text-sm font-medium text-neutral-200 truncate">
                           {cmd.label}
                         </span>
                       </div>
-                      <p className="text-[11px] text-neutral-400 truncate mt-0.5">
+                      <p className="text-sm text-neutral-400 truncate mt-0.5">
                         {cmd.description}
                       </p>
                     </div>
@@ -198,7 +198,7 @@ export function SlashCommandPopup({
 
                   <div className="flex-shrink-0 flex items-center gap-1">
                     {isSelected && (
-                      <span className="text-[10px] font-medium text-sky-300 bg-sky-500/20 border border-sky-400/30 px-1.5 py-0.5 rounded flex items-center gap-1">
+                      <span className="text-xs font-medium text-sky-300 bg-sky-500/20 border border-sky-400/30 px-1.5 py-0.5 rounded flex items-center gap-1">
                         {cmd.isInstantPrompt ? "Hỏi ngay" : "Điền mẫu"}
                         <CornerDownLeft size={10} />
                       </span>
@@ -212,7 +212,7 @@ export function SlashCommandPopup({
       </div>
 
       {/* Footer shortcut tips */}
-      <div className="px-3 py-1.5 bg-black/40 border-t border-white/[0.06] flex items-center justify-between text-[10px] text-neutral-400 flex-shrink-0">
+      <div className="px-3 py-1.5 bg-black/40 border-t border-white/[0.06] flex items-center justify-between text-xs text-neutral-400 flex-shrink-0">
         <div className="flex items-center gap-2.5">
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.2 rounded bg-white/10 font-mono text-neutral-300">↑↓</kbd>

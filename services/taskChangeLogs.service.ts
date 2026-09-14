@@ -1,6 +1,6 @@
 import { collection, addDoc, query, where, orderBy, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { toIsoString } from "@/lib/date";
+import { toIsoString, sortByDateDesc } from "@/lib/date";
 import type { TaskChangeLog, TaskChangeLogInput } from "@/types/taskChangeLog";
 
 const taskChangeLogsCol = collection(db, "taskChangeLogs");
@@ -36,7 +36,7 @@ export async function getTaskChangeLogsByActor(actorUid: string): Promise<TaskCh
   const snapshot = await getDocs(q);
   return snapshot.docs
     .map((d) => toTaskChangeLog(d.id, d.data()))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    .sort(sortByDateDesc("createdAt"));
 }
 
 export async function getAllTaskChangeLogs(): Promise<TaskChangeLog[]> {

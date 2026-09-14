@@ -13,6 +13,7 @@ import { Button } from "@astryxdesign/core/Button";
 import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { updateTask } from "@/services/tasks.service";
 import { syncMemberEffortStatus } from "@/services/members.service";
+import { notifyTaskStatusChanged, notifyTaskReassigned } from "@/services/chatops.service";
 import { formatEffortDuration, EFFORT_DURATION_PRESETS } from "@/lib/effort";
 import { formatDateLocal, parseDateLocal } from "@/lib/date";
 import type { Project } from "@/types/project";
@@ -97,6 +98,7 @@ function TaskEditForm({
 
     const resolvedMinutes = Math.max(1, Math.round(effortMinutes || 60));
     const previousMemberId = task.memberId;
+    const previousStatus = task.status;
 
     try {
       await updateTask(task.id, {
@@ -114,6 +116,32 @@ function TaskEditForm({
       await syncMemberEffortStatus(memberId);
       if (previousMemberId !== memberId) {
         await syncMemberEffortStatus(previousMemberId);
+      }
+
+      const newMember = members.find((m) => m.id === memberId);
+      const projectName = projects.find((p) => p.id === projectId)?.name ?? projectId;
+      const link = `${window.location.origin}/tasks`;
+
+      if (previousMemberId !== memberId) {
+        const oldMember = members.find((m) => m.id === previousMemberId);
+        notifyTaskReassigned({
+          title: title.trim(),
+          projectName,
+          oldMemberName: oldMember?.name ?? previousMemberId,
+          newMemberName: newMember?.name ?? memberId,
+          newMemberEmail: newMember?.email,
+          link,
+        });
+      } else if (previousStatus !== status) {
+        notifyTaskStatusChanged({
+          title: title.trim(),
+          memberName: newMember?.name ?? memberId,
+          memberEmail: newMember?.email,
+          projectName,
+          oldStatus: previousStatus,
+          newStatus: status,
+          link,
+        });
       }
 
       onTaskUpdated?.(task.id);
@@ -137,7 +165,7 @@ function TaskEditForm({
       <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
         <div className="p-5 flex flex-col gap-4 overflow-y-auto min-h-0">
           {error && (
-            <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/25 text-xs text-rose-400">
+            <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/25 text-sm text-rose-400">
               {error}
             </div>
           )}

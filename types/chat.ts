@@ -57,11 +57,21 @@ export interface ChatLog {
   id: string;
   memberId: string;
   mode: ChatMode;
+  threadId: string;
   rawInput: string | null;
   imageUrl: string | null;
   aiResponse: AiResponsePayload;
   confirmed: boolean;
   createdAt: string;
+}
+
+export interface ChatThread {
+  id: string;
+  memberId: string;
+  mode: ChatMode;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ChatMessage =

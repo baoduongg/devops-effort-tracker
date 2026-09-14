@@ -1,35 +1,18 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import axios from "axios";
-import { VStack, HStack, StackItem } from "@astryxdesign/core/Stack";
-import { ChatComposer, ChatComposerInput, ChatComposerDrawer, ChatSendButton } from "@astryxdesign/core/Chat";
+import { VStack, HStack } from "@astryxdesign/core/Stack";
+import { ChatLayout, ChatComposer, ChatComposerInput, ChatComposerDrawer, ChatSendButton } from "@astryxdesign/core/Chat";
 import { Spinner } from "@astryxdesign/core/Spinner";
 import { Text } from "@astryxdesign/core/Text";
 import { Icon } from "@astryxdesign/core/Icon";
 import {
   TriangleAlert,
   Sparkles,
-  MessageSquare,
   X,
-  Zap,
-  UserCheck,
-  BarChart2,
-  Clock,
-  UserPlus,
-  CalendarPlus,
-  ListTodo,
-  Users,
-  FolderGit2,
-  Flame,
-  Activity,
-  BarChart3,
-  NotebookPen,
-  ArrowRightLeft,
-  Trash2,
 } from "lucide-react";
 import { ModeToggle } from "@/components/chat/mode-toggle";
-import { ProviderToggle } from "@/components/chat/provider-toggle";
 import { ChatThread } from "@/components/chat/chat-thread";
 import { SlashCommandPopup } from "@/components/chat/slash-command-popup";
 import { CommandTemplateModal } from "@/components/chat/command-template-modal";
@@ -45,7 +28,8 @@ import {
   findMemberByName,
   syncMemberEffortStatus,
 } from "@/services/members.service";
-import { confirmChatLog, getChatLogsByMember, chatLogsToMessages } from "@/services/chatLogs.service";
+import { confirmChatLog, getChatLogsByThread, chatLogsToMessages } from "@/services/chatLogs.service";
+import { getThreadsByMember, createThread, touchThread } from "@/services/chatThreads.service";
 import { createTaskChangeLog } from "@/services/taskChangeLogs.service";
 import { notifyTaskCreated } from "@/services/chatops.service";
 import { getAvailableSlashCommands, resolveSlashCommand, SLASH_COMMANDS, type SlashCommand } from "@/lib/slash-commands";
@@ -58,6 +42,7 @@ import {
 import type { FormattedEntry, TaskChangeProposal } from "@/types/chat";
 import type { Member, MemberStatus } from "@/types/member";
 import type { Project } from "@/types/project";
+import { PROJECT_COLOR_SWATCHES } from "@/lib/project-colors";
 
 async function compressImageToBase64(file: File, maxDimension = 1000): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -102,24 +87,6 @@ function generateMessageId(suffix = ""): string {
   return suffix ? `${ts}-${suffix}-${rand}` : `${ts}-${rand}`;
 }
 
-// Visual styling for the quick-action pills, keyed by the SlashCommand id it represents.
-const PILL_STYLES: Record<string, { label: string; icon: React.ElementType; iconColor: string; hoverBorder: string }> = {
-  "coord-log": { label: "Ghi log", icon: NotebookPen, iconColor: "text-emerald-400", hoverBorder: "hover:border-emerald-500/50 hover:bg-emerald-500/10" },
-  "coord-add": { label: "Lên kế hoạch", icon: CalendarPlus, iconColor: "text-amber-400", hoverBorder: "hover:border-amber-500/50 hover:bg-amber-500/10" },
-  "basic-tasks": { label: "Công việc", icon: ListTodo, iconColor: "text-purple-400", hoverBorder: "hover:border-purple-500/50 hover:bg-purple-500/10" },
-  "basic-members": { label: "Thành viên", icon: Users, iconColor: "text-emerald-400", hoverBorder: "hover:border-emerald-500/50 hover:bg-emerald-500/10" },
-  "basic-projects": { label: "Dự án", icon: FolderGit2, iconColor: "text-sky-400", hoverBorder: "hover:border-sky-500/50 hover:bg-sky-500/10" },
-  "resource-free": { label: "Ai đang rảnh?", icon: UserCheck, iconColor: "text-emerald-400", hoverBorder: "hover:border-emerald-500/50 hover:bg-emerald-500/10" },
-  "resource-overload": { label: "Quá tải", icon: Flame, iconColor: "text-amber-400", hoverBorder: "hover:border-amber-500/50 hover:bg-amber-500/10" },
-  "resource-effort": { label: "% Effort", icon: Activity, iconColor: "text-purple-400", hoverBorder: "hover:border-purple-500/50 hover:bg-purple-500/10" },
-  "resource-load": { label: "Tải công việc", icon: BarChart3, iconColor: "text-sky-400", hoverBorder: "hover:border-sky-500/50 hover:bg-sky-500/10" },
-  "coord-assign": { label: "Giao task", icon: UserPlus, iconColor: "text-purple-400", hoverBorder: "hover:border-purple-500/50 hover:bg-purple-500/10" },
-  "coord-reassign": { label: "Chuyển task", icon: ArrowRightLeft, iconColor: "text-amber-400", hoverBorder: "hover:border-amber-500/50 hover:bg-amber-500/10" },
-  "coord-remove": { label: "Xóa task", icon: Trash2, iconColor: "text-rose-400", hoverBorder: "hover:border-rose-500/50 hover:bg-rose-500/10" },
-  "report-allocation": { label: "Báo cáo Effort", icon: BarChart2, iconColor: "text-sky-400", hoverBorder: "hover:border-sky-500/50 hover:bg-sky-500/10" },
-  "report-overdue": { label: "Task trễ hạn", icon: Clock, iconColor: "text-rose-400", hoverBorder: "hover:border-rose-500/50 hover:bg-rose-500/10" },
-};
-
 const DEVOPS_PROMPT_SUGGESTIONS = [
   "Nâng cấp cụm EKS lên v1.30 cho dự án Core Platform, tải 50%, xong vào thứ 6",
   "Tối ưu chi phí AWS và cấu hình Auto-scaling cho team Backend 30%",
@@ -145,12 +112,16 @@ export function ChatBox(): React.JSX.Element {
   const mode = useChatStore((state) => state.mode);
   const setMode = useChatStore((state) => state.setMode);
   const aiProvider = useChatStore((state) => state.aiProvider);
-  const setAiProvider = useChatStore((state) => state.setAiProvider);
   const messages = useChatStore((state) => state.messagesByMode[mode]);
   const setMessages = useChatStore((state) => state.setMessages);
   const appendMessage = useChatStore((state) => state.appendMessage);
   const updateEntryConfirmed = useChatStore((state) => state.updateEntryConfirmed);
   const updateProposalConfirmed = useChatStore((state) => state.updateProposalConfirmed);
+  const activeThreadId = useChatStore((state) => state.activeThreadIdByMode[mode]);
+  const setThreads = useChatStore((state) => state.setThreads);
+  const addThread = useChatStore((state) => state.addThread);
+  const updateThreadTitle = useChatStore((state) => state.updateThreadTitle);
+  const setActiveThread = useChatStore((state) => state.setActiveThread);
   const user = useAuthStore((state) => state.user);
 
   const [text, setText] = useState("");
@@ -159,6 +130,7 @@ export function ChatBox(): React.JSX.Element {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const locallyCreatedThreadIds = useRef<Set<string>>(new Set());
 
   // Members & Projects data for template modal & grounding
   const [allMembers, setAllMembers] = useState<Member[]>([]);
@@ -197,6 +169,7 @@ export function ChatBox(): React.JSX.Element {
     }
   }, [user?.role, setMode]);
 
+  // Load this member+mode's threads, defaulting to the most recently active one.
   useEffect(() => {
     let ignore = false;
     const memberId = mode === "devops" ? user?.memberId : "leader";
@@ -204,11 +177,42 @@ export function ChatBox(): React.JSX.Element {
       return;
     }
 
+    getThreadsByMember(memberId, mode)
+      .then((loadedThreads) => {
+        if (ignore) return;
+        setThreads(mode, loadedThreads);
+        setActiveThread(mode, loadedThreads[0]?.id ?? null);
+      })
+      .catch((err) => {
+        if (!ignore) {
+          console.error("Failed to load chat threads:", err);
+          setError("Không thể tải danh sách hội thoại. Thử tải lại trang.");
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [mode, user?.memberId, setThreads, setActiveThread]);
+
+  // Load the active thread's messages whenever it changes. Skipped for a thread this session
+  // just created — its message list is already being built locally via appendMessage, and a
+  // Firestore read racing that (log write happens after this effect fires) would stomp it.
+  useEffect(() => {
+    let ignore = false;
+    if (!activeThreadId) {
+      setMessages(mode, []);
+      return;
+    }
+    if (locallyCreatedThreadIds.current.has(activeThreadId)) {
+      locallyCreatedThreadIds.current.delete(activeThreadId);
+      return;
+    }
+
     Promise.resolve().then(() => {
       if (!ignore) setLoadingHistory(true);
     });
-
-    getChatLogsByMember(memberId, mode)
+    getChatLogsByThread(activeThreadId)
       .then((logs) => {
         if (!ignore) {
           setMessages(mode, chatLogsToMessages(logs));
@@ -229,7 +233,24 @@ export function ChatBox(): React.JSX.Element {
     return () => {
       ignore = true;
     };
-  }, [mode, user?.memberId, setMessages]);
+  }, [mode, activeThreadId, setMessages]);
+
+  function deriveThreadTitle(rawText: string): string {
+    const trimmed = rawText.trim();
+    if (!trimmed) return "New conversation";
+    return trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed;
+  }
+
+  async function ensureActiveThreadId(firstMessageText: string): Promise<string> {
+    if (activeThreadId) return activeThreadId;
+    const memberId = mode === "devops" ? user?.memberId || "leader" : "leader";
+    const newThreadId = await createThread({ memberId, mode, title: deriveThreadTitle(firstMessageText) });
+    const newThread = { id: newThreadId, memberId, mode, title: deriveThreadTitle(firstMessageText), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    addThread(mode, newThread);
+    locallyCreatedThreadIds.current.add(newThreadId);
+    setActiveThread(mode, newThreadId);
+    return newThreadId;
+  }
 
   async function handleUploadImage(file: File): Promise<void> {
     setUploadingImage(true);
@@ -317,6 +338,9 @@ export function ChatBox(): React.JSX.Element {
     setIsCommandPopupOpen(false);
     setSelectedCommandIndex(0);
 
+    const isFirstMessageInThread = !activeThreadId;
+    const currentThreadId = await ensureActiveThreadId(resolvedText);
+
     const userMessage = {
       id: generateMessageId("user"),
       role: "user" as const,
@@ -353,6 +377,7 @@ export function ChatBox(): React.JSX.Element {
           userInput: currentText,
           imageUrl: currentImageUrl,
           provider: aiProvider,
+          threadId: currentThreadId,
         });
         const { entry, chatLogId, message } = res.data;
         if (message) {
@@ -382,6 +407,7 @@ export function ChatBox(): React.JSX.Element {
           // detection and filtering leader accounts out of member suggestion lists.
           askerRole: user?.role,
           provider: aiProvider,
+          threadId: currentThreadId,
         });
         const { answer, entry, proposal, clarification, chatLogId } = res.data;
         if (entry) {
@@ -429,6 +455,9 @@ export function ChatBox(): React.JSX.Element {
           });
         }
       }
+      const title = isFirstMessageInThread ? deriveThreadTitle(currentText) : undefined;
+      touchThread(currentThreadId, title).catch((err) => console.warn("Could not update thread timestamp:", err));
+      if (title) updateThreadTitle(mode, currentThreadId, title);
     } catch (err: unknown) {
       console.error("AI Error:", err);
       setError("Lỗi khi xử lý yêu cầu với AI. Vui lòng kiểm tra lại kết nối / API Key.");
@@ -471,13 +500,13 @@ export function ChatBox(): React.JSX.Element {
       const projectId = await createProject({
         name: entry.projectName,
         description: `Dự án ${entry.projectName}`,
-        color: "#6366f1",
+        color: PROJECT_COLOR_SWATCHES[0],
       });
       project = {
         id: projectId,
         name: entry.projectName,
         description: `Dự án ${entry.projectName}`,
-        color: "#6366f1",
+        color: PROJECT_COLOR_SWATCHES[0],
         createdAt: new Date().toISOString(),
       };
     }
@@ -594,9 +623,9 @@ export function ChatBox(): React.JSX.Element {
           const projectId = await createProject({
             name: changes.projectName,
             description: `Dự án ${changes.projectName}`,
-            color: "#6366f1",
+            color: PROJECT_COLOR_SWATCHES[0],
           });
-          project = { id: projectId, name: changes.projectName, description: "", color: "#6366f1", createdAt: new Date().toISOString() };
+          project = { id: projectId, name: changes.projectName, description: "", color: PROJECT_COLOR_SWATCHES[0], createdAt: new Date().toISOString() };
         }
         taskPatch.projectId = project.id;
       }
@@ -686,241 +715,190 @@ export function ChatBox(): React.JSX.Element {
         ? DEVOPS_ASK_PROMPT_SUGGESTIONS
         : LEADER_PROMPT_SUGGESTIONS;
 
-  // Key quick commands for the current mode, styled by id and sourced from SLASH_COMMANDS
-  const quickPillCommands = useMemo(() => {
-    const pillIds =
-      mode === "devops"
-        ? ["devops-log", "devops-plan", "devops-my-tasks", "devops-my-effort"]
-        : ["leader-free", "leader-overloaded", "leader-report", "leader-overdue", "leader-assign"];
-
-    return pillIds
-      .map((id) => {
-        const cmd = SLASH_COMMANDS.find((c) => c.id === id);
-        const style = PILL_STYLES[id];
-        if (!cmd || !style) return null;
-        return { cmd, ...style };
-      })
-      .filter((p): p is NonNullable<typeof p> => p !== null);
-  }, [mode]);
-
   return (
-    <VStack gap={2} height="100%" className="h-full min-h-0 flex-1 overflow-hidden">
-      <StackItem size="static">
-        <HStack gap={2} vAlign="center" hAlign="between">
-          <ModeToggle />
-          <ProviderToggle />
-        </HStack>
-      </StackItem>
-
-      {/* Quick Prompt Suggestions when chat is empty or fresh */}
-      {messages.length === 0 && !loadingHistory && (
-        <StackItem size="static">
-          <div className="p-3.5 rounded-xl bg-neutral-800/40 border border-neutral-700/60 flex flex-col gap-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-300">
-              <Sparkles size={13} className="text-sky-400" />
-              <span>Gợi ý câu lệnh nhanh ({mode === "devops" ? "Ghi nhận công việc" : "Hỏi đáp Quản lý"}):</span>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {suggestions.map((sug, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setText(sug)}
-                  className="text-left p-2.5 rounded-lg bg-neutral-800/70 hover:bg-neutral-700/80 border border-neutral-700/50 hover:border-sky-500/40 text-xs text-neutral-200 hover:text-white transition-all flex items-center justify-between gap-2 cursor-pointer shadow-sm group hover:-translate-y-0.5"
+    <div className="h-full min-h-0 flex-1 overflow-hidden flex flex-col bg-gradient-to-b from-transparent to-black/20">
+      <ChatLayout
+        composer={
+          <div className="w-full bg-neutral-950/95 backdrop-blur-md border-t border-white/[0.08] shadow-2xl shadow-black pt-2 pb-3">
+            <VStack gap={2} className="max-w-[900px] w-full mx-auto px-4">
+              {error && (
+                <HStack
+                  gap={2}
+                  vAlign="center"
+                  className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-sm text-rose-300 shadow-sm"
                 >
-                  <div className="flex items-center gap-2 truncate">
-                    <MessageSquare size={13} className="text-sky-400 flex-shrink-0 group-hover:scale-110 transition-transform" />
-                    <span className="truncate">{sug}</span>
-                  </div>
-                  <span className="text-[10px] text-neutral-400 font-medium bg-white/[0.06] px-1.5 py-0.5 rounded border border-white/[0.04] flex-shrink-0">
-                    Sử dụng
+                  <Icon icon={TriangleAlert} color="error" />
+                  <Text color="accent" size="sm">{error}</Text>
+                </HStack>
+              )}
+
+              {/* Quick-prompt pills when there are active messages */}
+              {messages.length > 0 && (
+                <div className="flex items-center gap-2 overflow-x-auto py-1.5 px-3 rounded-xl bg-neutral-900/95 border border-white/10 shadow-md backdrop-blur-md scrollbar-none">
+                  <span className="text-[11px] font-semibold text-neutral-300 uppercase tracking-wider flex-shrink-0 flex items-center gap-1.5 mr-1">
+                    <Sparkles size={12} className="text-sky-400" />
+                    Gợi ý:
                   </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </StackItem>
-      )}
+                  {suggestions.map((sug, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => handleSubmit(sug)}
+                      className="flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium text-neutral-200 bg-white/[0.08] hover:bg-sky-500/25 hover:text-sky-200 border border-white/10 hover:border-sky-500/40 transition-all cursor-pointer shadow-sm active:scale-95"
+                    >
+                      {sug}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-      <StackItem size="fill" isScrollable className="min-h-0 pr-1">
-        <ChatThread
-          mode={mode}
-          messages={messages}
-          loading={loadingHistory}
-          thinking={thinking}
-          onConfirmEntry={handleConfirmEntry}
-          onConfirmProposal={handleConfirmProposal}
-          onCancelProposal={handleCancelProposal}
-          onSelectClarificationCandidate={handleSelectClarificationCandidate}
-        />
-      </StackItem>
-
-      {error && (
-        <StackItem size="static">
-          <HStack gap={2} vAlign="center" className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs">
-            <Icon icon={TriangleAlert} color="error" />
-            <Text color="accent">{error}</Text>
-          </HStack>
-        </StackItem>
-      )}
-
-      {/* Quick slash command toolbar */}
-      <StackItem size="static">
-        <div className="flex items-center gap-1.5 overflow-x-auto py-1 px-0.5 scrollbar-none">
-          {/* Main Slash Command Trigger Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setIsCommandPopupOpen((prev) => !prev);
-              if (!text.startsWith("/")) {
-                setText("/");
-              }
-            }}
-            className={`group flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer shadow-sm ${isCommandPopupOpen
-              ? "bg-sky-500/20 text-sky-200 border border-sky-400/40 ring-1 ring-sky-500/30"
-              : "bg-neutral-800/90 hover:bg-neutral-700 text-neutral-200 hover:text-white border border-neutral-700 hover:border-sky-500/50"
-              }`}
-            title="Mở danh sách toàn bộ câu lệnh nhanh (Gõ '/')"
-          >
-            <Zap size={13} className="text-sky-400 transition-transform group-hover:scale-110" />
-            <span>Xem lệnh</span>
-          </button>
-
-          <div className="h-4 w-[1px] bg-neutral-700/60 flex-shrink-0 mx-0.5" />
-
-          {/* Quick Action Pill Buttons */}
-          <div className="flex items-center gap-1.5 flex-nowrap">
-            {quickPillCommands.map((pill) => {
-              const IconComp = pill.icon;
-              return (
-                <button
-                  key={pill.cmd.command}
-                  type="button"
-                  onClick={() => handleSelectCommand(pill.cmd)}
-                  title={pill.cmd.prompt ? `Nhấn để hỏi nhanh: ${pill.cmd.prompt}` : `Nhấn để soạn lệnh ${pill.cmd.command}`}
-                  className={`group flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-neutral-800/80 hover:bg-neutral-700/90 text-neutral-200 hover:text-white border border-neutral-700/80 transition-all duration-150 cursor-pointer shadow-sm hover:shadow hover:-translate-y-0.5 active:translate-y-0 ${pill.hoverBorder}`}
-                >
-                  <IconComp size={12} className={`${pill.iconColor} transition-transform group-hover:scale-110`} />
-                  <span>{pill.label}</span>
-                  <span className="text-[10px] text-neutral-400 group-hover:text-neutral-300 font-mono bg-white/[0.06] px-1 py-0.2 rounded border border-white/[0.04]">
-                    {pill.cmd.command}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </StackItem>
-
-      {/* Input area with Slash Command Popup */}
-      <StackItem size="static">
-        <div className="relative">
-          <SlashCommandPopup
-            isOpen={isCommandPopupOpen}
-            commands={filteredCommands}
-            selectedIndex={selectedCommandIndex}
-            mode={mode}
-            searchQuery={commandSearchQuery}
-            onSelect={handleSelectCommand}
-            onClose={() => setIsCommandPopupOpen(false)}
-          />
-
-          <ChatComposer
-            value={text}
-            onChange={handleTextChange}
-            onSubmit={(submittedText) => handleSubmit(submittedText)}
-            isDisabled={thinking}
-            sendButton={
-              <ChatSendButton
-                isDisabled={(!text.trim() && !imageUrl) || thinking}
-                onSend={() => handleSubmit()}
+            <div className="relative">
+              <SlashCommandPopup
+                isOpen={isCommandPopupOpen}
+                commands={filteredCommands}
+                selectedIndex={selectedCommandIndex}
+                mode={mode}
+                searchQuery={commandSearchQuery}
+                onSelect={handleSelectCommand}
+                onClose={() => setIsCommandPopupOpen(false)}
               />
-            }
-            drawer={
-              (uploadingImage || imageUrl) && (
-                <ChatComposerDrawer>
-                  {uploadingImage ? (
-                    <HStack gap={2} vAlign="center">
-                      <Spinner size="sm" label="Đang xử lý ảnh" />
-                      <Text type="supporting">Đang tối ưu hình ảnh…</Text>
-                    </HStack>
-                  ) : (
-                    <div className="relative inline-block my-1">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={imageUrl!}
-                        alt="Ảnh chụp màn hình"
-                        style={{ maxHeight: 120, maxWidth: 260, borderRadius: 8, objectFit: "contain" }}
-                        className="border border-white/10 shadow-md"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setImageUrl(null)}
-                        title="Gỡ ảnh đính kèm"
-                        className="absolute -top-2 -right-2 p-1 rounded-full bg-neutral-900 border border-neutral-700 text-neutral-300 hover:text-white hover:bg-rose-600 transition-colors shadow-lg cursor-pointer"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  )}
-                </ChatComposerDrawer>
-              )
-            }
-            input={
-              <ChatComposerInput
-                label="Nhập tin nhắn"
-                placeholder={
-                  mode === "devops"
-                    ? "Gõ '/' để mở danh sách lệnh hoặc mô tả công việc (Cmd/Ctrl+V ảnh)..."
-                    : "Gõ '/' để mở danh sách lệnh hoặc hỏi về nhân sự, phân bổ effort..."
-                }
+
+              <ChatComposer
                 value={text}
                 onChange={handleTextChange}
                 onSubmit={(submittedText) => handleSubmit(submittedText)}
-                onKeyDown={(e) => {
-                  if (isCommandPopupOpen && filteredCommands.length > 0) {
-                    if (e.key === "ArrowDown") {
-                      e.preventDefault();
-                      setSelectedCommandIndex((prev) => (prev + 1) % filteredCommands.length);
-                      return;
+                isDisabled={thinking}
+                footerActions={
+                  <HStack gap={2} vAlign="center">
+                    <ModeToggle />
+                    <button
+                      type="button"
+                      onClick={() => setIsCommandPopupOpen((prev) => !prev)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1.5 border transition-all cursor-pointer ${
+                        isCommandPopupOpen
+                          ? "bg-sky-500/20 text-sky-300 border-sky-500/40 shadow-sm"
+                          : "bg-white/[0.04] text-neutral-400 hover:text-neutral-200 border-white/[0.08] hover:bg-white/[0.08]"
+                      }`}
+                      title="Mở danh sách lệnh nhanh (/)"
+                    >
+                      <span className="font-mono text-sky-400 font-bold">/</span>
+                      <span>Lệnh nhanh</span>
+                    </button>
+                  </HStack>
+                }
+                sendButton={
+                  <ChatSendButton
+                    isDisabled={(!text.trim() && !imageUrl) || thinking}
+                    onSend={() => handleSubmit()}
+                  />
+                }
+                drawer={
+                  (uploadingImage || imageUrl) && (
+                    <ChatComposerDrawer>
+                      {uploadingImage ? (
+                        <HStack gap={2} vAlign="center" className="py-1">
+                          <Spinner size="sm" label="Đang xử lý ảnh" />
+                          <Text type="supporting" size="sm">Đang tối ưu hình ảnh…</Text>
+                        </HStack>
+                      ) : (
+                        <div className="relative inline-block my-1.5">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={imageUrl!}
+                            alt="Ảnh chụp màn hình"
+                            style={{ maxHeight: 130, maxWidth: 280, borderRadius: 10, objectFit: "contain" }}
+                            className="border border-white/15 shadow-lg shadow-black/40"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setImageUrl(null)}
+                            title="Gỡ ảnh đính kèm"
+                            className="absolute -top-2 -right-2 p-1 rounded-full bg-neutral-900 border border-neutral-700 text-neutral-300 hover:text-white hover:bg-rose-600 transition-colors shadow-lg cursor-pointer"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </ChatComposerDrawer>
+                  )
+                }
+                input={
+                  <ChatComposerInput
+                    label="Nhập tin nhắn"
+                    placeholder={
+                      mode === "devops"
+                        ? "Gõ '/' để mở lệnh hoặc mô tả công việc (Dán Cmd/Ctrl+V ảnh)..."
+                        : "Gõ '/' để mở lệnh hoặc hỏi về nhân sự, phân bổ effort dự án..."
                     }
-                    if (e.key === "ArrowUp") {
-                      e.preventDefault();
-                      setSelectedCommandIndex((prev) => (prev - 1 + filteredCommands.length) % filteredCommands.length);
-                      return;
-                    }
-                    if (e.key === "Enter" || e.key === "Tab") {
-                      if (!e.shiftKey) {
-                        e.preventDefault();
-                        handleSelectCommand(filteredCommands[selectedCommandIndex]);
-                        return;
+                    value={text}
+                    onChange={handleTextChange}
+                    onSubmit={(submittedText) => handleSubmit(submittedText)}
+                    onKeyDown={(e) => {
+                      if (isCommandPopupOpen && filteredCommands.length > 0) {
+                        if (e.key === "ArrowDown") {
+                          e.preventDefault();
+                          setSelectedCommandIndex((prev) => (prev + 1) % filteredCommands.length);
+                          return;
+                        }
+                        if (e.key === "ArrowUp") {
+                          e.preventDefault();
+                          setSelectedCommandIndex((prev) => (prev - 1 + filteredCommands.length) % filteredCommands.length);
+                          return;
+                        }
+                        if (e.key === "Enter" || e.key === "Tab") {
+                          if (!e.shiftKey) {
+                            e.preventDefault();
+                            handleSelectCommand(filteredCommands[selectedCommandIndex]);
+                            return;
+                          }
+                        }
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          setIsCommandPopupOpen(false);
+                          return;
+                        }
                       }
-                    }
-                    if (e.key === "Escape") {
-                      e.preventDefault();
-                      setIsCommandPopupOpen(false);
-                      return;
-                    }
-                  }
 
-                  if (e.key === "/" && (!text || text === "/")) {
-                    setIsCommandPopupOpen(true);
-                  }
+                      if (e.key === "/" && (!text || text === "/")) {
+                        setIsCommandPopupOpen(true);
+                      }
 
-                  if (e.key === "Enter" && !e.shiftKey && imageUrl && !text.trim()) {
-                    e.preventDefault();
-                    handleSubmit();
-                  }
-                }}
-                onFiles={(files) => {
-                  const image = files.find((f) => f.type.startsWith("image/"));
-                  if (image) handleUploadImage(image);
-                }}
+                      if (e.key === "Enter" && !e.shiftKey && imageUrl && !text.trim()) {
+                        e.preventDefault();
+                        handleSubmit();
+                      }
+                    }}
+                    onFiles={(files) => {
+                      const image = files.find((f) => f.type.startsWith("image/"));
+                      if (image) handleUploadImage(image);
+                    }}
+                  />
+                }
               />
-            }
+            </div>
+
+            <div className="flex items-center justify-between px-1 text-[11px] text-neutral-400">
+              <span>Gõ <kbd className="px-1 py-0.2 rounded bg-white/10 font-mono text-neutral-300 text-[10px]">/</kbd> để xem lệnh nhanh • Dán ảnh (Ctrl+V)</span>
+              <span><kbd className="px-1 py-0.2 rounded bg-white/10 font-mono text-neutral-300 text-[10px]">Enter</kbd> để gửi</span>
+            </div>
+          </VStack>
+        </div>
+        }
+      >
+        <div className="max-w-[900px] w-full mx-auto px-4 pb-16">
+          <ChatThread
+            mode={mode}
+            messages={messages}
+            loading={loadingHistory}
+            thinking={thinking}
+            onConfirmEntry={handleConfirmEntry}
+            onConfirmProposal={handleConfirmProposal}
+            onCancelProposal={handleCancelProposal}
+            onSelectClarificationCandidate={handleSelectClarificationCandidate}
+            onSelectPromptSuggestion={(prompt) => handleSubmit(prompt)}
           />
         </div>
-      </StackItem>
+      </ChatLayout>
 
       {/* Interactive Command Template Modal */}
       <CommandTemplateModal
@@ -936,6 +914,7 @@ export function ChatBox(): React.JSX.Element {
           handleSubmit(preparedPrompt);
         }}
       />
-    </VStack>
+    </div>
   );
 }
+

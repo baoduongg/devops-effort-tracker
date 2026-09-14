@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { AlertTriangle, ChevronDown } from "lucide-react";
-import { Card } from "@astryxdesign/core/Card";
 import { List, ListItem } from "@astryxdesign/core/List";
-import { Token } from "@astryxdesign/core/Token";
+import { Badge } from "@astryxdesign/core/Badge";
 import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { HStack, StackItem } from "@astryxdesign/core/Stack";
@@ -32,7 +31,7 @@ export function OverdueTasksList({ tasks, members, projects }: OverdueTasksListP
   );
 
   return (
-    <Card elevation="low">
+    <div className="p-4 rounded-xl bg-gradient-to-b from-error/[0.11] to-error/[0.04] border border-error/30">
       <HStack gap={2} vAlign="center" className="pb-2">
         <AlertTriangle size={17} className="text-error" />
         <StackItem size="fill">
@@ -59,18 +58,12 @@ export function OverdueTasksList({ tasks, members, projects }: OverdueTasksListP
                 label={task.title}
                 href={member ? `/members/${member.id}` : undefined}
                 description={`${member?.name ?? "Unassigned"} — ${project?.name ?? "No project"}`}
-                endContent={
-                  <Token
-                    label={`Trễ ${overdueDays} ngày`}
-                    color={overdueDays > 7 ? "red" : "orange"}
-                    size="sm"
-                  />
-                }
+                endContent={<Badge label={`Trễ ${overdueDays} ngày`} variant="error" />}
               />
             );
           })}
         </List>
       )}
-    </Card>
+    </div>
   );
 }

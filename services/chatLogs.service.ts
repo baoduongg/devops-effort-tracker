@@ -1,4 +1,4 @@
-import { collection, doc, addDoc, updateDoc, query, where, orderBy, getDocs, Timestamp } from "firebase/firestore";
+import { collection, doc, addDoc, updateDoc, query, where, getDocs, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toIsoString } from "@/lib/date";
 import type {
@@ -13,15 +13,18 @@ import type {
 
 const chatLogsCol = collection(db, "chatLogs");
 
-export async function getChatLogsByMember(memberId: string, mode: ChatMode): Promise<ChatLog[]> {
-  const q = query(chatLogsCol, where("memberId", "==", memberId), where("mode", "==", mode), orderBy("createdAt", "asc"));
+export async function getChatLogsByThread(threadId: string): Promise<ChatLog[]> {
+  // Sorted client-side (not orderBy in the query) to avoid requiring a composite Firestore index
+  // for the threadId + createdAt combination.
+  const q = query(chatLogsCol, where("threadId", "==", threadId));
   const snapshot = await getDocs(q);
-  return snapshot.docs.map((docSnap) => {
+  const logs = snapshot.docs.map((docSnap) => {
     const data = docSnap.data();
     return {
       id: docSnap.id,
       memberId: data.memberId,
       mode: data.mode,
+      threadId: data.threadId,
       rawInput: data.rawInput,
       imageUrl: data.imageUrl,
       aiResponse: data.aiResponse,
@@ -29,11 +32,13 @@ export async function getChatLogsByMember(memberId: string, mode: ChatMode): Pro
       createdAt: toIsoString(data.createdAt),
     } satisfies ChatLog;
   });
+  return logs.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 }
 
 interface CreateChatLogInput {
   memberId: string;
   mode: ChatMode;
+  threadId: string;
   rawInput: string | null;
   imageUrl: string | null;
   aiResponse: AiResponsePayload;

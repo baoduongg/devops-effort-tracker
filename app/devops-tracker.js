@@ -217,6 +217,12 @@ export const devopsTrackerTheme = {
         "borderColor": "rgba(61,123,255,0.30)",
         "color": "#EAF0FF"
       }
+    },
+    "button": {
+      "variant:secondary": {
+        "backgroundColor": "var(--color-background-muted)",
+        "borderColor": "var(--color-border-emphasized)"
+      }
     }
   },
   __onDark: {

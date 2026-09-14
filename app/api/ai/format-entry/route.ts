@@ -4,19 +4,24 @@ import { createChatLog } from "@/services/chatLogs.service";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const body = await request.json();
-  const { text, userInput, imageUrl, memberId, askerMemberName, provider } = body as {
+  const { text, userInput, imageUrl, memberId, askerMemberName, provider, threadId } = body as {
     text?: string;
     userInput?: string;
     imageUrl?: string | null;
     memberId?: string;
     askerMemberName?: string | null;
     provider?: "claude" | "nvidia";
+    threadId?: string;
   };
 
   const inputText = (text ?? userInput ?? "").trim();
 
   if (!inputText && !imageUrl) {
     return NextResponse.json({ error: "text or imageUrl is required" }, { status: 400 });
+  }
+
+  if (!threadId) {
+    return NextResponse.json({ error: "threadId is required" }, { status: 400 });
   }
 
   try {
@@ -31,6 +36,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const chatLogId = await createChatLog({
       memberId: memberId || "leader",
       mode: "devops",
+      threadId,
       rawInput: inputText || null,
       imageUrl: imageUrl ?? null,
       aiResponse: notificationMessage ? { answer: notificationMessage, entry } : entry,

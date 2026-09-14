@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, onSnapshot, orderBy, query, setDoc, updateDoc, Timestamp } from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query, setDoc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { toIsoString } from "@/lib/date";
 import type { Notification, NotificationInput } from "@/types/notification";
@@ -18,12 +18,6 @@ function toNotification(id: string, data: Record<string, unknown>): Notification
     read: (data.read as boolean) ?? false,
     createdAt: toIsoString(data.createdAt),
   };
-}
-
-export async function getNotifications(): Promise<Notification[]> {
-  const q = query(notificationsCol, orderBy("createdAt", "desc"));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => toNotification(d.id, d.data()));
 }
 
 export function subscribeNotifications(callback: (notifications: Notification[]) => void): () => void {

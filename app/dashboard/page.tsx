@@ -30,6 +30,7 @@ import { subscribeMembers } from "@/services/members.service";
 import { getProjects } from "@/services/projects.service";
 import { subscribeAllTasks } from "@/services/tasks.service";
 import { subscribeNotifications, createNotification } from "@/services/notifications.service";
+import { notifyTaskOverdue } from "@/services/chatops.service";
 import { useMembersStore } from "@/store/members.store";
 import { useAuthStore } from "@/store/auth.store";
 import { DevOpsWorkspace } from "@/components/dashboard/devops-workspace";
@@ -175,6 +176,15 @@ export default function DashboardPage(): React.JSX.Element {
         },
         `overdue_task_${task.id}`
       );
+      notifyTaskOverdue({
+        title: task.title,
+        memberName: member?.name ?? "Unassigned",
+        memberEmail: member?.email,
+        projectName: project?.name ?? "No project",
+        overdueDays,
+        dueDate: formattedDate,
+        link: `${window.location.origin}/tasks`,
+      });
     });
   }, [overdueTasks, projectsLoaded, members, projects, notifications]);
 
@@ -296,23 +306,12 @@ export default function DashboardPage(): React.JSX.Element {
           </Text>
         </VStack>
 
-        <HStack gap={2} vAlign="center">
-          <Button
-            label="Tạo Task mới"
-            icon={<Plus size={15} />}
-            variant="primary"
-            onClick={() => setIsCreateTaskModalOpen(true)}
-          />
-          <SegmentedControl
-            label="Chế độ xem"
-            value={activeTab}
-            onChange={(v) => setActiveTab(v as DashboardTab)}
-          >
-            <SegmentedControlItem value="roster" label="Bảng nhân sự" icon={<Layers size={14} strokeWidth={2} />} />
-            <SegmentedControlItem value="timeline" label="Lịch trình Gantt" icon={<Calendar size={14} strokeWidth={2} />} />
-            <SegmentedControlItem value="projects" label="Theo Dự án" icon={<FolderGit2 size={14} strokeWidth={2} />} />
-          </SegmentedControl>
-        </HStack>
+        <Button
+          label="Tạo Task mới"
+          icon={<Plus size={15} />}
+          variant="primary"
+          onClick={() => setIsCreateTaskModalOpen(true)}
+        />
       </div>
 
       {/* Unified Executive KPI & Quick Filter Bar */}
@@ -377,44 +376,7 @@ export default function DashboardPage(): React.JSX.Element {
               </button>
             </div>
 
-            {/* Filter Search & Project Controls */}
-            <HStack gap={3} vAlign="center" wrap="wrap" className="pt-1 border-t border-border">
-              <StackItem size="fill">
-                <TextInput
-                  label="Tìm kiếm DevOps"
-                  isLabelHidden
-                  placeholder="Tìm theo tên DevOps, kỹ năng hoặc task đang làm..."
-                  value={searchQuery}
-                  onChange={setSearchQuery}
-                  startIcon={Search}
-                  hasClear
-                />
-              </StackItem>
 
-              <div className="w-full sm:w-64">
-                <Selector
-                  label="Dự án"
-                  isLabelHidden
-                  options={projectOptions}
-                  value={selectedProjectId}
-                  onChange={(v) => setSelectedProjectId(String(v))}
-                />
-              </div>
-
-              {hasActiveFilters && (
-                <Button
-                  label="Bỏ lọc"
-                  icon={<RotateCcw size={13} />}
-                  variant="ghost"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setSelectedProjectId("all");
-                    setSelectedCapacity("all");
-                    setShowOverdueOnly(false);
-                  }}
-                />
-              )}
-            </HStack>
           </VStack>
         </Card>
       )}
@@ -423,7 +385,54 @@ export default function DashboardPage(): React.JSX.Element {
       {!loading && overdueTasks.length > 0 && !showOverdueOnly && (
         <OverdueTasksList tasks={overdueTasks} members={members} projects={projects} />
       )}
+      {/* Filter Search & Project Controls */}
+      <HStack gap={3} vAlign="center" wrap="wrap" className="pt-2 border-t border-border">
+        <SegmentedControl
+          label="Chế độ xem"
+          value={activeTab}
+          onChange={(v) => setActiveTab(v as DashboardTab)}
+        >
+          <SegmentedControlItem value="roster" label="Bảng nhân sự" icon={<Layers size={14} strokeWidth={2} />} />
+          <SegmentedControlItem value="timeline" label="Lịch trình Gantt" icon={<Calendar size={14} strokeWidth={2} />} />
+          <SegmentedControlItem value="projects" label="Theo Dự án" icon={<FolderGit2 size={14} strokeWidth={2} />} />
+        </SegmentedControl>
 
+        <StackItem size="fill">
+          <TextInput
+            label="Tìm kiếm DevOps"
+            isLabelHidden
+            placeholder="Tìm theo tên DevOps, kỹ năng hoặc task đang làm..."
+            value={searchQuery}
+            onChange={setSearchQuery}
+            startIcon={Search}
+            hasClear
+          />
+        </StackItem>
+
+        <div className="w-full sm:w-64">
+          <Selector
+            label="Dự án"
+            isLabelHidden
+            options={projectOptions}
+            value={selectedProjectId}
+            onChange={(v) => setSelectedProjectId(String(v))}
+          />
+        </div>
+
+        {hasActiveFilters && (
+          <Button
+            label="Bỏ lọc"
+            icon={<RotateCcw size={13} />}
+            variant="ghost"
+            onClick={() => {
+              setSearchQuery("");
+              setSelectedProjectId("all");
+              setSelectedCapacity("all");
+              setShowOverdueOnly(false);
+            }}
+          />
+        )}
+      </HStack>
       {/* Main Content Area */}
       {loading ? (
         <VStack gap={3}>
@@ -438,7 +447,7 @@ export default function DashboardPage(): React.JSX.Element {
           description="Thử điều chỉnh từ khóa tìm kiếm hoặc bấm 'Bỏ lọc' để xem toàn bộ danh sách."
         />
       ) : activeTab === "roster" ? (
-        <PMTeamRoster members={filteredMembers} tasks={tasks} projects={projects} />
+        <PMTeamRoster members={filteredMembers} tasks={tasks} />
       ) : activeTab === "timeline" ? (
         <TeamTimelineChart members={filteredMembers} tasks={tasks} projects={projects} />
       ) : (

@@ -358,6 +358,11 @@
     color: #EAF0FF;
   }
 
+  .astryx-button.secondary {
+    background-color: var(--color-background-muted);
+    border-color: var(--color-border-emphasized);
+  }
+
   .astryx-text.primary { color: var(--color-text-primary); }
 
   .astryx-heading.primary { color: var(--color-text-primary); }

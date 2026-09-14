@@ -12,8 +12,10 @@ import {
 import { db } from "@/lib/firebase";
 import type { Member, MemberInput, MemberStatus } from "@/types/member";
 import { getTasksByMember } from "@/services/tasks.service";
+import { notifyMemberOverloaded } from "@/services/chatops.service";
 
 import { toIsoString } from "@/lib/date";
+import { effortPercentToMinutes } from "@/lib/effort";
 
 const membersCol = collection(db, "members");
 
@@ -30,7 +32,7 @@ function toMember(id: string, data: Record<string, unknown>): Member {
       typeof data.effortMinutes === "number"
         ? data.effortMinutes
         : typeof data.effortPercent === "number"
-          ? Math.round((data.effortPercent / 100) * 480)
+          ? effortPercentToMinutes(data.effortPercent)
           : 0,
     role: (data.role as Member["role"]) ?? undefined,
     updatedAt: toIsoString(data.updatedAt),
@@ -75,11 +77,23 @@ export async function syncMemberEffortStatus(memberId: string): Promise<void> {
   const newStatus: MemberStatus =
     activeCount === 0 || totalEffortMinutes === 0 ? "available" : totalEffortMinutes > 480 ? "overloaded" : "busy";
 
+  const member = await getMember(memberId);
+
   await updateMember(memberId, {
     currentTaskId: activeTasks[0]?.id || null,
     effortMinutes: totalEffortMinutes,
     status: newStatus,
   });
+
+  if (newStatus === "overloaded" && member?.status !== "overloaded") {
+    notifyMemberOverloaded({
+      memberName: member?.name ?? memberId,
+      memberEmail: member?.email,
+      effortMinutes: totalEffortMinutes,
+      activeTaskCount: activeCount,
+      link: `${window.location.origin}/members/${memberId}`,
+    });
+  }
 }
 
 export function subscribeMembers(callback: (members: Member[]) => void): () => void {

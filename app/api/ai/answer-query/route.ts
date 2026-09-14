@@ -199,13 +199,14 @@ function renderClarificationAnswer(clarification: ClarificationRequest): string 
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const body = await request.json();
-  const { question, query, memberId, mode, askerRole, provider } = body as {
+  const { question, query, memberId, mode, askerRole, provider, threadId } = body as {
     question?: string;
     query?: string;
     memberId?: string;
     mode?: "leader" | "devops";
     askerRole?: "leader" | "devops";
     provider?: "claude" | "nvidia";
+    threadId?: string;
   };
   const userQuery = (question ?? query ?? "").trim();
   const currentMode = mode || "leader";
@@ -218,6 +219,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   if (!userQuery) {
     return NextResponse.json({ error: "question is required" }, { status: 400 });
+  }
+
+  if (!threadId) {
+    return NextResponse.json({ error: "threadId is required" }, { status: 400 });
   }
 
   try {
@@ -236,6 +241,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const chatLogId = await createChatLog({
         memberId: currentMemberId || "leader",
         mode: currentMode,
+        threadId,
         rawInput: userQuery,
         imageUrl: null,
         aiResponse: { answer },
@@ -252,6 +258,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const chatLogId = await createChatLog({
           memberId: currentMemberId || "leader",
           mode: currentMode,
+          threadId,
           rawInput: userQuery,
           imageUrl: null,
           aiResponse: { answer, clarification: result.clarification },
@@ -264,6 +271,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const chatLogId = await createChatLog({
           memberId: currentMemberId || "leader",
           mode: currentMode,
+          threadId,
           rawInput: userQuery,
           imageUrl: null,
           aiResponse: { answer, proposal: result.proposal },
@@ -281,6 +289,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const chatLogId = await createChatLog({
           memberId: currentMemberId || "leader",
           mode: currentMode,
+          threadId,
           rawInput: userQuery,
           imageUrl: null,
           aiResponse: { answer, clarification: result.clarification },
@@ -293,6 +302,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const chatLogId = await createChatLog({
           memberId: currentMemberId || "leader",
           mode: currentMode,
+          threadId,
           rawInput: userQuery,
           imageUrl: null,
           aiResponse: { answer, proposal: result.proposal },
@@ -315,6 +325,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const chatLogId = await createChatLog({
           memberId: currentMemberId || "leader",
           mode: currentMode,
+          threadId,
           rawInput: userQuery,
           imageUrl: null,
           aiResponse: { answer, clarification },
@@ -329,6 +340,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const chatLogId = await createChatLog({
           memberId: currentMemberId || "leader",
           mode: currentMode,
+          threadId,
           rawInput: userQuery,
           imageUrl: null,
           aiResponse: { answer, clarification },
@@ -353,6 +365,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             const chatLogId = await createChatLog({
               memberId: currentMemberId || "leader",
               mode: currentMode,
+              threadId,
               rawInput: userQuery,
               imageUrl: null,
               aiResponse: { answer, clarification },
@@ -373,6 +386,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const chatLogId = await createChatLog({
           memberId: currentMemberId || "leader",
           mode: currentMode,
+          threadId,
           rawInput: userQuery,
           imageUrl: null,
           aiResponse: { answer, entry },
@@ -409,6 +423,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const chatLogId = await createChatLog({
         memberId: currentMemberId || "leader",
         mode: currentMode,
+        threadId,
         rawInput: userQuery,
         imageUrl: null,
         aiResponse: { answer },
@@ -426,6 +441,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         const chatLogId = await createChatLog({
           memberId: currentMemberId || "leader",
           mode: currentMode,
+          threadId,
           rawInput: userQuery,
           imageUrl: null,
           aiResponse: { answer },
@@ -443,6 +459,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           const chatLogId = await createChatLog({
             memberId: currentMemberId || "leader",
             mode: currentMode,
+            threadId,
             rawInput: userQuery,
             imageUrl: null,
             aiResponse: { answer },
@@ -460,6 +477,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           const chatLogId = await createChatLog({
             memberId: currentMemberId || "leader",
             mode: currentMode,
+            threadId,
             rawInput: userQuery,
             imageUrl: null,
             aiResponse: { answer },
@@ -480,6 +498,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const chatLogId = await createChatLog({
       memberId: currentMemberId || "leader",
       mode: currentMode,
+      threadId,
       rawInput: userQuery,
       imageUrl: null,
       aiResponse: { answer },

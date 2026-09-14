@@ -17,6 +17,7 @@ import { updateMember } from "@/services/members.service";
 import { notifyTaskCreated } from "@/services/chatops.service";
 import { useAuthStore } from "@/store/auth.store";
 import { formatEffortDuration, EFFORT_DURATION_PRESETS } from "@/lib/effort";
+import { PROJECT_COLOR_SWATCHES } from "@/lib/project-colors";
 import type { Project } from "@/types/project";
 import type { Member, MemberStatus } from "@/types/member";
 import type { TaskStatus } from "@/types/task";
@@ -155,7 +156,7 @@ export function TaskCreateModal({
         finalProjectId = await createProject({
           name: newProjectName.trim(),
           description: `Dự án ${newProjectName.trim()}`,
-          color: "#38bdf8",
+          color: PROJECT_COLOR_SWATCHES[0],
         });
       }
 
@@ -243,7 +244,7 @@ export function TaskCreateModal({
       <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
       <div className="p-5 flex flex-col gap-4 overflow-y-auto min-h-0">
         {error && (
-          <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/25 text-xs text-rose-400">
+          <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/25 text-sm text-rose-400">
             {error}
           </div>
         )}

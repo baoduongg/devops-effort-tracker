@@ -7,8 +7,9 @@ import { getProjects } from "@/services/projects.service";
 import { formatDateLocal } from "@/lib/date";
 import type { ClarificationRequest, TaskChangeProposal } from "@/types/chat";
 import type { Task } from "@/types/task";
+import type { Member } from "@/types/member";
 
-export interface MutationExtractionResult {
+interface MutationExtractionResult {
   proposal?: TaskChangeProposal;
   clarification?: ClarificationRequest;
 }
@@ -51,41 +52,116 @@ function normalizeVi(s: string): string {
     .trim();
 }
 
-/** Extracts a candidate member name mentioned in the command (assignee/owner of the target task). */
-function extractMentionedMemberName(text: string): string | null {
-  const patterns = [
-    /(?:của|cho)\s+([a-zA-ZÀ-ỹ]+)(?:\s|$|[.,!?])/i,
-    /task\s+.+?\s+của\s+([a-zA-ZÀ-ỹ]+)/i,
-  ];
-  for (const p of patterns) {
-    const m = text.match(p);
-    if (m?.[1]) return m[1].trim();
+/** Extracts current owner and new assignee mentioned in mutation command. */
+function extractMutationMembers(text: string, allMembers: Member[]): {
+  currentOwner: Member | null;
+  newAssignee: Member | null;
+} {
+  let currentOwner: Member | null = null;
+  let newAssignee: Member | null = null;
+
+  // 1. Check "từ [Name] sang/cho [Name2]" or "từ [Name]"
+  const tuMatch = text.match(/\b(?:từ|tu)\s+([a-zA-ZÀ-ỹ0-9\s]+?)(?:\s+(?:sang\s+cho|sang|cho|thanh|thành)|\s*$|[.,!?])/i);
+  if (tuMatch?.[1]) {
+    currentOwner = findMemberByName(allMembers, tuMatch[1].trim());
   }
-  return null;
+
+  // 2. Check "của [Name] sang/cho [Name2]" or "của [Name]"
+  if (!currentOwner) {
+    const cuaMatch = text.match(/\b(?:của|cua)\s+([a-zA-ZÀ-ỹ0-9\s]+?)(?:\s+(?:sang\s+cho|sang|cho|thanh|thành)|\s*$|[.,!?])/i);
+    if (cuaMatch?.[1]) {
+      currentOwner = findMemberByName(allMembers, cuaMatch[1].trim());
+    }
+  }
+
+  // 3. Check "sang cho [Name]" or "sang [Name]" or "chuyển cho [Name]"
+  const sangMatch = text.match(/\b(?:sang\s+cho|chuyen\s+cho|chuyển\s+cho|sang)\s+([a-zA-ZÀ-ỹ0-9\s]+?)(?:$|[.,!?])/i);
+  if (sangMatch?.[1]) {
+    newAssignee = findMemberByName(allMembers, sangMatch[1].trim());
+  } else {
+    // If only "cho [Name]" at the end and not matched as currentOwner
+    const choMatch = text.match(/\bcho\s+([a-zA-ZÀ-ỹ0-9\s]+?)(?:$|[.,!?])/i);
+    if (choMatch?.[1]) {
+      const candidate = findMemberByName(allMembers, choMatch[1].trim());
+      if (candidate && candidate.id !== currentOwner?.id) {
+        newAssignee = candidate;
+      }
+    }
+  }
+
+  return { currentOwner, newAssignee };
 }
 
 /** Extracts keywords from the task title mentioned in the command (best-effort, strips known verbs/names). */
-function extractTaskKeyword(text: string, memberName: string | null): string {
+function extractTaskKeyword(text: string, currentOwner: Member | null, newAssignee: Member | null): string {
   let cleaned = text
     .replace(/^(sửa|đổi|cập nhật|chuyển|xóa|hủy|bỏ|xoá|update|edit|change|delete|remove|cancel)\s+/i, "")
     .replace(/^(trạng thái|ngày|người phụ trách|assignee)\s+(?:của\s+)?/i, "")
     .replace(/^(task|việc|công việc|nhiệm vụ)\s+/i, "");
-  if (memberName) {
-    cleaned = cleaned.replace(new RegExp(`(?:của|cho)\\s+${memberName}.*$`, "i"), "");
+
+  // Remove trailing member transitions: "từ ... sang ...", "của ... sang ...", "sang ...", "từ ...", "của ..."
+  cleaned = cleaned
+    .replace(/\s+\b(?:từ|tu)\s+.*$/i, "")
+    .replace(/\s+\b(?:của|cua)\s+.*$/i, "")
+    .replace(/\s+\b(?:sang\s+cho|chuyen\s+cho|chuyển\s+cho|sang|thành|thanh)\s+.*$/i, "");
+
+  if (currentOwner) {
+    cleaned = cleaned.replace(new RegExp(`\\b${currentOwner.name}\\b`, "gi"), "");
   }
-  cleaned = cleaned.replace(/\s+(sang|thành)\s+.+$/i, "");
+  if (newAssignee) {
+    cleaned = cleaned.replace(new RegExp(`\\b${newAssignee.name}\\b`, "gi"), "");
+  }
+
   return cleaned.trim();
 }
 
 function matchTasks(tasks: Task[], memberIds: string[] | null, keyword: string): Task[] {
   const kw = normalizeVi(keyword);
-  const pool = memberIds ? tasks.filter((t) => memberIds.includes(t.memberId)) : tasks;
+  const pool = memberIds && memberIds.length > 0 ? tasks.filter((t) => memberIds.includes(t.memberId)) : tasks;
   if (!kw) return pool;
+
   const kwWords = kw.split(/\s+/).filter(Boolean);
-  return pool.filter((t) => {
-    const title = normalizeVi(t.title);
-    return kwWords.every((w) => title.includes(w)) || title.includes(kw);
+
+  // 1. Exact title match
+  const exact = pool.filter((t) => normalizeVi(t.title) === kw);
+  if (exact.length > 0) return exact;
+
+  // 2. Substring match
+  const sub = pool.filter((t) => {
+    const tNorm = normalizeVi(t.title);
+    return tNorm.includes(kw) || kw.includes(tNorm);
   });
+  if (sub.length > 0) return sub;
+
+  // 3. All words match
+  const allWords = pool.filter((t) => {
+    const tNorm = normalizeVi(t.title);
+    return kwWords.every((w) => tNorm.includes(w));
+  });
+  if (allWords.length > 0) return allWords;
+
+  // 4. Overlap score match
+  const scored = pool
+    .map((t) => {
+      const tWords = normalizeVi(t.title).split(/\s+/).filter((w) => w.length > 1);
+      const matchCount = kwWords.filter((w) => tWords.some((tw) => tw.includes(w) || w.includes(tw))).length;
+      return { task: t, matchCount };
+    })
+    .filter((item) => item.matchCount > 0);
+
+  scored.sort((a, b) => b.matchCount - a.matchCount);
+  if (scored.length > 0) {
+    const maxScore = scored[0].matchCount;
+    const topMatches = scored.filter((s) => s.matchCount === maxScore).map((s) => s.task);
+    if (topMatches.length > 0) return topMatches;
+  }
+
+  // 5. Fallback: If filtered by memberIds but found nothing, search pool of all tasks
+  if (memberIds && memberIds.length > 0) {
+    return matchTasks(tasks, null, keyword);
+  }
+
+  return [];
 }
 
 /**
@@ -101,20 +177,11 @@ export async function extractTaskMutationFromInput(
   const projectById = new Map(allProjects.map((p) => [p.id, p]));
   const memberById = new Map(allMembers.map((m) => [m.id, m]));
 
-  const mentionedName = extractMentionedMemberName(inputText);
+  const { currentOwner, newAssignee } = extractMutationMembers(inputText, allMembers);
   let candidateMemberIds: string[] | null = null;
 
-  if (mentionedName) {
-    const matchedMember = findMemberByName(allMembers, mentionedName);
-    if (!matchedMember) {
-      return {
-        clarification: {
-          reason: "no_match",
-          candidates: allMembers.map((m) => ({ id: m.id, label: m.name })),
-        },
-      };
-    }
-    if (matchedMember.role === "leader") {
+  if (currentOwner) {
+    if (currentOwner.role === "leader" && action === "delete") {
       const suggestion = findBestSuitableMember(allMembers, inputText, "");
       return {
         clarification: {
@@ -123,10 +190,10 @@ export async function extractTaskMutationFromInput(
         },
       };
     }
-    candidateMemberIds = [matchedMember.id];
+    candidateMemberIds = [currentOwner.id];
   }
 
-  const keyword = extractTaskKeyword(inputText, mentionedName);
+  const keyword = extractTaskKeyword(inputText, currentOwner, newAssignee);
   const matchedTasks = matchTasks(allTasks, candidateMemberIds, keyword);
 
   if (matchedTasks.length === 0) {
@@ -188,18 +255,17 @@ export async function extractTaskMutationFromInput(
 
   let changes = parsed.success ? parsed.data.changes : {};
 
-  // ISSUE-12 (reopened at rev 9): comparing against the task's current value only catches no-op
-  // hallucinations (AI echoes back the same value). It never catches the actually-reported bug —
-  // AI inventing a DIFFERENT value for a field the command never mentioned at all (e.g. setting
-  // projectName to the task's own title when the user only named the task, never said "dự án").
-  // Fix: cross-validate each field against the original input text, same heuristic already used
-  // for the create branch (answer-query/route.ts mentionsProject/mentionsEffort) — only keep a
-  // field if a keyword for that field actually appears in what the leader typed.
+  // If a new assignee was explicitly found via regex (e.g. "sang cho Dương Bảo"), ensure it's in changes
+  if (newAssignee && (!changes || !changes.assigneeName)) {
+    changes = { ...changes, assigneeName: newAssignee.name };
+  }
+
+  // Cross-validate each field against the original input text
   const inputNorm = normalizeVi(inputText);
   const FIELD_KEYWORDS: Record<string, RegExp> = {
     title: /\b(ten|tieu de|title|doi ten)\b/,
     projectName: /\b(du an|project)\b/,
-    assigneeName: /\b(giao|cho|gan|phu trach|assignee|nguoi lam|chuyen cho)\b/,
+    assigneeName: /\b(giao|cho|gan|phu trach|assignee|nguoi lam|chuyen cho|chuyen|sang|tu)\b/,
     status: /\b(trang thai|status|done|hoan thanh|dang lam|in progress|planned|ke hoach|xong)\b/,
     startDate: /\b(ngay bat dau|bat dau|start)\b/,
     endDate: /\b(han|deadline|ngay ket thuc|ket thuc|end date)\b/,
@@ -235,8 +301,8 @@ export async function extractTaskMutationFromInput(
 
   // If leader tries to reassign to someone who turns out to be a leader, block it too (F-07/AC-07-2).
   if (changes.assigneeName) {
-    const newAssignee = findMemberByName(allMembers, changes.assigneeName);
-    if (newAssignee?.role === "leader") {
+    const targetAssignee = findMemberByName(allMembers, changes.assigneeName);
+    if (targetAssignee?.role === "leader") {
       const suggestion = findBestSuitableMember(allMembers, task.title, project?.name ?? "");
       return {
         clarification: {

@@ -131,7 +131,7 @@ export function extractJsonFromAiText(raw: string): unknown {
   return null;
 }
 
-export interface ExtractTaskResult {
+interface ExtractTaskResult {
   entry: FormattedEntry;
   notificationMessage?: string | null;
 }

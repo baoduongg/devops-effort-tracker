@@ -16,21 +16,10 @@ import { subscribeAllTasks } from "@/services/tasks.service";
 import { subscribeMembers } from "@/services/members.service";
 import { useAuthStore } from "@/store/auth.store";
 import { formatEffortDuration } from "@/lib/effort";
+import { PROJECT_COLOR_SWATCHES, getProjectColor } from "@/lib/project-colors";
 import type { Project } from "@/types/project";
 import type { Task } from "@/types/task";
 import type { Member } from "@/types/member";
-
-
-const COLOR_PRESETS = [
-  "#38bdf8", // Sky
-  "#6366f1", // Indigo
-  "#10b981", // Emerald
-  "#a855f7", // Purple
-  "#f59e0b", // Amber
-  "#f43f5e", // Rose
-  "#06b6d4", // Cyan
-  "#ec4899", // Pink
-];
 
 export default function ProjectsPage(): React.JSX.Element {
   const user = useAuthStore((state) => state.user);
@@ -45,7 +34,7 @@ export default function ProjectsPage(): React.JSX.Element {
   const [isCreating, setIsCreating] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
-  const [newProjectColor, setNewProjectColor] = useState("#38bdf8");
+  const [newProjectColor, setNewProjectColor] = useState<string>(PROJECT_COLOR_SWATCHES[0]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -145,7 +134,9 @@ export default function ProjectsPage(): React.JSX.Element {
               </span>
               <div className="flex flex-col">
                 <span className="text-xs text-neutral-400 font-medium">Tổng số Dự án</span>
-                <span className="text-lg font-bold text-neutral-100">{projects.length} dự án</span>
+                <Text type="display-3" weight="semibold" hasTabularNumbers className="text-neutral-100">
+                  {projects.length} dự án
+                </Text>
               </div>
             </div>
           </div>
@@ -157,7 +148,9 @@ export default function ProjectsPage(): React.JSX.Element {
               </span>
               <div className="flex flex-col">
                 <span className="text-xs text-neutral-400 font-medium">Tổng tải phân bổ</span>
-                <span className="text-lg font-bold text-emerald-300">{formatEffortDuration(totalEffortAcrossProjects)} Effort</span>
+                <Text type="display-3" weight="semibold" hasTabularNumbers className="text-emerald-300">
+                  {formatEffortDuration(totalEffortAcrossProjects)} Effort
+                </Text>
               </div>
             </div>
           </div>
@@ -169,7 +162,9 @@ export default function ProjectsPage(): React.JSX.Element {
               </span>
               <div className="flex flex-col">
                 <span className="text-xs text-neutral-400 font-medium">Task đang thực hiện</span>
-                <span className="text-lg font-bold text-purple-300">{activeTasksCount} tasks</span>
+                <Text type="display-3" weight="semibold" hasTabularNumbers className="text-purple-300">
+                  {activeTasksCount} tasks
+                </Text>
               </div>
             </div>
           </div>
@@ -196,7 +191,7 @@ export default function ProjectsPage(): React.JSX.Element {
                   placeholder="Ví dụ: Cloud Migration, K8s Upgrade..."
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
-                  className="w-full bg-white/[0.03] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-sky-500 transition-colors"
+                  className="w-full bg-white/[0.03] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-sky-500 transition-colors"
                 />
               </div>
 
@@ -207,14 +202,14 @@ export default function ProjectsPage(): React.JSX.Element {
                   placeholder="Mô tả ngắn về mục tiêu hoặc phạm vi..."
                   value={newProjectDesc}
                   onChange={(e) => setNewProjectDesc(e.target.value)}
-                  className="w-full bg-white/[0.03] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-sky-500 transition-colors"
+                  className="w-full bg-white/[0.03] border border-white/[0.1] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-sky-500 transition-colors"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-neutral-300 mb-1.5">Màu đại diện</label>
                 <div className="flex items-center gap-2 pt-1">
-                  {COLOR_PRESETS.map((color) => (
+                  {PROJECT_COLOR_SWATCHES.map((color) => (
                     <button
                       key={color}
                       type="button"
@@ -273,7 +268,7 @@ export default function ProjectsPage(): React.JSX.Element {
 
             const isUserAssigned = Boolean(user?.memberId && memberEffortMap.has(user.memberId));
             const userEffortInProject = user?.memberId ? memberEffortMap.get(user.memberId) : undefined;
-            const projColor = project.color || "#38bdf8";
+            const projColor = getProjectColor(project.color);
 
             return (
               <Card key={project.id} elevation="low">
@@ -293,7 +288,7 @@ export default function ProjectsPage(): React.JSX.Element {
                             {project.name}
                           </Text>
                           {isUserAssigned && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                               Của bạn ({formatEffortDuration(userEffortInProject)})
                             </span>
                           )}
@@ -336,7 +331,7 @@ export default function ProjectsPage(): React.JSX.Element {
                         {assignedMembers.map(({ member, effort }) => {
                           if (!member) return null;
                           return (
-                            <div key={member.id} className="flex items-center justify-between text-xs py-0.5">
+                            <div key={member.id} className="flex items-center justify-between text-sm py-0.5">
                               <HStack gap={2} vAlign="center">
                                 <Avatar name={member.name} src={member.photoURL ?? undefined} size="xsm" tooltip={false} />
                                 <span className="text-neutral-200">{member.name}</span>
@@ -372,7 +367,7 @@ export default function ProjectsPage(): React.JSX.Element {
                         return (
                           <div
                             key={task.id}
-                            className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] flex items-center justify-between text-xs"
+                            className="p-2 rounded-lg bg-white/[0.02] border border-white/[0.04] flex items-center justify-between text-sm"
                           >
                             <div className="flex items-center gap-2 truncate min-w-0">
                               {isDone ? (
@@ -384,14 +379,14 @@ export default function ProjectsPage(): React.JSX.Element {
                               )}
                               <span className="truncate text-neutral-200">{task.title}</span>
                             </div>
-                            <span className="text-neutral-400 text-[11px] ml-2 flex-shrink-0">
+                            <span className="text-neutral-400 text-sm ml-2 flex-shrink-0">
                               {assignee?.name.split(" ")[0] ?? "Unassigned"} ({formatEffortDuration(task.effortMinutes)})
                             </span>
                           </div>
                         );
                       })}
                       {projectTasks.length > 3 && (
-                        <span className="text-center text-[11px] text-neutral-400 pt-1">
+                        <span className="text-center text-sm text-neutral-400 pt-1">
                           +{projectTasks.length - 3} task khác
                         </span>
                       )}

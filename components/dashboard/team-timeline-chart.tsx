@@ -20,6 +20,7 @@ import { Card } from "@astryxdesign/core/Card";
 import { Button } from "@astryxdesign/core/Button";
 import { Badge } from "@astryxdesign/core/Badge";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
+import { GanttDayHeader } from "@/components/dashboard/gantt-day-header";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
 import { formatTaskEffort } from "@/lib/effort";
 import { parseDateLocal, calculateDefaultEndDate } from "@/lib/date";
@@ -125,10 +126,10 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
               <CalendarIcon size={16} />
             </span>
             <div className="flex flex-col">
-              <Text weight="semibold" size="base">
+              <Text weight="semibold" size="lg">
                 Lịch trình Phân bổ & Tiến độ
               </Text>
-              <Text type="supporting" size="xsm">
+              <Text type="supporting" size="sm">
                 {days[0].toLocaleDateString("vi-VN", { month: "short", day: "numeric" })} -{" "}
                 {days[days.length - 1].toLocaleDateString("vi-VN", { month: "short", day: "numeric", year: "numeric" })}
               </Text>
@@ -164,32 +165,10 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
           <div className="min-w-[820px]">
             {/* Days Header */}
             <div className="grid grid-cols-[220px_1fr] border-b border-border pb-2">
-              <Text type="supporting" size="xsm" weight="semibold" className="px-3 uppercase tracking-wider">
+              <Text type="supporting" size="sm" weight="semibold" className="px-3 uppercase tracking-wider">
                 DevOps Member
               </Text>
-              <div className="grid grid-cols-14 gap-1 text-center">
-                {days.map((day, idx) => {
-                  const isToday = day.toDateString() === new Date().toDateString();
-                  const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-                  return (
-                    <div
-                      key={idx}
-                      className={`text-xs py-1.5 rounded-lg flex flex-col items-center justify-center transition-all ${
-                        isToday
-                          ? "bg-accent/20 text-accent font-bold border border-accent/40 shadow-sm"
-                          : isWeekend
-                          ? "text-secondary bg-surface"
-                          : "text-primary bg-surface"
-                      }`}
-                    >
-                      <span className="text-[10px] uppercase font-semibold opacity-70">
-                        {day.toLocaleDateString("en-US", { weekday: "narrow" })}
-                      </span>
-                      <span className="text-xs">{day.getDate()}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              <GanttDayHeader days={days} />
             </div>
 
             {/* Member Timeline Rows */}
@@ -215,14 +194,14 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
                 return (
                   <HStack key={member.id} gap={0} vAlign="center" className="py-3" style={{ minHeight: rowHeight + 12 }}>
                     <div className="w-[220px] flex-shrink-0 px-3 flex items-center gap-2.5">
-                      <Avatar name={member.name} src={member.photoURL ?? undefined} size="sm" tooltip={false} />
+                      <Avatar name={member.name} src={member.photoURL ?? undefined} size="md" tooltip={false} />
                       <div className="truncate">
                         <Link href={`/members/${member.id}`}>
-                          <Text weight="medium" size="sm" maxLines={1}>
+                          <Text weight="semibold" maxLines={1}>
                             {member.name}
                           </Text>
                         </Link>
-                        <Text type="supporting" size="xsm">
+                        <Text type="supporting" size="sm">
                           {memberTasks.length} task{memberTasks.length === 1 ? "" : "s"} trong kỳ
                         </Text>
                       </div>
@@ -237,7 +216,7 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
                       </div>
 
                       {lanes.length === 0 ? (
-                        <Text type="supporting" size="xsm" className="relative z-10 text-center py-1 block">
+                        <Text type="supporting" size="sm" className="relative z-10 text-center py-1 block">
                           Chưa có task trong khoảng này
                         </Text>
                       ) : (
@@ -266,7 +245,7 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
                             >
                               {isDone && <CheckCircle2 size={11} className="flex-shrink-0" />}
                               {isPlanned && <Clock size={11} className="flex-shrink-0 opacity-80" />}
-                              <span className="truncate font-medium text-[11px]">{task.title}</span>
+                              <span className="truncate font-medium text-sm">{task.title}</span>
                             </div>
                           );
                         })
@@ -281,33 +260,33 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
 
         {/* Legend */}
         <HStack gap={4} wrap="wrap" vAlign="center" className="pt-3 border-t border-border">
-          <Text type="supporting" size="xsm" weight="semibold">
+          <Text type="supporting" size="sm" weight="semibold">
             Dự án:
           </Text>
           {projects.map((p) => (
             <HStack key={p.id} gap={1.5} vAlign="center">
               <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getProjectColor(p.color) }} />
-              <Text size="xsm">{p.name}</Text>
+              <Text size="sm">{p.name}</Text>
             </HStack>
           ))}
-          <Text type="supporting" size="xsm">
+          <Text type="supporting" size="sm">
             •
           </Text>
           <HStack gap={1.5} vAlign="center">
             <span className="w-3.5 h-2.5 rounded bg-sky-500" />
-            <Text type="supporting" size="xsm">
+            <Text type="supporting" size="sm">
               Đang làm
             </Text>
           </HStack>
           <HStack gap={1.5} vAlign="center">
             <span className="w-3.5 h-2.5 rounded bg-purple-500 border border-dashed border-white/60" />
-            <Text type="supporting" size="xsm">
+            <Text type="supporting" size="sm">
               Kế hoạch
             </Text>
           </HStack>
           <HStack gap={1.5} vAlign="center">
             <span className="w-3.5 h-2.5 rounded bg-neutral-600 opacity-50" />
-            <Text type="supporting" size="xsm">
+            <Text type="supporting" size="sm">
               Đã xong
             </Text>
           </HStack>

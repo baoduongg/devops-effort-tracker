@@ -1,10 +1,4 @@
-import {
-  signInAnonymously,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  signOut,
-  type User,
-} from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup, signOut, type User } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, onSnapshot, query, setDoc, where, Timestamp } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
 import type { AppUser, UserRole } from "@/types/user";
@@ -25,10 +19,6 @@ export async function signInWithGoogle(): Promise<void> {
   await signInWithPopup(auth, googleProvider);
 }
 
-export async function signInAnon(): Promise<void> {
-  await signInAnonymously(auth);
-}
-
 export async function signInWithEmailPassword(email: string, password: string): Promise<void> {
   await signInWithEmailAndPassword(auth, email, password);
 }
@@ -40,11 +30,6 @@ export async function signOutUser(): Promise<void> {
 export async function updateUserRole(uid: string, role: UserRole): Promise<void> {
   const uidRef = doc(db, "users", uid);
   await setDoc(uidRef, { role }, { merge: true });
-}
-
-export async function getUsers(): Promise<AppUser[]> {
-  const snapshot = await getDocs(collection(db, "users"));
-  return snapshot.docs.map((d) => toAppUser(d.id, d.data()));
 }
 
 export function subscribeUsers(callback: (users: AppUser[]) => void): () => void {

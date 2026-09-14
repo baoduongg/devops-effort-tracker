@@ -2,7 +2,7 @@
  * Utility functions and presets for Task Effort & Duration management.
  */
 
-export interface EffortPreset {
+interface EffortPreset {
   label: string;
   minutes: number;
   description?: string;
@@ -73,62 +73,33 @@ export function minutesToWorkdayPercent(minutes: number): number {
   return Math.round((minutes / 480) * 100);
 }
 
+/** Legacy migration: converts a stored effortPercent field (0-100) back to minutes of an 8h workday. */
+export function effortPercentToMinutes(percent: number): number {
+  return Math.round((percent / 100) * 480);
+}
+
+export type EffortStatus = "available" | "busy" | "overloaded";
+
 /**
- * Parses free text duration into minutes.
- * Examples: "15p", "15 phút", "30m", "1 tiếng", "1h", "1.5h", "2 giờ", "1 ngày", "nửa ngày"
+ * Classifies workload minutes into a status + label + progress-bar variant.
+ * Thresholds scaled from an 8h/480m workday.
  */
-export function parseEffortDuration(input: string | number): number {
-  if (typeof input === "number") {
-    return Math.max(0, Math.round(input));
+export function getEffortStatus(
+  minutes: number,
+  activeCount: number
+): { status: EffortStatus; label: string; variant: "success" | "warning" | "error" } {
+  const durationStr = formatEffortDuration(minutes);
+  if (activeCount === 0 || minutes <= 0) {
+    return { status: "available", label: "Trống việc (rảnh)", variant: "success" };
   }
-
-  if (!input || typeof input !== "string") {
-    return 60; // Default 1 hour
+  if (minutes > 480) {
+    return { status: "overloaded", label: `Quá tải ${durationStr}`, variant: "error" };
   }
-
-  const str = input.toLowerCase().trim();
-
-  // Keyword checks
-  if (str.includes("nửa ngày") || str.includes("0.5 ngày")) return 240;
-  if (str.includes("1 ngày") || str.includes("cả ngày")) return 480;
-  if (str.includes("2 ngày")) return 960;
-  if (str.includes("nửa tiếng") || str.includes("nửa giờ") || str.includes("30p") || str.includes("30 phút") || str.includes("30m")) return 30;
-
-  // Pattern: X ngày
-  const dayMatch = str.match(/([\d.]+)\s*(ngày|day|days)/i);
-  if (dayMatch) {
-    const d = parseFloat(dayMatch[1]);
-    if (!isNaN(d)) return Math.round(d * 480);
+  if (minutes >= 384) {
+    return { status: "busy", label: `Bận ${durationStr}`, variant: "warning" };
   }
-
-  // Pattern: X tiếng Y phút / Xh Ym
-  const hourMinMatch = str.match(/(\d+)\s*(?:tiếng|giờ|h)\s*(\d+)\s*(?:phút|p|m)?/i);
-  if (hourMinMatch) {
-    const h = parseInt(hourMinMatch[1], 10);
-    const m = parseInt(hourMinMatch[2], 10);
-    return h * 60 + m;
+  if (minutes >= 240) {
+    return { status: "busy", label: `Vừa tải ${durationStr}`, variant: "warning" };
   }
-
-  // Pattern: X tiếng / X giờ / Xh
-  const hourMatch = str.match(/([\d.]+)\s*(?:tiếng|giờ|h|hours?|hrs?)/i);
-  if (hourMatch) {
-    const h = parseFloat(hourMatch[1]);
-    if (!isNaN(h)) return Math.round(h * 60);
-  }
-
-  // Pattern: X phút / Xp / Xm
-  const minMatch = str.match(/([\d.]+)\s*(?:phút|p|m|mins?|minutes?)/i);
-  if (minMatch) {
-    const m = parseFloat(minMatch[1]);
-    if (!isNaN(m)) return Math.round(m);
-  }
-
-  // Number only fallback
-  const num = parseFloat(str);
-  if (!isNaN(num)) {
-    // If <= 12, assume hours; otherwise assume minutes
-    return num <= 12 ? Math.round(num * 60) : Math.round(num);
-  }
-
-  return 60;
+  return { status: "busy", label: `Đang làm ${durationStr}`, variant: "warning" };
 }

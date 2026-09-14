@@ -21,13 +21,15 @@ import { Text } from "@astryxdesign/core/Text";
 import { Card } from "@astryxdesign/core/Card";
 import { Button } from "@astryxdesign/core/Button";
 import { Avatar } from "@astryxdesign/core/Avatar";
+import { ProgressBar } from "@astryxdesign/core/ProgressBar";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { MemberTimelineGantt } from "@/components/members/member-timeline-gantt";
 import { TaskCreateModal } from "@/components/tasks/task-create-modal";
 import { updateTask } from "@/services/tasks.service";
 import { updateMember } from "@/services/members.service";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
-import { formatEffortDuration, formatTaskEffort } from "@/lib/effort";
+import { formatEffortDuration, formatTaskEffort, minutesToWorkdayPercent, getEffortStatus } from "@/lib/effort";
+import { getProjectColor } from "@/lib/project-colors";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Member, MemberStatus } from "@/types/member";
 import type { Project } from "@/types/project";
@@ -68,6 +70,11 @@ export function DevOpsWorkspace({
   const totalEffortMinutes = useMemo(() => {
     return inProgressTasks.reduce((sum, t) => sum + t.effortMinutes, 0);
   }, [inProgressTasks]);
+
+  const workloadStatus = useMemo(
+    () => getEffortStatus(totalEffortMinutes, inProgressTasks.length),
+    [totalEffortMinutes, inProgressTasks.length]
+  );
 
   const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
 
@@ -134,42 +141,23 @@ export function DevOpsWorkspace({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Workload Progress Card */}
         <Card elevation="low">
-          <div className="flex flex-col justify-between h-full gap-3 p-1">
-            <div className="flex items-center justify-between">
+          <VStack gap={3} className="h-full justify-between p-1">
+            <HStack gap={2} vAlign="center" className="justify-between">
               <span className="text-xs font-semibold text-neutral-400 flex items-center gap-1.5">
                 <Layers size={14} className="text-sky-400" />
                 Mức tải hiện tại
               </span>
-              <span
-                className={`text-xs font-bold px-2 py-0.5 rounded-full border ${totalEffortMinutes > 480
-                  ? "bg-rose-500/10 text-rose-400 border-rose-500/25"
-                  : totalEffortMinutes >= 288
-                    ? "bg-sky-500/10 text-sky-400 border-sky-500/25"
-                    : "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
-                  }`}
-              >
-                {totalEffortMinutes > 480 ? "Quá tải" : totalEffortMinutes >= 288 ? "Vừa tải" : "Rảnh việc"}
-              </span>
-            </div>
-
-            <div className="flex items-baseline gap-2">
-              <span
-                className={`text-2xl font-black ${totalEffortMinutes > 480 ? "text-rose-400" : totalEffortMinutes >= 288 ? "text-sky-300" : "text-emerald-400"
-                  }`}
-              >
-                {formatEffortDuration(totalEffortMinutes)}
-              </span>
               <span className="text-xs text-neutral-500 font-medium">/ 8h dung lượng</span>
-            </div>
+            </HStack>
 
-            <div className="w-full h-2 rounded-full bg-white/[0.06] overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all ${totalEffortMinutes > 480 ? "bg-rose-500" : totalEffortMinutes >= 288 ? "bg-sky-500" : "bg-emerald-500"
-                  }`}
-                style={{ width: `${Math.min((totalEffortMinutes / 480) * 100, 100)}%` }}
-              />
-            </div>
-          </div>
+            <ProgressBar
+              label={workloadStatus.label}
+              value={Math.min(minutesToWorkdayPercent(totalEffortMinutes), 100)}
+              hasValueLabel
+              formatValueLabel={() => formatEffortDuration(totalEffortMinutes)}
+              variant={workloadStatus.variant}
+            />
+          </VStack>
         </Card>
 
         {/* In Progress Tasks */}
@@ -180,10 +168,12 @@ export function DevOpsWorkspace({
               Đang thực hiện
             </span>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-neutral-100">{inProgressTasks.length}</span>
+              <Text type="display-3" weight="semibold" hasTabularNumbers className="text-neutral-100">
+                {inProgressTasks.length}
+              </Text>
               <span className="text-xs text-neutral-500">nhiệm vụ active</span>
             </div>
-            <span className="text-[11px] text-neutral-400">
+            <span className="text-sm text-neutral-400">
               {inProgressTasks.length === 0 ? "Chưa có task nào đang chạy" : `Tổng cộng ${formatEffortDuration(totalEffortMinutes)} effort`}
             </span>
           </div>
@@ -197,10 +187,12 @@ export function DevOpsWorkspace({
               Kế hoạch tiếp theo
             </span>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-purple-300">{plannedTasks.length}</span>
+              <Text type="display-3" weight="semibold" hasTabularNumbers className="text-purple-300">
+                {plannedTasks.length}
+              </Text>
               <span className="text-xs text-neutral-500">nhiệm vụ chờ sprint</span>
             </div>
-            <span className="text-[11px] text-neutral-400">
+            <span className="text-sm text-neutral-400">
               {plannedTasks.length} task đã lên lịch thực hiện
             </span>
           </div>
@@ -218,17 +210,19 @@ export function DevOpsWorkspace({
               {overdueTasks.length > 0 ? "Cảnh báo trễ hạn" : "Đã hoàn thành"}
             </span>
             <div className="flex items-baseline gap-2">
-              <span
-                className={`text-2xl font-black ${overdueTasks.length > 0 ? "text-rose-400" : "text-emerald-300"
-                  }`}
+              <Text
+                type="display-3"
+                weight="semibold"
+                hasTabularNumbers
+                className={overdueTasks.length > 0 ? "text-rose-400" : "text-emerald-300"}
               >
                 {overdueTasks.length > 0 ? overdueTasks.length : doneTasks.length}
-              </span>
+              </Text>
               <span className="text-xs text-neutral-500">
                 {overdueTasks.length > 0 ? "cần xử lý gấp" : "nhiệm vụ đã xong"}
               </span>
             </div>
-            <span className="text-[11px] text-neutral-400">
+            <span className="text-sm text-neutral-400">
               {overdueTasks.length > 0
                 ? "Có task quá hạn dự kiến!"
                 : `${doneTasks.length} task đã bàn giao`}
@@ -299,7 +293,7 @@ export function DevOpsWorkspace({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               {inProgressTasks.map((task) => {
                 const project = projectMap.get(task.projectId);
-                const projColor = project?.color || "#38bdf8";
+                const projColor = getProjectColor(project?.color);
                 const overdue = isOverdue(task);
                 const isUpdating = updatingTaskId === task.id;
 
@@ -353,7 +347,7 @@ export function DevOpsWorkspace({
 
                       {/* Action buttons */}
                       <div className="flex items-center justify-between pt-1 border-t border-white/[0.04]">
-                        <span className="text-[11px] text-neutral-500">
+                        <span className="text-sm text-neutral-500">
                           {task.source === "ai_chat" ? "Tạo qua AI Chat" : "Nhập thủ công"}
                         </span>
 
@@ -389,7 +383,7 @@ export function DevOpsWorkspace({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               {plannedTasks.map((task) => {
                 const project = projectMap.get(task.projectId);
-                const projColor = project?.color || "#a855f7";
+                const projColor = getProjectColor(project?.color);
                 const isUpdating = updatingTaskId === task.id;
 
                 return (
@@ -531,16 +525,16 @@ export function DevOpsWorkspace({
                       <Avatar name={mate.name} src={mate.photoURL ?? undefined} size="sm" tooltip={false} />
 
                       <div className="min-w-0">
-                        <Link href={`/members/${mate.id}`} className="hover:underline font-semibold text-xs text-neutral-200">
+                        <Link href={`/members/${mate.id}`} className="hover:underline font-semibold text-sm text-neutral-200">
                           {mate.name}
                         </Link>
-                        <div className="text-[11px] text-neutral-500 truncate">
+                        <div className="text-xs text-neutral-500 truncate">
                           {mate.skills.slice(0, 2).join(", ") || "DevOps"}
                         </div>
                       </div>
                     </HStack>
 
-                    <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span className="px-2 py-0.5 rounded-md text-sm font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                       {formatEffortDuration(mate.effortMinutes)} tải
                     </span>
                   </div>

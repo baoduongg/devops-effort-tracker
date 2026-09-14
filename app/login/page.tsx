@@ -10,10 +10,22 @@ import { Text } from "@astryxdesign/core/Text";
 import { Button } from "@astryxdesign/core/Button";
 import { TextInput } from "@astryxdesign/core/TextInput";
 import { Divider } from "@astryxdesign/core/Divider";
+import { Link } from "@astryxdesign/core/Link";
 import { signInWithGoogle, signInWithEmailPassword } from "@/services/auth.service";
 import { useAuthStore } from "@/store/auth.store";
 
 type AuthAction = "email" | "google" | null;
+
+function GoogleIcon({ size = 16 }: { size?: number }): React.JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <path fill="#4285F4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.5v2.9h3.7c2.2-2 3.4-5 3.4-8.6z" />
+      <path fill="#34A853" d="M12 24c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1-3 0-5.6-2-6.5-4.8H1.7v3A12 12 0 0 0 12 24z" />
+      <path fill="#FBBC05" d="M5.5 14.6a7.2 7.2 0 0 1 0-4.6v-3H1.7a12 12 0 0 0 0 10.6z" />
+      <path fill="#EA4335" d="M12 4.8c1.7 0 3.2.6 4.4 1.7l3.3-3.3A11.6 11.6 0 0 0 12 0 12 12 0 0 0 1.7 6l3.8 3a7.1 7.1 0 0 1 6.5-4.2z" />
+    </svg>
+  );
+}
 
 function firebaseLoginErrorMessage(error: unknown): string {
   const code = (error as { code?: string })?.code;
@@ -97,25 +109,25 @@ export default function LoginPage(): React.JSX.Element {
       >
         <span
           aria-hidden
-          className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[350px] rounded-full pointer-events-none"
+          className="login-blob absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[350px] rounded-full pointer-events-none"
           style={{ background: "rgba(61,123,255,0.14)", filter: "blur(100px)" }}
         />
         <span
           aria-hidden
-          className="absolute bottom-1/4 left-1/2 -translate-x-1/2 translate-y-1/2 w-[400px] h-[300px] rounded-full pointer-events-none"
+          className="login-blob-reverse absolute bottom-1/4 left-1/2 -translate-x-1/2 translate-y-1/2 w-[400px] h-[300px] rounded-full pointer-events-none"
           style={{ background: "rgba(124,92,255,0.10)", filter: "blur(100px)" }}
         />
 
         <VStack gap={4} hAlign="center" className="w-full max-w-sm relative z-10 text-center">
           <div className="relative">
-            <div className="w-14 h-14 rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center text-accent shadow-xl">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center text-white shadow-xl">
               <ShieldCheck size={28} strokeWidth={2.2} />
             </div>
             <div className="absolute -inset-1 rounded-xl border-2 border-accent/30 border-t-accent animate-spin" />
           </div>
 
           <VStack gap={1} hAlign="center">
-            <Heading level={1}>DevOps Tracker</Heading>
+            <Heading level={1}>DevOps Effort Hub</Heading>
             <HStack gap={2} vAlign="center" className="text-secondary text-sm mt-2">
               <Loader2 size={15} className="animate-spin text-accent shrink-0" />
               <span>{user ? "Đang chuyển đến Dashboard..." : "Đang kiểm tra phiên đăng nhập..."}</span>
@@ -135,24 +147,33 @@ export default function LoginPage(): React.JSX.Element {
     >
       <span
         aria-hidden
-        className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[350px] rounded-full pointer-events-none"
-        style={{ background: "rgba(61,123,255,0.14)", filter: "blur(100px)" }}
+        className="login-blob absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[820px] h-[820px] rounded-full pointer-events-none"
+        style={{
+          background: "radial-gradient(circle, rgba(61,123,255,0.30), rgba(61,123,255,0) 62%)",
+          filter: "blur(30px)",
+        }}
       />
       <span
         aria-hidden
-        className="absolute bottom-1/4 left-1/2 -translate-x-1/2 translate-y-1/2 w-[400px] h-[300px] rounded-full pointer-events-none"
-        style={{ background: "rgba(124,92,255,0.10)", filter: "blur(100px)" }}
+        className="login-blob-reverse absolute top-1/2 left-1/2 -translate-x-[calc(50%+260px)] translate-y-[calc(-50%+220px)] w-[620px] h-[620px] rounded-full pointer-events-none"
+        style={{
+          background: "radial-gradient(circle, rgba(124,92,255,0.22), rgba(124,92,255,0) 65%)",
+          filter: "blur(30px)",
+        }}
       />
 
       <div className="w-full max-w-sm relative z-10">
-        <Card elevation="high" padding={2}>
-          <VStack gap={5} hAlign="center" className="py-2">
-            <div className="w-12 h-12 rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center text-accent shadow-lg">
-              <ShieldCheck size={24} strokeWidth={2.2} />
-            </div>
+        <Card elevation="high" padding={8}>
+          <VStack gap={5}>
+            <HStack gap={2} vAlign="center">
+              <div className="w-[30px] h-[30px] rounded-lg bg-gradient-to-br from-accent to-purple-500 flex items-center justify-center text-white shadow-lg shrink-0">
+                <ShieldCheck size={16} strokeWidth={2.2} />
+              </div>
+              <Text weight="semibold">DevOps Effort Hub</Text>
+            </HStack>
 
-            <VStack gap={1} hAlign="center" className="text-center">
-              <Heading level={1}>DevOps Tracker</Heading>
+            <VStack gap={1}>
+              <Heading level={1}>Đăng nhập</Heading>
               <Text type="supporting">
                 Theo dõi phân bổ nguồn lực, tải công việc và lịch trình của team DevOps.
               </Text>
@@ -176,27 +197,45 @@ export default function LoginPage(): React.JSX.Element {
             )}
 
             <VStack gap={3} width="100%">
-              <TextInput
-                type="email"
-                label="Email"
-                value={email}
-                onChange={setEmail}
-                placeholder="ban@congty.com"
-                isDisabled={isAuthenticating}
-                width="100%"
-              />
-              <TextInput
-                type="password"
-                label="Mật khẩu"
-                value={password}
-                onChange={setPassword}
-                placeholder="Nhập mật khẩu"
-                isDisabled={isAuthenticating}
-                onEnter={handleEmailPasswordSignIn}
-                status={loginError ? { type: "error", message: loginError } : undefined}
-                width="100%"
-              />
+              <VStack gap={1} width="100%">
+                <Text type="supporting" size="xsm" color="secondary" className="uppercase tracking-wide">
+                  Email
+                </Text>
+                <TextInput
+                  type="email"
+                  label="Email"
+                  isLabelHidden
+                  value={email}
+                  onChange={setEmail}
+                  placeholder="ban@congty.com"
+                  isDisabled={isAuthenticating}
+                  width="100%"
+                />
+              </VStack>
+              <VStack gap={1} width="100%">
+                <Text type="supporting" size="xsm" color="secondary" className="uppercase tracking-wide">
+                  Mật khẩu
+                </Text>
+                <TextInput
+                  type="password"
+                  label="Mật khẩu"
+                  isLabelHidden
+                  value={password}
+                  onChange={setPassword}
+                  placeholder="Nhập mật khẩu"
+                  isDisabled={isAuthenticating}
+                  onEnter={handleEmailPasswordSignIn}
+                  status={loginError ? { type: "error", message: loginError } : undefined}
+                  width="100%"
+                />
+              </VStack>
             </VStack>
+
+            <HStack width="100%" hAlign="end">
+              <Link href="#" isStandalone>
+                Quên mật khẩu?
+              </Link>
+            </HStack>
 
             <VStack gap={3} width="100%">
               <Button
@@ -220,7 +259,7 @@ export default function LoginPage(): React.JSX.Element {
             <VStack gap={2} width="100%">
               <Button
                 label={authAction === "google" ? "Đang kết nối Google..." : "Đăng nhập với Google"}
-                icon={authAction === "google" ? <Loader2 size={15} className="animate-spin" /> : undefined}
+                icon={authAction === "google" ? <Loader2 size={15} className="animate-spin" /> : <GoogleIcon />}
                 onClick={handleGoogleSignIn}
                 variant="secondary"
                 width="100%"
@@ -228,7 +267,7 @@ export default function LoginPage(): React.JSX.Element {
               />
             </VStack>
 
-            <HStack gap={1.5} vAlign="center" className="pt-1">
+            <HStack gap={2} vAlign="center" hAlign="center" width="100%" className="-mt-2">
               <ShieldCheck size={13} className="text-success" />
               <Text type="supporting" size="sm" color="disabled">
                 Bảo mật dữ liệu Firebase &amp; AI Grounding

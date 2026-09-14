@@ -55,5 +55,11 @@ export const appTheme = defineTheme({
         color: "#EAF0FF",
       },
     },
+    button: {
+      "variant:secondary": {
+        backgroundColor: "var(--color-background-muted)",
+        borderColor: "var(--color-border-emphasized)",
+      },
+    },
   },
 });

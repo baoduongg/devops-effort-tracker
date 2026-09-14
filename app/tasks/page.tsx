@@ -24,6 +24,7 @@ import { getProjects } from "@/services/projects.service";
 import { useAuthStore } from "@/store/auth.store";
 import { isOverdue } from "@/lib/overdue";
 import { formatTaskEffort } from "@/lib/effort";
+import { sortByDateDesc } from "@/lib/date";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Member } from "@/types/member";
 import type { Project } from "@/types/project";
@@ -97,7 +98,7 @@ export default function TasksPage(): React.JSX.Element {
         const matchesMember = memberFilter === "all" || t.memberId === memberFilter;
         return matchesQuery && matchesStatus && matchesProject && matchesMember;
       })
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      .sort(sortByDateDesc("updatedAt"));
   }, [tasks, query, statusFilter, projectFilter, memberFilter]);
 
   async function handleTaskUpdated(): Promise<void> {

@@ -27,7 +27,7 @@ export function ClarificationCard({ text, clarification, onSelectCandidate }: Cl
         </HStack>
 
         {text && (
-          <Markdown density="compact" autolink="gfm">
+          <Markdown autolink="gfm">
             {text}
           </Markdown>
         )}

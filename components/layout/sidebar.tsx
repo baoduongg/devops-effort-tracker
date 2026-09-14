@@ -89,7 +89,7 @@ export function Sidebar(): React.JSX.Element {
         header={
           <SideNavHeading
             icon={<NavIcon icon={<Activity size={16} strokeWidth={2.25} />} />}
-            heading="DevOps Tracker"
+            heading="DevOps Effort Hub"
             headingHref="/dashboard"
           />
         }

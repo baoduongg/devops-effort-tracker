@@ -11,8 +11,6 @@ export const formattedEntrySchema = z.object({
   suggestionNote: z.string().nullable().optional(),
 });
 
-export type FormattedEntrySchema = z.infer<typeof formattedEntrySchema>;
-
 export const taskChangeProposalSchema = z.object({
   action: z.enum(["update", "delete"]),
   taskId: z.string().min(1),
@@ -28,5 +26,3 @@ export const taskChangeProposalSchema = z.object({
     })
     .default({}),
 });
-
-export type TaskChangeProposalSchema = z.infer<typeof taskChangeProposalSchema>;

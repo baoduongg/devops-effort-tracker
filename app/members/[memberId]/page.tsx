@@ -23,6 +23,8 @@ import { Card } from "@astryxdesign/core/Card";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { AlertDialog } from "@astryxdesign/core/AlertDialog";
+import { Token } from "@astryxdesign/core/Token";
+import { StatusBadge } from "@/components/dashboard/status-badge";
 import { MemberForm } from "@/components/members/member-form";
 import { MemberTimelineGantt } from "@/components/members/member-timeline-gantt";
 import { MemberTaskBreakdown } from "@/components/members/member-task-breakdown";
@@ -32,59 +34,10 @@ import { getTasksByMember, deleteTask } from "@/services/tasks.service";
 import { getProjects } from "@/services/projects.service";
 import { useAuthStore } from "@/store/auth.store";
 import { isOverdue } from "@/lib/overdue";
-import { formatEffortDuration } from "@/lib/effort";
-import type { Member, MemberInput, MemberStatus } from "@/types/member";
+import { formatEffortDuration, getEffortStatus } from "@/lib/effort";
+import type { Member, MemberInput } from "@/types/member";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
-
-
-// Thresholds scaled from an 8h/480m workday
-function getMemberBandwidthInfo(effortMinutes: number, activeCount: number): {
-  status: MemberStatus;
-  label: string;
-  colorClass: string;
-  dotColor: string;
-} {
-  const durationStr = formatEffortDuration(effortMinutes);
-  if (activeCount === 0 || effortMinutes === 0) {
-    return {
-      status: "available",
-      label: "Trống việc (rảnh)",
-      colorClass: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-      dotColor: "bg-emerald-400",
-    };
-  }
-  if (effortMinutes > 480) {
-    return {
-      status: "overloaded",
-      label: `Quá tải (${durationStr})`,
-      colorClass: "text-rose-400 bg-rose-500/10 border-rose-500/20",
-      dotColor: "bg-rose-400",
-    };
-  }
-  if (effortMinutes >= 384) {
-    return {
-      status: "busy",
-      label: `Bận (${durationStr})`,
-      colorClass: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-      dotColor: "bg-amber-400",
-    };
-  }
-  if (effortMinutes >= 240) {
-    return {
-      status: "busy",
-      label: `Vừa tải (${durationStr})`,
-      colorClass: "text-sky-400 bg-sky-500/10 border-sky-500/20",
-      dotColor: "bg-sky-400",
-    };
-  }
-  return {
-    status: "busy",
-    label: `Đang làm việc (${durationStr})`,
-    colorClass: "text-sky-400 bg-sky-500/10 border-sky-500/20",
-    dotColor: "bg-sky-400",
-  };
-}
 
 export default function MemberDetailPage(): React.JSX.Element {
   const params = useParams<{ memberId: string }>();
@@ -164,7 +117,7 @@ export default function MemberDetailPage(): React.JSX.Element {
   }, [inProgressTasks]);
 
   const bandwidth = useMemo(() => {
-    return getMemberBandwidthInfo(computedEffort, inProgressTasks.length);
+    return getEffortStatus(computedEffort, inProgressTasks.length);
   }, [computedEffort, inProgressTasks.length]);
 
   const user = useAuthStore((state) => state.user);
@@ -224,35 +177,19 @@ export default function MemberDetailPage(): React.JSX.Element {
 
                 {/* Role Badge */}
                 {isLeaderRole ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-gradient-to-r from-amber-500/15 via-purple-500/15 to-amber-500/10 text-amber-300 border border-amber-500/30 shadow-sm">
-                    <Crown size={12} className="text-amber-400" />
-                    Trưởng nhóm (Leader)
-                  </span>
+                  <Token label="Trưởng nhóm (Leader)" color="orange" icon={<Crown size={12} />} />
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-medium bg-sky-500/10 text-sky-300 border border-sky-500/20">
-                    <Cpu size={12} className="text-sky-400" />
-                    Kỹ sư DevOps
-                  </span>
+                  <Token label="Kỹ sư DevOps" color="blue" icon={<Cpu size={12} />} />
                 )}
 
                 {/* Bandwidth Status Badge */}
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${bandwidth.colorClass}`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${bandwidth.dotColor}`} />
-                  {bandwidth.label}
-                </span>
+                <StatusBadge status={bandwidth.status} />
               </div>
               <Text type="supporting">{member.email}</Text>
               {member.skills.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-1">
                   {member.skills.map((skill) => (
-                    <span
-                      key={skill}
-                      className="px-2 py-0.5 text-xs rounded-md bg-white/5 border border-white/10 text-neutral-300"
-                    >
-                      {skill}
-                    </span>
+                    <Token key={skill} label={skill} size="sm" />
                   ))}
                 </div>
               )}
@@ -262,31 +199,37 @@ export default function MemberDetailPage(): React.JSX.Element {
           {/* Quick Stats Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-white/[0.02] p-3 rounded-xl border border-white/5 lg:min-w-[420px]">
             <div className="flex flex-col">
-              <span className="text-[11px] text-neutral-400 flex items-center gap-1">
+              <span className="text-sm text-neutral-400 flex items-center gap-1">
                 <Layers size={13} className="text-sky-400" />
                 Tổng tải
               </span>
-              <span className="text-lg font-bold text-sky-300">{formatEffortDuration(computedEffort)}</span>
+              <Text type="large" weight="semibold" hasTabularNumbers className="text-sky-300">
+                {formatEffortDuration(computedEffort)}
+              </Text>
             </div>
 
             <div className="flex flex-col">
-              <span className="text-[11px] text-neutral-400 flex items-center gap-1">
+              <span className="text-sm text-neutral-400 flex items-center gap-1">
                 <Clock size={13} className="text-sky-400" />
                 Đang làm
               </span>
-              <span className="text-lg font-bold text-neutral-100">{inProgressTasks.length} task</span>
+              <Text type="large" weight="semibold" hasTabularNumbers className="text-neutral-100">
+                {inProgressTasks.length} task
+              </Text>
             </div>
 
             <div className="flex flex-col">
-              <span className="text-[11px] text-neutral-400 flex items-center gap-1">
+              <span className="text-sm text-neutral-400 flex items-center gap-1">
                 <Calendar size={13} className="text-purple-400" />
                 Kế hoạch
               </span>
-              <span className="text-lg font-bold text-purple-300">{plannedTasks.length} task</span>
+              <Text type="large" weight="semibold" hasTabularNumbers className="text-purple-300">
+                {plannedTasks.length} task
+              </Text>
             </div>
 
             <div className="flex flex-col">
-              <span className="text-[11px] text-neutral-400 flex items-center gap-1">
+              <span className="text-sm text-neutral-400 flex items-center gap-1">
                 {overdueTasks.length > 0 ? (
                   <AlertTriangle size={13} className="text-rose-400" />
                 ) : (
@@ -294,13 +237,14 @@ export default function MemberDetailPage(): React.JSX.Element {
                 )}
                 {overdueTasks.length > 0 ? "Trễ hạn" : "Đã xong"}
               </span>
-              <span
-                className={`text-lg font-bold ${
-                  overdueTasks.length > 0 ? "text-rose-400" : "text-emerald-300"
-                }`}
+              <Text
+                type="large"
+                weight="semibold"
+                hasTabularNumbers
+                className={overdueTasks.length > 0 ? "text-rose-400" : "text-emerald-300"}
               >
                 {overdueTasks.length > 0 ? `${overdueTasks.length} task` : `${doneTasks.length} task`}
-              </span>
+              </Text>
             </div>
           </div>
         </div>

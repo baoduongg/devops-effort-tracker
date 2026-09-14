@@ -1,3 +1,17 @@
+/** Formats an ISO date string as a short relative label: "Today", "Yesterday", "3d ago", or a date. */
+export function formatRelativeTime(iso: string): string {
+  const date = new Date(iso);
+  const now = new Date();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(now) - startOfDay(date)) / dayMs);
+
+  if (diffDays <= 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 export function toIsoString(value: unknown): string {
   if (!value) return new Date().toISOString();
   if (typeof value === "string") return value;
@@ -6,6 +20,11 @@ export function toIsoString(value: unknown): string {
     return (value as { toDate: () => Date }).toDate().toISOString();
   }
   return new Date().toISOString();
+}
+
+/** Sort comparator: newest first, by an ISO-string date field. */
+export function sortByDateDesc<T>(field: keyof T): (a: T, b: T) => number {
+  return (a, b) => new Date(b[field] as string).getTime() - new Date(a[field] as string).getTime();
 }
 
 /** Formats a date object to YYYY-MM-DD in local time */

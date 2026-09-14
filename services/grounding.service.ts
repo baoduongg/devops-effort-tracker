@@ -1,7 +1,7 @@
 import { getMembers } from "@/services/members.service";
 import { getAllTasks } from "@/services/tasks.service";
 import { getProjects } from "@/services/projects.service";
-import { formatTaskEffort } from "@/lib/effort";
+import { formatTaskEffort, getEffortStatus } from "@/lib/effort";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
 
 export interface GroundingSnapshot {
@@ -55,7 +55,7 @@ export async function buildGroundingSnapshot(restrictToMemberId?: string): Promi
       id: m.id,
       name: m.name,
       role: m.role ?? "devops",
-      status: computedEffortMinutes > 480 ? "overloaded" : computedEffortMinutes > 288 ? "busy" : "available",
+      status: getEffortStatus(computedEffortMinutes, inProgress.length).status,
       totalEffortMinutes: computedEffortMinutes,
       skills: m.skills,
       activeTasks: inProgress.map((t) => ({

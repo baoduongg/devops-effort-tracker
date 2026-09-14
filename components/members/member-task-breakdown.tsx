@@ -7,6 +7,8 @@ import { Grid } from "@astryxdesign/core/Grid";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
 import { formatTaskEffort, formatEffortDuration } from "@/lib/effort";
+import { getProjectColor } from "@/lib/project-colors";
+import { sortByDateDesc } from "@/lib/date";
 import type { Task } from "@/types/task";
 import type { Project } from "@/types/project";
 
@@ -71,7 +73,7 @@ export function MemberTaskBreakdown({
   const plannedTasks = tasks.filter((t) => t.status === "planned");
   const doneTasks = tasks
     .filter((t) => t.status === "done")
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    .sort(sortByDateDesc("updatedAt"));
 
   const totalInProgressMinutes = inProgressTasks.reduce((s, t) => s + t.effortMinutes, 0);
 
@@ -107,7 +109,7 @@ export function MemberTaskBreakdown({
                 const project = projectMap.get(task.projectId);
                 const overdue = isOverdue(task);
                 const overdueDaysCount = overdue ? daysOverdue(task.endDate as string) : 0;
-                const projColor = project?.color ?? "#3b82f6";
+                const projColor = getProjectColor(project?.color);
 
                 return (
                   <div
@@ -122,7 +124,7 @@ export function MemberTaskBreakdown({
                       <div className="flex flex-col gap-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span
-                            className="text-[11px] font-bold px-2 py-0.5 rounded-md truncate"
+                            className="text-sm font-bold px-2 py-0.5 rounded-md truncate"
                             style={{
                               backgroundColor: `${projColor}25`,
                               color: projColor,
@@ -195,7 +197,7 @@ export function MemberTaskBreakdown({
             <VStack gap={3}>
               {plannedTasks.map((task) => {
                 const project = projectMap.get(task.projectId);
-                const projColor = project?.color ?? "#a855f7";
+                const projColor = getProjectColor(project?.color);
 
                 return (
                   <div
@@ -205,7 +207,7 @@ export function MemberTaskBreakdown({
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex flex-col gap-1 min-w-0">
                         <span
-                          className="text-[11px] font-medium px-2 py-0.5 rounded-md self-start"
+                          className="text-sm font-medium px-2 py-0.5 rounded-md self-start"
                           style={{
                             backgroundColor: `${projColor}20`,
                             color: projColor,
@@ -282,7 +284,7 @@ export function MemberTaskBreakdown({
                     </div>
 
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      <span className="text-neutral-500 text-[11px]">
+                      <span className="text-neutral-500 text-sm">
                         {formatDate(task.updatedAt)}
                       </span>
                       <TaskActions task={task} canManage={canManage} onEditTask={onEditTask} onDeleteTask={onDeleteTask} />

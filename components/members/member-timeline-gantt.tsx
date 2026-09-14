@@ -21,8 +21,10 @@ import { Card } from "@astryxdesign/core/Card";
 import { Button } from "@astryxdesign/core/Button";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
+import { GanttDayHeader } from "@/components/dashboard/gantt-day-header";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
 import { formatTaskEffort } from "@/lib/effort";
+import { getProjectColor } from "@/lib/project-colors";
 import { parseDateLocal, calculateDefaultEndDate } from "@/lib/date";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -119,7 +121,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                 <Text weight="semibold" size="base">
                   Lịch trình công việc
                 </Text>
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/[0.06] text-neutral-300 font-medium">
+                <span className="text-sm px-2 py-0.5 rounded-full bg-white/[0.06] text-neutral-300 font-medium">
                   {validTasks.length} task trong kỳ
                 </span>
               </HStack>
@@ -175,28 +177,8 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
           <div className="overflow-x-auto">
             <div className="min-w-[760px]">
               {/* Days Header */}
-              <div className="grid grid-cols-14 gap-1 text-center border-b border-white/10 pb-2">
-                {days.map((day, idx) => {
-                  const isToday = day.toDateString() === new Date().toDateString();
-                  const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-                  return (
-                    <div
-                      key={idx}
-                      className={`text-xs py-1.5 rounded-lg flex flex-col items-center justify-center transition-all ${
-                        isToday
-                          ? "bg-sky-500/20 text-sky-300 font-bold border border-sky-500/40 shadow-sm"
-                          : isWeekend
-                          ? "text-neutral-500 bg-white/[0.01]"
-                          : "text-neutral-300 bg-white/[0.02]"
-                      }`}
-                    >
-                      <span className="text-[10px] uppercase font-semibold opacity-70">
-                        {day.toLocaleDateString("en-US", { weekday: "narrow" })}
-                      </span>
-                      <span className="text-xs">{day.getDate()}</span>
-                    </div>
-                  );
-                })}
+              <div className="border-b border-white/10 pb-2">
+                <GanttDayHeader days={days} />
               </div>
 
               {/* Task Timeline Bars Container */}
@@ -247,7 +229,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                     // Hide if completely outside current window
                     if (taskEnd < windowStartMs || taskStart > windowEndMs) return null;
 
-                    const color = project?.color ?? "#38bdf8";
+                    const color = getProjectColor(project?.color);
                     const isHovered = hoveredTaskId === task.id;
 
                     return (
@@ -276,7 +258,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                           <div className="flex items-center gap-1.5 min-w-0 pr-1 truncate">
                             {isDone && <CheckCircle2 size={13} className="text-white flex-shrink-0" />}
                             {isPlanned && <Clock size={13} className="text-white/80 flex-shrink-0" />}
-                            <span className="font-bold text-[11px] px-1 py-0.2 rounded bg-black/25 flex-shrink-0">
+                            <span className="font-bold text-sm px-1 py-0.2 rounded bg-black/25 flex-shrink-0">
                               {project?.name ?? "Project"}
                             </span>
                             <span className="truncate font-medium text-xs drop-shadow-sm">
@@ -285,7 +267,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                           </div>
 
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-black/40 font-bold">
+                            <span className="text-sm px-1.5 py-0.5 rounded bg-black/40 font-bold">
                               {formatTaskEffort(task)}
                             </span>
                           </div>
@@ -310,7 +292,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                   Chi tiết công việc trong khoảng thời gian này:
                 </span>
               </HStack>
-              <span className="text-[11px] text-neutral-400">
+              <span className="text-sm text-neutral-400">
                 (Nhấn vào task để xem chi tiết)
               </span>
             </div>
@@ -323,7 +305,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                 {validTasks.map((task) => {
                   const project = projectMap.get(task.projectId);
-                  const projColor = project?.color ?? "#38bdf8";
+                  const projColor = getProjectColor(project?.color);
                   const statusInfo = STATUS_LABELS[task.status] || STATUS_LABELS.in_progress;
                   const overdue = isOverdue(task);
                   const isHovered = hoveredTaskId === task.id;
@@ -345,7 +327,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span
-                            className="text-[11px] font-bold px-2 py-0.5 rounded-md truncate"
+                            className="text-sm font-bold px-2 py-0.5 rounded-md truncate"
                             style={{
                               backgroundColor: `${projColor}20`,
                               color: projColor,
@@ -355,7 +337,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                             {project?.name ?? "General"}
                           </span>
                           <span
-                            className={`text-[11px] font-medium px-2 py-0.5 rounded-md border ${statusInfo.bgClass} ${statusInfo.colorClass}`}
+                            className={`text-sm font-medium px-2 py-0.5 rounded-md border ${statusInfo.bgClass} ${statusInfo.colorClass}`}
                           >
                             {statusInfo.label}
                           </span>
@@ -392,12 +374,12 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                         </div>
 
                         {overdue ? (
-                          <span className="text-rose-400 font-semibold flex items-center gap-1 text-[11px]">
+                          <span className="text-rose-400 font-semibold flex items-center gap-1 text-sm">
                             <AlertTriangle size={11} />
                             Trễ hạn
                           </span>
                         ) : (
-                          <span className="text-sky-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-[11px] font-medium">
+                          <span className="text-sky-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-sm font-medium">
                             <Eye size={12} />
                             Xem
                           </span>
@@ -451,9 +433,9 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                 <span
                   className="px-2.5 py-1 rounded-lg text-xs font-bold border"
                   style={{
-                    backgroundColor: `${selectedProject?.color ?? "#38bdf8"}20`,
-                    color: selectedProject?.color ?? "#38bdf8",
-                    borderColor: `${selectedProject?.color ?? "#38bdf8"}40`,
+                    backgroundColor: `${getProjectColor(selectedProject?.color)}20`,
+                    color: getProjectColor(selectedProject?.color),
+                    borderColor: `${getProjectColor(selectedProject?.color)}40`,
                   }}
                 >
                   {selectedProject?.name ?? "General"}
@@ -514,7 +496,7 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                   <Info size={13} />
                   Mô tả chi tiết:
                 </span>
-                <div className="p-3 rounded-xl bg-white/[0.015] border border-white/[0.04] text-xs text-neutral-300 min-h-[60px] whitespace-pre-wrap leading-relaxed">
+                <div className="p-3 rounded-xl bg-white/[0.015] border border-white/[0.04] text-sm text-neutral-300 min-h-[60px] whitespace-pre-wrap leading-relaxed">
                   {selectedTask.description ? selectedTask.description : "Chưa có mô tả chi tiết cho công việc này."}
                 </div>
               </div>

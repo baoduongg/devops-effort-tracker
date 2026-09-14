@@ -10,7 +10,7 @@ export function ModeToggle(): React.JSX.Element {
   const setMode = useChatStore((state) => state.setMode);
 
   return (
-    <SegmentedControl label="Chat mode" value={mode} onChange={(v) => setMode(v as ChatMode)} layout="fill">
+    <SegmentedControl label="Chat mode" value={mode} onChange={(v) => setMode(v as ChatMode)} size="sm">
       <SegmentedControlItem value="devops" label="Log / Plan" icon={<NotebookPen size={14} strokeWidth={2} />} />
       <SegmentedControlItem value="leader" label="Ask" icon={<Search size={14} strokeWidth={2} />} />
     </SegmentedControl>

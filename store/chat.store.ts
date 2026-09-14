@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ChatMessage, ChatMode } from "@/types/chat";
+import type { ChatMessage, ChatMode, ChatThread } from "@/types/chat";
 
 export type AiProvider = "nvidia" | "claude";
 
@@ -19,18 +19,26 @@ interface ChatState {
   mode: ChatMode;
   aiProvider: AiProvider;
   messagesByMode: Record<ChatMode, ChatMessage[]>;
+  threadsByMode: Record<ChatMode, ChatThread[]>;
+  activeThreadIdByMode: Record<ChatMode, string | null>;
   setMode: (mode: ChatMode) => void;
   setAiProvider: (provider: AiProvider) => void;
   setMessages: (mode: ChatMode, messages: ChatMessage[]) => void;
   appendMessage: (mode: ChatMode, message: ChatMessage) => void;
   updateEntryConfirmed: (mode: ChatMode, chatLogId: string, confirmed: boolean) => void;
   updateProposalConfirmed: (mode: ChatMode, chatLogId: string, confirmed: boolean) => void;
+  setThreads: (mode: ChatMode, threads: ChatThread[]) => void;
+  addThread: (mode: ChatMode, thread: ChatThread) => void;
+  updateThreadTitle: (mode: ChatMode, threadId: string, title: string) => void;
+  setActiveThread: (mode: ChatMode, threadId: string | null) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
   mode: "devops",
   aiProvider: loadStoredProvider(),
   messagesByMode: { devops: [], leader: [] },
+  threadsByMode: { devops: [], leader: [] },
+  activeThreadIdByMode: { devops: null, leader: null },
   setMode: (mode) => set({ mode }),
   setAiProvider: (provider) => {
     try {
@@ -63,5 +71,22 @@ export const useChatStore = create<ChatState>((set) => ({
           m.role === "ai-proposal" && m.chatLogId === chatLogId ? { ...m, confirmed } : m
         ),
       },
+    })),
+  setThreads: (mode, threads) =>
+    set((state) => ({ threadsByMode: { ...state.threadsByMode, [mode]: threads } })),
+  addThread: (mode, thread) =>
+    set((state) => ({
+      threadsByMode: { ...state.threadsByMode, [mode]: [thread, ...state.threadsByMode[mode]] },
+    })),
+  updateThreadTitle: (mode, threadId, title) =>
+    set((state) => ({
+      threadsByMode: {
+        ...state.threadsByMode,
+        [mode]: state.threadsByMode[mode].map((t) => (t.id === threadId ? { ...t, title } : t)),
+      },
+    })),
+  setActiveThread: (mode, threadId) =>
+    set((state) => ({
+      activeThreadIdByMode: { ...state.activeThreadIdByMode, [mode]: threadId },
     })),
 }));
