@@ -342,28 +342,41 @@ export function resolveSlashCommand(text: string, currentMode: ChatMode): string
     return "Hiển thị danh sách các dự án hiện có, nhân sự phụ trách và tổng effort";
   }
 
+  // Anti-double-prefix guards: check both keyword tokens appear anywhere (any order) rather than
+  // requiring exact adjacency, so reordered args like "task giao cho Nam" are also recognized as
+  // already containing the verb+noun and don't get "Giao task " prepended again.
+  // Normalize to NFC first: `\b` word-boundary matching breaks on NFD-decomposed Vietnamese text
+  // (combining diacritics split off as separate chars), which macOS filenames/some IMEs/clipboard
+  // paste can deliver. Match against `args`, not `argsPart`, but still interpolate `argsPart`.
   if (matched.id === "coord-assign" && argsPart) {
-    if (/giao\s+task/i.test(argsPart)) return argsPart;
+    const args = argsPart.normalize("NFC");
+    if (/\bgiao\b/i.test(args) && /\btask\b/i.test(args)) return argsPart;
     return `Giao task ${argsPart}`;
   }
 
   if (matched.id === "coord-reassign" && argsPart) {
-    if (/chuyển\s+task/i.test(argsPart)) return argsPart;
+    const args = argsPart.normalize("NFC");
+    if (/\bchuyển\b/i.test(args) && /\btask\b/i.test(args)) return argsPart;
     return `Chuyển task ${argsPart}`;
   }
 
   if (matched.id === "coord-remove" && argsPart) {
-    if (/xóa\s+task/i.test(argsPart)) return argsPart;
+    const args = argsPart.normalize("NFC");
+    if (/\bxóa\b/i.test(args) && /\btask\b/i.test(args)) return argsPart;
     return `Xóa task ${argsPart}`;
   }
 
   if (matched.id === "coord-add" && argsPart) {
-    if (/lập\s+kế\s+hoạch/i.test(argsPart) || /thêm\s+task/i.test(argsPart)) return argsPart;
+    const args = argsPart.normalize("NFC");
+    const hasLapKeHoach = /\blập\b/i.test(args) && /\bkế\s+hoạch\b/i.test(args);
+    const hasThemTask = /\bthêm\b/i.test(args) && /\btask\b/i.test(args);
+    if (hasLapKeHoach || hasThemTask) return argsPart;
     return `Lập kế hoạch task ${argsPart}`;
   }
 
   if (matched.id === "coord-log" && argsPart) {
-    if (/log\s+công\s+việc/i.test(argsPart)) return argsPart;
+    const args = argsPart.normalize("NFC");
+    if (/\blog\b/i.test(args) && /\bcông\s+việc\b/i.test(args)) return argsPart;
     return `Log công việc: ${argsPart}`;
   }
 

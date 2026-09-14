@@ -108,7 +108,7 @@ const DEVOPS_ASK_PROMPT_SUGGESTIONS = [
   "Tiến độ các task của tôi hiện tại thế nào?",
 ];
 
-export function ChatBox(): React.JSX.Element {
+export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.JSX.Element {
   const mode = useChatStore((state) => state.mode);
   const setMode = useChatStore((state) => state.setMode);
   const aiProvider = useChatStore((state) => state.aiProvider);
@@ -172,7 +172,7 @@ export function ChatBox(): React.JSX.Element {
   // Load this member+mode's threads, defaulting to the most recently active one.
   useEffect(() => {
     let ignore = false;
-    const memberId = mode === "devops" ? user?.memberId : "leader";
+    const memberId = user?.memberId || user?.uid;
     if (!memberId) {
       return;
     }
@@ -193,7 +193,7 @@ export function ChatBox(): React.JSX.Element {
     return () => {
       ignore = true;
     };
-  }, [mode, user?.memberId, setThreads, setActiveThread]);
+  }, [mode, user?.memberId, user?.uid, setThreads, setActiveThread]);
 
   // Load the active thread's messages whenever it changes. Skipped for a thread this session
   // just created — its message list is already being built locally via appendMessage, and a
@@ -243,10 +243,16 @@ export function ChatBox(): React.JSX.Element {
 
   async function ensureActiveThreadId(firstMessageText: string): Promise<string> {
     if (activeThreadId) return activeThreadId;
-    const memberId = mode === "devops" ? user?.memberId || "leader" : "leader";
+    const memberId = user?.memberId || user?.uid || "";
     const newThreadId = await createThread({ memberId, mode, title: deriveThreadTitle(firstMessageText) });
-    const newThread = { id: newThreadId, memberId, mode, title: deriveThreadTitle(firstMessageText), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-    addThread(mode, newThread);
+    // The initial thread-list fetch (in flight since mount) can resolve after this create call and
+    // already include the new doc via setThreads — guard so the local prepend below doesn't then add
+    // a second, duplicate entry for the same id on top of it.
+    const alreadyLoaded = useChatStore.getState().threadsByMode[mode].some((t) => t.id === newThreadId);
+    if (!alreadyLoaded) {
+      const newThread = { id: newThreadId, memberId, mode, title: deriveThreadTitle(firstMessageText), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      addThread(mode, newThread);
+    }
     locallyCreatedThreadIds.current.add(newThreadId);
     setActiveThread(mode, newThreadId);
     return newThreadId;
@@ -789,7 +795,6 @@ export function ChatBox(): React.JSX.Element {
                 sendButton={
                   <ChatSendButton
                     isDisabled={(!text.trim() && !imageUrl) || thinking}
-                    onSend={() => handleSubmit()}
                   />
                 }
                 drawer={
@@ -827,12 +832,15 @@ export function ChatBox(): React.JSX.Element {
                     label="Nhập tin nhắn"
                     placeholder={
                       mode === "devops"
-                        ? "Gõ '/' để mở lệnh hoặc mô tả công việc (Dán Cmd/Ctrl+V ảnh)..."
-                        : "Gõ '/' để mở lệnh hoặc hỏi về nhân sự, phân bổ effort dự án..."
+                        ? compact
+                          ? "Mô tả công việc..."
+                          : "Gõ '/' để mở lệnh hoặc mô tả công việc (Dán Cmd/Ctrl+V ảnh)..."
+                        : compact
+                          ? "Hỏi về nhân sự, effort dự án..."
+                          : "Gõ '/' để mở lệnh hoặc hỏi về nhân sự, phân bổ effort dự án..."
                     }
                     value={text}
                     onChange={handleTextChange}
-                    onSubmit={(submittedText) => handleSubmit(submittedText)}
                     onKeyDown={(e) => {
                       if (isCommandPopupOpen && filteredCommands.length > 0) {
                         if (e.key === "ArrowDown") {

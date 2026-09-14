@@ -33,3 +33,35 @@ MORE CLI:
   swizzle <Name>     eject component source for deep customization
   upgrade --apply    run after any @astryxdesign/core bump
 <!-- ASTRYX:END -->
+
+## Subagent Team
+
+Solo-dev virtual team in `.claude/agents/`, 7 roles:
+
+1. **system-architect** — design/data-flow/module boundaries before code. Read-only.
+2. **backend-engineer** — API routes, service layer, types, leader/devops permission logic.
+3. **frontend-engineer** — components, pages, Zustand wiring, Astryx UI.
+4. **ai-feature-engineer** — AI Ask flow: `services/nvidia.service.ts`, `services/grounding.service.ts`, `app/api/ai/*`, prompt/validation/token limits.
+5. **code-reviewer** — reviews diffs for type safety, naming, service-layer separation, no placeholder code. Read-only, no edits.
+6. **qa-engineer** — test plans/cases, prioritizing leader/devops permission flows and AI Ask. No automated suite in this repo — manual plans plus `pnpm lint`/`pnpm build` checks.
+7. **debugger** — reproduce → isolate → fix. No guessing at fixes without a confirmed root cause.
+
+**Standard workflow for a new feature:**
+
+```
+system-architect (design)
+        │
+        ▼
+backend-engineer  +  frontend-engineer   (parallel)
+        │
+        ▼
+code-reviewer (review diff)
+        │
+        ▼
+qa-engineer (test plan/cases)
+        │
+        ▼
+debugger (only if a test fails or a bug is found)
+```
+
+For features touching AI Ask specifically, ai-feature-engineer runs alongside backend-engineer/frontend-engineer in the parallel step, owning `app/api/ai/*` prompt/grounding logic while backend-engineer owns any plain CRUD it depends on.

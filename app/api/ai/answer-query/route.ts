@@ -97,7 +97,34 @@ function detectSelfQueryTarget(query: string, askerRole: "leader" | "devops", cu
   return allMembers.find((m) => m.id === currentMemberId) ?? null;
 }
 
-function detectMemberQueryTarget(query: string): { isMemberQuery: boolean; rawTarget: string | null; isPlaceholder: boolean } {
+/**
+ * Normalizes for name comparison (diacritics/case-insensitive), mirrors findMemberByName's
+ * normalize() in members.service.ts.
+ */
+function normalizeForNameMatch(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Root-cause fix: MEMBER_QUERY_PATTERN only matches when a trigger word (task/tình hình/thành
+ * viên/...) appears immediately before the name, or the string starts with a trigger word. It
+ * misses subject-first phrasing like "Team Leader đang làm task gì?" where the name comes first
+ * and no trigger word precedes it. Since the trigger-word regex can't be generalized to catch
+ * "name anywhere" without false-positiving on every sentence, fall back to scanning for a known
+ * member's name as a whole-word match anywhere in the query — this is what actually lets
+ * FB-CHAT-04's self-only check run for subject-first questions.
+ */
+function detectMemberQueryTarget(
+  query: string,
+  allMembers: Member[] = []
+): { isMemberQuery: boolean; rawTarget: string | null; isPlaceholder: boolean } {
   const q = query.trim();
 
   // Unfilled placeholder e.g. "/status [Tên thành viên]" or "kế hoạch của [Tên thành viên]"
@@ -108,12 +135,28 @@ function detectMemberQueryTarget(query: string): { isMemberQuery: boolean; rawTa
   // /status template prompt: "Tình hình công việc, task đang làm và kế hoạch của XYZ ra sao?"
   const statusTplMatch = q.match(/Tình hình công việc,?\s*task đang làm và kế hoạch của\s+(.+?)(?:\s+ra sao\??|\?|$)/i);
   const rawMatch = statusTplMatch?.[1] ?? MEMBER_QUERY_PATTERN.exec(q)?.slice(1).find(Boolean);
-  if (!rawMatch) return { isMemberQuery: false, rawTarget: null, isPlaceholder: false };
+  if (rawMatch) {
+    const target = cleanMemberNameTarget(rawMatch);
+    if (!target) return { isMemberQuery: true, rawTarget: null, isPlaceholder: true };
+    if (isGeneralTeamKeyword(target) || target.length < 2) return { isMemberQuery: false, rawTarget: null, isPlaceholder: false };
+    return { isMemberQuery: true, rawTarget: target, isPlaceholder: false };
+  }
 
-  const target = cleanMemberNameTarget(rawMatch);
-  if (!target) return { isMemberQuery: true, rawTarget: null, isPlaceholder: true };
-  if (isGeneralTeamKeyword(target) || target.length < 2) return { isMemberQuery: false, rawTarget: null, isPlaceholder: false };
-  return { isMemberQuery: true, rawTarget: target, isPlaceholder: false };
+  // Subject-first fallback: no trigger word found, check if any known member's name appears
+  // anywhere in the query as a whole word (longest name first, so "Team Leader" wins over "Leader").
+  const qNorm = normalizeForNameMatch(q);
+  const sortedByLength = allMembers
+    .map((member) => ({ member, nameNorm: normalizeForNameMatch(member.name) }))
+    .sort((a, b) => b.nameNorm.length - a.nameNorm.length);
+  for (const { member, nameNorm } of sortedByLength) {
+    if (!nameNorm || nameNorm.length < 2) continue;
+    const wordBoundaryMatch = new RegExp(`(?:^|\\s)${nameNorm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\s|$)`).test(qNorm);
+    if (wordBoundaryMatch) {
+      return { isMemberQuery: true, rawTarget: member.name, isPlaceholder: false };
+    }
+  }
+
+  return { isMemberQuery: false, rawTarget: null, isPlaceholder: false };
 }
 
 /**
@@ -198,7 +241,7 @@ function renderClarificationAnswer(clarification: ClarificationRequest): string 
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const body = await request.json();
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const { question, query, memberId, mode, askerRole, provider, threadId } = body as {
     question?: string;
     query?: string;
@@ -433,7 +476,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // 5. Check if user is specifically querying information of a member
-    const memberQueryCheck = detectMemberQueryTarget(effectiveQuery);
+    const memberQueryCheck = detectMemberQueryTarget(effectiveQuery, allMembers);
     if (memberQueryCheck.isMemberQuery) {
       if (memberQueryCheck.isPlaceholder) {
         const answer = `⚠️ **Chưa nhập tên thành viên cần tra cứu**\n\nVui lòng nhập tên thành viên cụ thể (Ví dụ: \`/status Bảo\` hoặc \`Tình hình công việc của Bảo ra sao?\`).\n\n📋 **Danh sách thành viên hiện có trong team:**\n${renderMemberList(allMembers, snapshot.members, currentAskerRole)}`;

@@ -3,7 +3,7 @@ import { extractTaskEntryFromInput } from "@/services/task-extractor.service";
 import { createChatLog } from "@/services/chatLogs.service";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const body = await request.json();
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const { text, userInput, imageUrl, memberId, askerMemberName, provider, threadId } = body as {
     text?: string;
     userInput?: string;

@@ -31,6 +31,8 @@ interface ChatState {
   addThread: (mode: ChatMode, thread: ChatThread) => void;
   updateThreadTitle: (mode: ChatMode, threadId: string, title: string) => void;
   setActiveThread: (mode: ChatMode, threadId: string | null) => void;
+  removeThread: (mode: ChatMode, threadId: string) => void;
+  clearThreads: (mode: ChatMode) => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -88,5 +90,27 @@ export const useChatStore = create<ChatState>((set) => ({
   setActiveThread: (mode, threadId) =>
     set((state) => ({
       activeThreadIdByMode: { ...state.activeThreadIdByMode, [mode]: threadId },
+    })),
+  removeThread: (mode, threadId) =>
+    set((state) => {
+      const wasActive = state.activeThreadIdByMode[mode] === threadId;
+      return {
+        threadsByMode: {
+          ...state.threadsByMode,
+          [mode]: state.threadsByMode[mode].filter((t) => t.id !== threadId),
+        },
+        activeThreadIdByMode: wasActive
+          ? { ...state.activeThreadIdByMode, [mode]: null }
+          : state.activeThreadIdByMode,
+        messagesByMode: wasActive
+          ? { ...state.messagesByMode, [mode]: [] }
+          : state.messagesByMode,
+      };
+    }),
+  clearThreads: (mode) =>
+    set((state) => ({
+      threadsByMode: { ...state.threadsByMode, [mode]: [] },
+      activeThreadIdByMode: { ...state.activeThreadIdByMode, [mode]: null },
+      messagesByMode: { ...state.messagesByMode, [mode]: [] },
     })),
 }));

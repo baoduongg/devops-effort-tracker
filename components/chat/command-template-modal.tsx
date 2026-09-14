@@ -59,7 +59,13 @@ function CommandTemplateForm({
   onSubmitPrompt,
 }: CommandTemplateFormProps): React.JSX.Element {
   const initialMemberId = members.length > 0 ? members[0].id : "";
-  const initialNewAssigneeId = members.length > 1 ? members[1].id : "";
+  // Assignee-target pickers must exclude leader-role members — the backend
+  // always rejects assigning/reassigning a task to a leader.
+  const assignableMembers = useMemo(
+    () => members.filter((m) => m.role !== "leader"),
+    [members]
+  );
+  const initialNewAssigneeId = assignableMembers.length > 1 ? assignableMembers[1].id : "";
 
   const [taskTitle, setTaskTitle] = useState("");
   const [selectedMemberName, setSelectedMemberName] = useState(
@@ -102,14 +108,23 @@ function CommandTemplateForm({
     }));
   }, [members]);
 
+  // Assignee-target pickers (/assign, /add "Giao cho", /reassign "Người mới") must exclude
+  // leader-role members — the backend always rejects assigning a task to a leader.
+  const assignableMemberOptions = useMemo(() => {
+    return assignableMembers.map((m) => ({
+      value: m.id,
+      label: `${m.name} (${m.status || "DevOps"})`,
+    }));
+  }, [assignableMembers]);
+
   const newAssigneeOptions = useMemo(() => {
-    return members
+    return assignableMembers
       .filter((m) => m.id !== selectedMemberName)
       .map((m) => ({
         value: m.id,
-        label: `${m.name} (${m.role === "leader" ? "Leader" : m.status || "DevOps"})`,
+        label: `${m.name} (${m.status || "DevOps"})`,
       }));
-  }, [members, selectedMemberName]);
+  }, [assignableMembers, selectedMemberName]);
 
   const projectOptions = useMemo(() => {
     return projects.map((p) => ({
@@ -345,7 +360,7 @@ function CommandTemplateForm({
               onChange={(v) => {
                 setSelectedMemberName(v);
                 if (newAssigneeName === v) {
-                  const alt = members.find((m) => m.id !== v);
+                  const alt = assignableMembers.find((m) => m.id !== v);
                   setNewAssigneeName(alt?.id || "");
                 }
                 setIsManualPromptEdited(false);
@@ -569,7 +584,7 @@ function CommandTemplateForm({
             <Selector
               label="Giao cho nhân sự (Assignee)"
               size="md"
-              options={memberOptions}
+              options={assignableMemberOptions}
               value={selectedMemberName}
               onChange={(v) => {
                 setSelectedMemberName(v);

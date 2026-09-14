@@ -100,9 +100,18 @@ export async function buildGroundingSnapshot(restrictToMemberId?: string): Promi
       daysOverdue: daysOverdue(t.endDate as string),
     }));
 
-  const freeMembers = memberData.filter((m) => m.status === "available").map((m) => m.name);
-  const busyMembers = memberData.filter((m) => m.status === "busy").map((m) => m.name);
-  const overloadedMembers = memberData.filter((m) => m.status === "overloaded").map((m) => m.name);
+  // Task-assignment candidate lists: leaders manage assignment, they aren't assignable devops
+  // engineers, so they must never appear here at the data level (not just via prompt wording) —
+  // see SYSTEM_PROMPT's "QUY TẮC PHÂN BỔ" in answer-query/route.ts which relies on this filter.
+  // `memberData` above stays unfiltered by role — it's the full roster (post `restrictToMemberId`
+  // scoping) used for per-member lookups (e.g. a leader's own status), which legitimately still
+  // needs leaders present. Note: for a devops-scoped call, `memberData` already contains only the
+  // asker themself, so `assignableMembers`/free/busy/overloaded below come out empty — expected,
+  // since a devops asker shouldn't see team-wide assignment candidates anyway.
+  const assignableMembers = memberData.filter((m) => m.role !== "leader");
+  const freeMembers = assignableMembers.filter((m) => m.status === "available").map((m) => m.name);
+  const busyMembers = assignableMembers.filter((m) => m.status === "busy").map((m) => m.name);
+  const overloadedMembers = assignableMembers.filter((m) => m.status === "overloaded").map((m) => m.name);
 
   const projectProgress = projects.map((p) => {
     const pTasks = tasks.filter((t) => t.projectId === p.id);

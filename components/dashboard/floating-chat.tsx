@@ -73,8 +73,8 @@ export function FloatingChat(): React.JSX.Element {
 
           <Divider isFullBleed />
 
-          <StackItem size="fill" isScrollable>
-            <ChatBox />
+          <StackItem size="fill">
+            <ChatBox compact />
           </StackItem>
         </VStack>
       </Card>
