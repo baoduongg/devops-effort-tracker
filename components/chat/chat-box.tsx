@@ -32,14 +32,20 @@ import { confirmChatLog, getChatLogsByThread, chatLogsToMessages } from "@/servi
 import { getThreadsByMember, createThread, touchThread } from "@/services/chatThreads.service";
 import { createTaskChangeLog } from "@/services/taskChangeLogs.service";
 import { notifyTaskCreated } from "@/services/chatops.service";
-import { getAvailableSlashCommands, resolveSlashCommand, SLASH_COMMANDS, type SlashCommand } from "@/lib/slash-commands";
+import {
+  getAvailableSlashCommands,
+  resolveSlashCommand,
+  deriveSlashCommandFromText,
+  SLASH_COMMANDS,
+  type SlashCommand,
+} from "@/lib/slash-commands";
 import {
   isTaskCreationIntent,
   isTaskUpdateIntent,
   isTaskDeleteIntent,
   looksLikeSelfLogEntry,
 } from "@/lib/intent";
-import type { FormattedEntry, TaskChangeProposal } from "@/types/chat";
+import type { FormattedEntry, TaskChangeProposal, ChatMessage } from "@/types/chat";
 import type { Member, MemberStatus } from "@/types/member";
 import type { Project } from "@/types/project";
 import { PROJECT_COLOR_SWATCHES } from "@/lib/project-colors";
@@ -347,11 +353,23 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
     const isFirstMessageInThread = !activeThreadId;
     const currentThreadId = await ensureActiveThreadId(resolvedText);
 
-    const userMessage = {
+    const rawTrimmed = rawTextToSend.trim();
+    const detectedCmd = rawTrimmed.startsWith("/")
+      ? rawTrimmed.split(/\s+/)[0]
+      : deriveSlashCommandFromText(rawTrimmed) || deriveSlashCommandFromText(resolvedText);
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+    const senderName = user?.role === "leader" ? "Tech Lead" : (user?.displayName || "DevOps Engineer");
+
+    const userMessage: ChatMessage = {
       id: generateMessageId("user"),
       role: "user" as const,
       text: resolvedText || null,
       imageUrl: imageUrl || null,
+      command: detectedCmd,
+      senderName,
+      time: timeStr,
     };
 
     appendMessage(mode, userMessage);
@@ -415,7 +433,24 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
           provider: aiProvider,
           threadId: currentThreadId,
         });
-        const { answer, entry, proposal, clarification, chatLogId } = res.data;
+        const {
+          answer,
+          entry,
+          proposal,
+          clarification,
+          memberAvailability,
+          taskList,
+          overloadData,
+          effortData,
+          loadData,
+          reportData,
+          overdueData,
+          membersListData,
+          projectsListData,
+          helpData,
+          memberInfoData,
+          chatLogId,
+        } = res.data;
         if (entry) {
           if (answer) {
             appendMessage(mode, {
@@ -452,6 +487,83 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
             role: "ai-clarification",
             text: answer || "",
             clarification,
+          });
+        } else if (memberAvailability) {
+          appendMessage(mode, {
+            id: generateMessageId("ai-availability"),
+            role: "ai-member-availability",
+            text: answer || "",
+            availability: memberAvailability,
+          });
+        } else if (taskList) {
+          appendMessage(mode, {
+            id: generateMessageId("ai-task-list"),
+            role: "ai-task-list",
+            text: answer || "",
+            taskList,
+          });
+        } else if (overloadData) {
+          appendMessage(mode, {
+            id: generateMessageId("ai-overload"),
+            role: "ai-overload",
+            text: answer || "",
+            overloadData,
+          });
+        } else if (effortData) {
+          appendMessage(mode, {
+            id: generateMessageId("ai-effort"),
+            role: "ai-effort",
+            text: answer || "",
+            effortData,
+          });
+        } else if (loadData) {
+          appendMessage(mode, {
+            id: generateMessageId("ai-load"),
+            role: "ai-load",
+            text: answer || "",
+            loadData,
+          });
+        } else if (reportData) {
+          appendMessage(mode, {
+            id: generateMessageId("ai-report"),
+            role: "ai-report",
+            text: answer || "",
+            reportData,
+          });
+        } else if (overdueData) {
+          appendMessage(mode, {
+            id: generateMessageId("ai-overdue"),
+            role: "ai-overdue",
+            text: answer || "",
+            overdueData,
+          });
+        } else if (membersListData) {
+          appendMessage(mode, {
+            id: generateMessageId("ai-members-list"),
+            role: "ai-members-list",
+            text: answer || "",
+            membersListData,
+          });
+        } else if (projectsListData) {
+          appendMessage(mode, {
+            id: generateMessageId("ai-projects-list"),
+            role: "ai-projects-list",
+            text: answer || "",
+            projectsListData,
+          });
+        } else if (helpData) {
+          appendMessage(mode, {
+            id: generateMessageId("ai-help"),
+            role: "ai-help",
+            text: answer || "",
+            helpData,
+          });
+        } else if (memberInfoData) {
+          appendMessage(mode, {
+            id: generateMessageId("ai-member-info"),
+            role: "ai-member-info",
+            text: answer || "",
+            memberInfoData,
           });
         } else {
           appendMessage(mode, {
@@ -711,6 +823,21 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
     setText(label);
   }
 
+  // Suggested-action tokens on the member-availability card carry a bare slash command (e.g.
+  // "/assign"). Route it through the same lookup as a typed command so template commands (like
+  // /assign) open the fill-in modal instead of being blindly submitted as literal text.
+  function handleRunSlashCommand(slashCommand: string): void {
+    const cmdName = slashCommand.trim().split(/\s+/)[0]?.toLowerCase();
+    const matched = SLASH_COMMANDS.find(
+      (c) => (c.mode === "all" || c.mode === mode) && (c.command.toLowerCase() === cmdName || c.aliases?.includes(cmdName))
+    );
+    if (matched) {
+      handleSelectCommand(matched);
+      return;
+    }
+    setText(slashCommand);
+  }
+
   // FB-CHAT-03: suggestions must follow the real account role (user?.role), not the active tab
   // (`mode`) — a devops account on the "Ask" tab (mode === "leader") must still see self-scoped
   // suggestions, never the team-wide leader ones.
@@ -886,8 +1013,14 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
             </div>
 
             <div className="flex items-center justify-between px-1 text-[11px] text-neutral-400">
-              <span>Gõ <kbd className="px-1 py-0.2 rounded bg-white/10 font-mono text-neutral-300 text-[10px]">/</kbd> để xem lệnh nhanh • Dán ảnh (Ctrl+V)</span>
-              <span><kbd className="px-1 py-0.2 rounded bg-white/10 font-mono text-neutral-300 text-[10px]">Enter</kbd> để gửi</span>
+              <span className="flex items-center gap-1 font-mono">
+                <Sparkles size={11} className="text-amber-400" />
+                RunAgents (Claude 3.5 Sonnet) &bull; Zero-hallucination
+              </span>
+              <span className="hidden sm:flex items-center gap-2">
+                <span>Gõ <kbd className="px-1 py-0.2 rounded bg-white/10 font-mono text-neutral-300 text-[10px]">/</kbd> để xem lệnh nhanh</span>
+                <span><kbd className="px-1 py-0.2 rounded bg-white/10 font-mono text-neutral-300 text-[10px]">Enter</kbd> để gửi</span>
+              </span>
             </div>
           </VStack>
         </div>
@@ -903,6 +1036,7 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
             onConfirmProposal={handleConfirmProposal}
             onCancelProposal={handleCancelProposal}
             onSelectClarificationCandidate={handleSelectClarificationCandidate}
+            onRunSlashCommand={handleRunSlashCommand}
             onSelectPromptSuggestion={(prompt) => handleSubmit(prompt)}
           />
         </div>

@@ -27,6 +27,35 @@ export function generateDailyDigestImageResponse({
     (m) => m.activeTasks.length > 0
   );
 
+  const displayedOverdue = snapshot.overdueTasks.slice(0, 4);
+  const displayedProjects = snapshot.projectProgress.slice(0, 4);
+  const displayedMembers = membersWithTasks.slice(0, 5);
+
+  // Dynamic height calculation so content never overlaps footer regardless of task volume
+  const overdueCardHeight =
+    displayedOverdue.length === 0
+      ? 110
+      : 60 + displayedOverdue.length * 68 + (snapshot.overdueTasks.length > 4 ? 26 : 0);
+
+  const projectCardHeight =
+    displayedProjects.length === 0
+      ? 0
+      : 60 + displayedProjects.length * 52 + (snapshot.projectProgress.length > 4 ? 26 : 0);
+
+  const leftColumnHeight =
+    overdueCardHeight + (displayedProjects.length > 0 ? 16 + projectCardHeight : 0);
+
+  const rightColumnHeight =
+    displayedMembers.length === 0
+      ? 120
+      : 60 + displayedMembers.length * 82 + (membersWithTasks.length > 5 ? 26 : 0);
+
+  const contentHeight = Math.max(leftColumnHeight, rightColumnHeight);
+
+  // Base overhead: Header (~100px) + KPI Bar (~105px) + Footer (~55px) + Root Paddings (68px) + Gap buffers (40px)
+  const calculatedHeight = Math.max(720, Math.round(368 + contentHeight));
+  const canvasWidth = 1180;
+
   return new ImageResponse(
     (
       <div
@@ -35,21 +64,22 @@ export function generateDailyDigestImageResponse({
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          backgroundColor: "#0B0F19",
+          backgroundColor: "#080C14",
           color: "#F1F5F9",
-          padding: "36px 40px",
+          padding: "34px 38px",
           fontFamily: "system-ui, -apple-system, sans-serif",
+          justifyContent: "space-between",
         }}
       >
-        {/* Header */}
+        {/* Top Header */}
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             borderBottom: "1px solid #1E293B",
-            paddingBottom: "20px",
-            marginBottom: "24px",
+            paddingBottom: "18px",
+            marginBottom: "20px",
           }}
         >
           <div style={{ display: "flex", flexDirection: "column" }}>
@@ -66,7 +96,7 @@ export function generateDailyDigestImageResponse({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  backgroundColor: "#3B82F6",
+                  backgroundColor: "#2563EB",
                   color: "#FFFFFF",
                   fontSize: "11px",
                   fontWeight: 700,
@@ -83,7 +113,7 @@ export function generateDailyDigestImageResponse({
             </div>
             <div
               style={{
-                fontSize: "26px",
+                fontSize: "25px",
                 fontWeight: 800,
                 color: "#FFFFFF",
                 letterSpacing: "-0.02em",
@@ -98,12 +128,16 @@ export function generateDailyDigestImageResponse({
               display: "flex",
               flexDirection: "column",
               alignItems: "flex-end",
+              backgroundColor: "#0F172A",
+              border: "1px solid #1E293B",
+              borderRadius: "10px",
+              padding: "8px 16px",
             }}
           >
-            <span style={{ fontSize: "12px", color: "#94A3B8" }}>Ngày báo cáo</span>
+            <span style={{ fontSize: "11px", color: "#94A3B8" }}>Ngày báo cáo</span>
             <span
               style={{
-                fontSize: "16px",
+                fontSize: "15px",
                 fontWeight: 700,
                 color: "#38BDF8",
               }}
@@ -113,12 +147,12 @@ export function generateDailyDigestImageResponse({
           </div>
         </div>
 
-        {/* Top KPI Cards */}
+        {/* Top KPI Cards Row */}
         <div
           style={{
             display: "flex",
             gap: "14px",
-            marginBottom: "24px",
+            marginBottom: "20px",
           }}
         >
           {/* Overdue KPI */}
@@ -127,10 +161,10 @@ export function generateDailyDigestImageResponse({
               display: "flex",
               flex: 1,
               flexDirection: "column",
-              backgroundColor: overdueCount > 0 ? "#450A0A" : "#0F172A",
+              backgroundColor: overdueCount > 0 ? "rgba(220, 38, 38, 0.12)" : "#0F172A",
               border: `1px solid ${overdueCount > 0 ? "#DC2626" : "#1E293B"}`,
               borderRadius: "12px",
-              padding: "14px 16px",
+              padding: "14px 18px",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -150,16 +184,28 @@ export function generateDailyDigestImageResponse({
                 {overdueCount > 0 ? "CẦN XỬ LÝ" : "TỐT"}
               </span>
             </div>
-            <span
+            <div
               style={{
-                fontSize: "28px",
-                fontWeight: 800,
-                color: overdueCount > 0 ? "#EF4444" : "#10B981",
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "baseline",
+                gap: "6px",
                 marginTop: "4px",
               }}
             >
-              {overdueCount} <span style={{ fontSize: "14px", fontWeight: 500 }}>task</span>
-            </span>
+              <span
+                style={{
+                  fontSize: "28px",
+                  fontWeight: 800,
+                  color: overdueCount > 0 ? "#EF4444" : "#10B981",
+                }}
+              >
+                {overdueCount}
+              </span>
+              <span style={{ fontSize: "14px", fontWeight: 500, color: "#94A3B8" }}>
+                task
+              </span>
+            </div>
           </div>
 
           {/* Active Tasks KPI */}
@@ -171,7 +217,7 @@ export function generateDailyDigestImageResponse({
               backgroundColor: "#0F172A",
               border: "1px solid #1E293B",
               borderRadius: "12px",
-              padding: "14px 16px",
+              padding: "14px 18px",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -191,79 +237,94 @@ export function generateDailyDigestImageResponse({
                 IN PROGRESS
               </span>
             </div>
-            <span
+            <div
               style={{
-                fontSize: "28px",
-                fontWeight: 800,
-                color: "#38BDF8",
+                display: "flex",
+                flexDirection: "row",
+                alignItems: "baseline",
+                gap: "6px",
                 marginTop: "4px",
               }}
             >
-              {totalActiveTasks} <span style={{ fontSize: "14px", fontWeight: 500 }}>task</span>
-            </span>
+              <span
+                style={{
+                  fontSize: "28px",
+                  fontWeight: 800,
+                  color: "#38BDF8",
+                }}
+              >
+                {totalActiveTasks}
+              </span>
+              <span style={{ fontSize: "14px", fontWeight: 500, color: "#94A3B8" }}>
+                task
+              </span>
+            </div>
           </div>
 
           {/* Workload Status KPI */}
           <div
             style={{
               display: "flex",
-              flex: 1.4,
+              flex: 1.5,
               flexDirection: "column",
               backgroundColor: "#0F172A",
               border: "1px solid #1E293B",
               borderRadius: "12px",
-              padding: "14px 16px",
+              padding: "14px 18px",
             }}
           >
-            <span style={{ fontSize: "13px", color: "#94A3B8", fontWeight: 600, marginBottom: "6px" }}>
-              👥 Tải công việc Devops
+            <span style={{ fontSize: "13px", color: "#94A3B8", fontWeight: 600, marginBottom: "8px" }}>
+              👥 Tải công việc DevOps
             </span>
-            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <div style={{ display: "flex", flexDirection: "row", gap: "10px", alignItems: "center" }}>
               <div
                 style={{
                   display: "flex",
+                  flexDirection: "row",
                   alignItems: "center",
-                  gap: "5px",
+                  gap: "6px",
                   backgroundColor: "#1E293B",
-                  padding: "4px 8px",
+                  padding: "4px 10px",
                   borderRadius: "6px",
                 }}
               >
                 <div style={{ width: "8px", height: "8px", borderRadius: "4px", backgroundColor: "#EF4444" }} />
-                <span style={{ fontSize: "12px", color: "#E2E8F0" }}>Quá tải: <strong>{overloadedCount}</strong></span>
+                <span style={{ fontSize: "12px", color: "#E2E8F0" }}>Quá tải: {overloadedCount}</span>
               </div>
               <div
                 style={{
                   display: "flex",
+                  flexDirection: "row",
                   alignItems: "center",
-                  gap: "5px",
+                  gap: "6px",
                   backgroundColor: "#1E293B",
-                  padding: "4px 8px",
+                  padding: "4px 10px",
                   borderRadius: "6px",
                 }}
               >
                 <div style={{ width: "8px", height: "8px", borderRadius: "4px", backgroundColor: "#F59E0B" }} />
-                <span style={{ fontSize: "12px", color: "#E2E8F0" }}>Bận: <strong>{busyCount}</strong></span>
+                <span style={{ fontSize: "12px", color: "#E2E8F0" }}>Bận: {busyCount}</span>
               </div>
               <div
                 style={{
                   display: "flex",
+                  flexDirection: "row",
                   alignItems: "center",
-                  gap: "5px",
+                  gap: "6px",
                   backgroundColor: "#1E293B",
-                  padding: "4px 8px",
+                  padding: "4px 10px",
                   borderRadius: "6px",
                 }}
               >
                 <div style={{ width: "8px", height: "8px", borderRadius: "4px", backgroundColor: "#10B981" }} />
-                <span style={{ fontSize: "12px", color: "#E2E8F0" }}>Sẵn sàng: <strong>{freeCount}</strong></span>
+                <span style={{ fontSize: "12px", color: "#E2E8F0" }}>Sẵn sàng: {freeCount}</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Content Body: Two Columns */}
-        <div style={{ display: "flex", gap: "20px", flex: 1 }}>
+        <div style={{ display: "flex", gap: "20px", flex: 1, marginBottom: "20px" }}>
           {/* Left Column: Overdue Tasks + Project Progress */}
           <div style={{ display: "flex", flexDirection: "column", flex: 1, gap: "16px" }}>
             {/* Overdue Tasks Section */}
@@ -272,7 +333,7 @@ export function generateDailyDigestImageResponse({
                 display: "flex",
                 flexDirection: "column",
                 backgroundColor: "#0F172A",
-                border: "1px solid #1E293B",
+                border: `1px solid ${snapshot.overdueTasks.length > 0 ? "rgba(239, 68, 68, 0.4)" : "#1E293B"}`,
                 borderRadius: "12px",
                 padding: "16px",
               }}
@@ -291,7 +352,16 @@ export function generateDailyDigestImageResponse({
                   ⚠️ Task Quá Hạn & Có Vấn Đề ({snapshot.overdueTasks.length})
                 </span>
                 {snapshot.overdueTasks.length > 0 && (
-                  <span style={{ fontSize: "11px", color: "#EF4444", fontWeight: 600 }}>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "#EF4444",
+                      fontWeight: 700,
+                      backgroundColor: "rgba(239, 68, 68, 0.15)",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                    }}
+                  >
                     Cần xử lý ngay
                   </span>
                 )}
@@ -303,19 +373,20 @@ export function generateDailyDigestImageResponse({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    padding: "20px",
+                    padding: "18px",
                     color: "#10B981",
-                    fontSize: "14px",
+                    fontSize: "13px",
                     fontWeight: 600,
                     backgroundColor: "rgba(16, 185, 129, 0.08)",
                     borderRadius: "8px",
+                    border: "1px dashed rgba(16, 185, 129, 0.3)",
                   }}
                 >
                   🎉 Không có task nào quá hạn hôm nay!
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {snapshot.overdueTasks.slice(0, 4).map((t, idx) => (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {displayedOverdue.map((t, idx) => (
                     <div
                       key={idx}
                       style={{
@@ -334,7 +405,7 @@ export function generateDailyDigestImageResponse({
                             fontSize: "13px",
                             fontWeight: 700,
                             color: "#FFFFFF",
-                            maxWidth: "280px",
+                            maxWidth: "340px",
                             whiteSpace: "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
@@ -387,9 +458,9 @@ export function generateDailyDigestImageResponse({
                       </div>
                     </div>
                   ))}
-                  {snapshot.overdueTasks.length > 4 && (
+                  {snapshot.overdueTasks.length > displayedOverdue.length && (
                     <span style={{ fontSize: "11px", color: "#94A3B8", textAlign: "center", marginTop: "2px" }}>
-                      + còn {snapshot.overdueTasks.length - 4} task quá hạn khác...
+                      + còn {snapshot.overdueTasks.length - displayedOverdue.length} task quá hạn khác...
                     </span>
                   )}
                 </div>
@@ -397,72 +468,79 @@ export function generateDailyDigestImageResponse({
             </div>
 
             {/* Projects Progress Section */}
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                backgroundColor: "#0F172A",
-                border: "1px solid #1E293B",
-                borderRadius: "12px",
-                padding: "16px",
-              }}
-            >
+            {snapshot.projectProgress.length > 0 && (
               <div
                 style={{
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: "12px",
-                  borderBottom: "1px solid #1E293B",
-                  paddingBottom: "8px",
+                  flexDirection: "column",
+                  backgroundColor: "#0F172A",
+                  border: "1px solid #1E293B",
+                  borderRadius: "12px",
+                  padding: "16px",
                 }}
               >
-                <span style={{ fontSize: "14px", fontWeight: 700, color: "#38BDF8" }}>
-                  📊 Tiến Độ Dự Án ({snapshot.projectProgress.length})
-                </span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {snapshot.projectProgress.slice(0, 3).map((p, idx) => {
-                  const total = p.planned + p.inProgress + p.done;
-                  const donePercent = total > 0 ? Math.round((p.done / total) * 100) : 0;
-                  return (
-                    <div key={idx} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
-                        <span style={{ fontWeight: 600, color: "#E2E8F0" }}>{p.name}</span>
-                        <span style={{ color: "#94A3B8" }}>
-                          {p.inProgress} đang làm / {p.done} xong ({donePercent}%)
-                        </span>
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          width: "100%",
-                          height: "6px",
-                          backgroundColor: "#1E293B",
-                          borderRadius: "3px",
-                          overflow: "hidden",
-                        }}
-                      >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: "12px",
+                    borderBottom: "1px solid #1E293B",
+                    paddingBottom: "8px",
+                  }}
+                >
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: "#38BDF8" }}>
+                    📊 Tiến Độ Dự Án ({snapshot.projectProgress.length})
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {displayedProjects.map((p, idx) => {
+                    const total = p.planned + p.inProgress + p.done;
+                    const donePercent = total > 0 ? Math.round((p.done / total) * 100) : 0;
+                    return (
+                      <div key={idx} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                          <span style={{ fontWeight: 600, color: "#E2E8F0" }}>{p.name}</span>
+                          <span style={{ color: "#94A3B8" }}>
+                            {p.inProgress} đang làm / {p.done} xong ({donePercent}%)
+                          </span>
+                        </div>
                         <div
                           style={{
-                            width: `${donePercent}%`,
-                            backgroundColor: "#10B981",
-                            height: "100%",
+                            display: "flex",
+                            width: "100%",
+                            height: "6px",
+                            backgroundColor: "#1E293B",
+                            borderRadius: "3px",
+                            overflow: "hidden",
                           }}
-                        />
-                        <div
-                          style={{
-                            width: `${total > 0 ? Math.round((p.inProgress / total) * 100) : 0}%`,
-                            backgroundColor: "#0284C7",
-                            height: "100%",
-                          }}
-                        />
+                        >
+                          <div
+                            style={{
+                              width: `${donePercent}%`,
+                              backgroundColor: "#10B981",
+                              height: "100%",
+                            }}
+                          />
+                          <div
+                            style={{
+                              width: `${total > 0 ? Math.round((p.inProgress / total) * 100) : 0}%`,
+                              backgroundColor: "#0284C7",
+                              height: "100%",
+                            }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                  {snapshot.projectProgress.length > displayedProjects.length && (
+                    <span style={{ fontSize: "11px", color: "#94A3B8", textAlign: "center", marginTop: "2px" }}>
+                      + còn {snapshot.projectProgress.length - displayedProjects.length} dự án khác...
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Right Column: Member Tasks */}
@@ -510,7 +588,7 @@ export function generateDailyDigestImageResponse({
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {membersWithTasks.slice(0, 5).map((m, idx) => {
+                {displayedMembers.map((m, idx) => {
                   const statusBg =
                     m.status === "overloaded"
                       ? "rgba(239, 68, 68, 0.15)"
@@ -542,7 +620,7 @@ export function generateDailyDigestImageResponse({
                         borderRadius: "8px",
                         padding: "10px 12px",
                         gap: "6px",
-                        borderLeft: m.status === "overloaded" || isOverdueMember ? "3px solid #EF4444" : undefined,
+                        borderLeft: m.status === "overloaded" || isOverdueMember ? "3px solid #EF4444" : "3px solid transparent",
                       }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -598,7 +676,7 @@ export function generateDailyDigestImageResponse({
                             <span style={{ color: "#38BDF8", marginRight: "4px" }}>•</span>
                             <span
                               style={{
-                                maxWidth: "200px",
+                                maxWidth: "220px",
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
                                 textOverflow: "ellipsis",
@@ -617,6 +695,11 @@ export function generateDailyDigestImageResponse({
                     </div>
                   );
                 })}
+                {membersWithTasks.length > displayedMembers.length && (
+                  <span style={{ fontSize: "11px", color: "#94A3B8", textAlign: "center", marginTop: "2px" }}>
+                    + còn {membersWithTasks.length - displayedMembers.length} thành viên khác...
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -628,7 +711,6 @@ export function generateDailyDigestImageResponse({
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            marginTop: "20px",
             paddingTop: "14px",
             borderTop: "1px solid #1E293B",
             fontSize: "11px",
@@ -641,8 +723,8 @@ export function generateDailyDigestImageResponse({
       </div>
     ),
     {
-      width: 1000,
-      height: 640,
+      width: canvasWidth,
+      height: calculatedHeight,
     }
   );
 }

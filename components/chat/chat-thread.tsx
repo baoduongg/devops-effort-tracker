@@ -31,6 +31,7 @@ interface ChatThreadProps {
   ) => Promise<void>;
   onCancelProposal: (chatLogId: string, proposal: TaskChangeProposal) => Promise<void>;
   onSelectClarificationCandidate: (label: string) => void;
+  onRunSlashCommand?: (slashCommand: string) => void;
   onSelectPromptSuggestion?: (prompt: string) => void;
 }
 
@@ -170,6 +171,7 @@ export function ChatThread({
   onConfirmProposal,
   onCancelProposal,
   onSelectClarificationCandidate,
+  onRunSlashCommand,
   onSelectPromptSuggestion,
 }: ChatThreadProps): React.JSX.Element {
   if (loading) {
@@ -200,6 +202,7 @@ export function ChatThread({
           onConfirmProposal={onConfirmProposal}
           onCancelProposal={onCancelProposal}
           onSelectClarificationCandidate={onSelectClarificationCandidate}
+          onRunSlashCommand={onRunSlashCommand}
         />
       ))}
       {thinking && (
