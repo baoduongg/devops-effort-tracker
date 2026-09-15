@@ -53,7 +53,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     category: "basic",
     mode: "all",
     badgeText: "Cơ bản",
-    prompt: "Hiển thị danh sách các dự án hiện có, nhân sự phụ trách và tổng effort",
+    prompt: "Hiển thị danh sách các dự án hiện có",
     isInstantPrompt: true,
   },
   {
@@ -105,7 +105,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     category: "resource",
     mode: "all",
     badgeText: "Nguồn lực",
-    prompt: "Xem tổng hợp phân bổ effort và thời lượng công việc của đội ngũ",
+    prompt: "Xem tổng hợp phân bổ effort và thời lượng công việc của toàn bộ thành viên",
     isInstantPrompt: true,
   },
   {
@@ -276,7 +276,7 @@ export function getAvailableSlashCommands(currentMode: ChatMode, queryText = "")
   const cleanQuery = queryText.toLowerCase().trim();
   const searchKeyword = cleanQuery.startsWith("/") ? cleanQuery.slice(1) : cleanQuery;
 
-  return SLASH_COMMANDS.filter((cmd) => {
+  const matches = SLASH_COMMANDS.filter((cmd) => {
     // Mode match
     if (cmd.mode !== "all" && cmd.mode !== currentMode) {
       return false;
@@ -291,6 +291,18 @@ export function getAvailableSlashCommands(currentMode: ChatMode, queryText = "")
     const descMatch = cmd.description.toLowerCase().includes(searchKeyword);
 
     return cmdMatch || aliasMatch || labelMatch || descMatch;
+  });
+
+  if (!searchKeyword) return matches;
+
+  // Exact command/alias match must rank first (e.g. typing "/load" should highlight "/load" itself,
+  // not "/overload" which also substring-matches "load" but happens to be declared earlier).
+  return matches.sort((a, b) => {
+    const aExact = a.command.toLowerCase() === `/${searchKeyword}` || a.aliases?.some((al) => al.toLowerCase() === `/${searchKeyword}`);
+    const bExact = b.command.toLowerCase() === `/${searchKeyword}` || b.aliases?.some((al) => al.toLowerCase() === `/${searchKeyword}`);
+    if (aExact && !bExact) return -1;
+    if (!aExact && bExact) return 1;
+    return 0;
   });
 }
 
@@ -387,3 +399,29 @@ export function resolveSlashCommand(text: string, currentMode: ChatMode): string
 
   return trimmed;
 }
+
+/**
+ * Derives the active slash command from raw text or resolved natural language prompt.
+ * e.g. "/free" -> "/free"
+ * e.g. "Ai trong team đang rảnh việc hoặc có thể nhận thêm task?" -> "/free"
+ */
+export function deriveSlashCommandFromText(text: string | null | undefined): string | undefined {
+  if (!text) return undefined;
+  const trimmed = text.trim();
+  if (trimmed.startsWith("/")) {
+    const cmd = trimmed.split(/\s+/)[0].toLowerCase();
+    const matched = SLASH_COMMANDS.find(
+      (c) => c.command.toLowerCase() === cmd || c.aliases?.some((a) => a.toLowerCase() === cmd)
+    );
+    return matched ? matched.command : cmd;
+  }
+  const matched = SLASH_COMMANDS.find(
+    (c) =>
+      c.prompt &&
+      (c.prompt.toLowerCase() === trimmed.toLowerCase() ||
+        trimmed.toLowerCase().includes(c.prompt.toLowerCase()) ||
+        c.prompt.toLowerCase().includes(trimmed.toLowerCase()))
+  );
+  return matched?.command;
+}
+

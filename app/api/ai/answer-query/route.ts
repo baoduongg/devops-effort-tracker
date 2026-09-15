@@ -7,9 +7,31 @@ import { extractTaskMutationFromInput } from "@/services/task-mutation-extractor
 import { getMembers, findMemberByName, findBestSuitableMember } from "@/services/members.service";
 import { getAllTaskChangeLogs, getTaskChangeLogsByActor } from "@/services/taskChangeLogs.service";
 import { isTaskCreationIntent, isTaskUpdateIntent, isTaskDeleteIntent } from "@/lib/intent";
-import { formatEffortDuration } from "@/lib/effort";
+import { formatEffortDuration, getEffortStatus } from "@/lib/effort";
+import { daysOverdue } from "@/lib/overdue";
+import { deriveSlashCommandFromText } from "@/lib/slash-commands";
 import type { Member } from "@/types/member";
-import type { ClarificationRequest } from "@/types/chat";
+import type {
+  ClarificationRequest,
+  MemberAvailability,
+  TaskListPayload,
+  TaskSummaryItem,
+  OverloadPayload,
+  EffortPayload,
+  LoadPayload,
+  ReportPayload,
+  OverduePayload,
+  MembersListPayload,
+  ProjectsListPayload,
+  HelpPayload,
+  MemberInfoPayload,
+  LoadMemberItem,
+  EffortMemberItem,
+  ReportProjectItem,
+  OverdueTaskItem,
+  MembersListItem,
+  ProjectsListItem,
+} from "@/types/chat";
 
 const SYSTEM_PROMPT = `Bạn là Trợ lý AI Quản lý Nguồn lực & Điều phối Nhân sự DevOps (DevOps Effort & Resource Assistant).
 Nhiệm vụ của bạn là giải đáp câu hỏi của Leader / Quản lý một cách CHUYÊN NGHIỆP, RÕ RÀNG, TRỰC QUAN và CHÍNH XÁC dựa trên dữ liệu thực tế được cung cấp.
@@ -18,6 +40,7 @@ QUY TẮC BẮT BUỘC KHI TRẢ LỜI:
 1. NGÔN NGỮ: Luôn trả lời hoàn toàn bằng TIẾNG VIỆT tự nhiên, mạch lạc, chuẩn phong thái quản trị điều hành.
 2. ĐỊNH DẠNG:
    - TUYỆT ĐỐI KHÔNG xuất ra raw JSON hoặc khối code kỹ thuật (\`\`\`json ... \`\`\`).
+   - TUYỆT ĐỐI KHÔNG xuất ra Markdown Table (| ... | ... |) khi liệt kê danh sách task vì gây vỡ bố cục trên khung chat.
    - Sử dụng Markdown trực quan: in đậm tiêu đề, gạch đầu dòng rõ ràng, làm nổi bật tên người, dự án, thời lượng effort (phút/giờ).
 3. QUY TẮC KIỂM TRA SỰ TỒN TẠI CỦA THÀNH VIÊN (MEMBER EXISTENCE CHECK):
    - Khi người dùng hỏi thông tin, tình hình, task hoặc kế hoạch của một thành viên / nhân sự cụ thể:
@@ -127,12 +150,17 @@ function detectMemberQueryTarget(
 ): { isMemberQuery: boolean; rawTarget: string | null; isPlaceholder: boolean } {
   const q = query.trim();
 
-  // Unfilled placeholder e.g. "/status [Tên thành viên]" or "kế hoạch của [Tên thành viên]"
+  // Unfilled placeholder e.g. "/status [Tên thành viên]" or "/info [Tên thành viên]"
   if (/[[<]\s*(?:tên\s+)?(?:thành\s+viên|nhân\s+sự|member|name)\s*[\]>]/i.test(q)) {
     return { isMemberQuery: true, rawTarget: null, isPlaceholder: true };
   }
 
-  // /status template prompt: "Tình hình công việc, task đang làm và kế hoạch của XYZ ra sao?"
+  // Bare command without target e.g. "/status" or "/info"
+  if (/^\s*\/(?:status|info|member|nhansu)\s*$/i.test(q)) {
+    return { isMemberQuery: true, rawTarget: null, isPlaceholder: true };
+  }
+
+  // /status or /info template prompt: "Tình hình công việc, task đang làm và kế hoạch của XYZ ra sao?"
   const statusTplMatch = q.match(/Tình hình công việc,?\s*task đang làm và kế hoạch của\s+(.+?)(?:\s+ra sao\??|\?|$)/i);
   const rawMatch = statusTplMatch?.[1] ?? MEMBER_QUERY_PATTERN.exec(q)?.slice(1).find(Boolean);
   if (rawMatch) {
@@ -144,7 +172,10 @@ function detectMemberQueryTarget(
 
   // Subject-first fallback: no trigger word found, check if any known member's name appears
   // anywhere in the query as a whole word (longest name first, so "Team Leader" wins over "Leader").
-  const qNorm = normalizeForNameMatch(q);
+  // Strip out common team phrases so "thành viên" doesn't falsely match a member named "Thành", etc.
+  const qCleaned = q
+    .replace(/\b(?:thành viên|thanh vien|nhân sự|nhan su|đội ngũ|doi ngu|toàn bộ|toan bo|tất cả|tat ca|hệ thống|he thong|báo cáo|bao cao|công việc|cong viec|tải công việc|tai cong viec|băng thông|bang thong|mức độ bận rộn|muc do ban ron)\b/gi, " ");
+  const qNorm = normalizeForNameMatch(qCleaned);
   const sortedByLength = allMembers
     .map((member) => ({ member, nameNorm: normalizeForNameMatch(member.name) }))
     .sort((a, b) => b.nameNorm.length - a.nameNorm.length);
@@ -203,6 +234,311 @@ async function resolveIsLeader(mode: "leader" | "devops", memberId: string, allM
 
 const AUDIT_QUERY_PATTERN =
   /(vừa nãy|vừa rồi).*(đổi|sửa|xóa|xoá).*(qua chat|task)|(?:tôi|leader)\s+(?:vừa|đã)\s+(?:đổi|sửa|xóa|xoá).*task/i;
+
+// FREE-CARD: leader-only "who's free" structured card, answered deterministically from the
+// already-built grounding snapshot instead of an AI call (see buildFreeCardAvailability below).
+// Anchored to a leading "ai ..." subject so it doesn't fire inside member-specific questions
+// (e.g. "Bảo có thể nhận thêm task không?") or unrelated sentences containing "ranh"/"trong".
+const FREE_QUERY_PATTERN =
+  /(?:^\s*\/(?:free|available|ranh|nhansuranh)\b)|(?:\b(?:ai|nhân sự nào|những ai|thành viên nào)\b.*(?:rảnh|trống|con trong|chưa có task|nhận thêm task))/i;
+const OVERLOAD_QUERY_PATTERN =
+  /(?:^\s*\/(?:overload|overloaded|quatai|busy)\b)|(?:\b(?:quá tải|qua tai|vượt mức 480m|vượt ngưỡng|vượt mức 8h)\b)/i;
+const EFFORT_QUERY_PATTERN =
+  /(?:^\s*\/(?:effort|my-effort|taicongviec|totaleffort)\b)|(?:(?:tổng hợp phân bổ effort|phân bổ effort|tổng % effort|tổng effort|thời lượng công việc của toàn bộ thành viên)\b)/i;
+const LOAD_QUERY_PATTERN =
+  /(?:^\s*\/(?:load|workload|bandwidth|tinhtrangtai)\b)|(?:(?:tình trạng tải|mức độ bận rộn|băng thông|bandwidth)\b)/i;
+const REPORT_QUERY_PATTERN =
+  /(?:^\s*\/(?:report|baocao|summary|phanbo)\b)|(?:(?:báo cáo.*phân bổ effort|báo cáo.*dự án|báo cáo tổng hợp phân bổ)\b)/i;
+const OVERDUE_QUERY_PATTERN =
+  /(?:^\s*\/(?:overdue|trehan|deadline|gap)\b)|(?:(?:task.*(?:trễ hạn|quá hạn|deadline|gần đến hạn|gấp)|trễ hạn|cận kề deadline)\b)/i;
+const TASKS_QUERY_PATTERN =
+  /(?:^\s*\/(?:tasks?|all-tasks|danhsachtask|viec|my-tasks|vieccuatoi)\b)|(?:(?:danh sách.*task|các task đang thực hiện|task đang làm và kế hoạch|danh sách công việc)\b)/i;
+const MEMBERS_QUERY_PATTERN =
+  /(?:^\s*\/(?:members?|team|nhansu|danhsach)\b)|(?:(?:danh sách.*thành viên|toàn bộ thành viên trong đội ngũ|danh sách nhân sự)\b)/i;
+const PROJECTS_QUERY_PATTERN =
+  /(?:^\s*\/(?:projects?|duan|project-list|danhsachduan)\b)|(?:(?:danh sách.*dự án|các dự án hiện có|tiến độ dự án)\b)/i;
+const HELP_QUERY_PATTERN =
+  /(?:^\s*\/(?:help|huongdan|\?)\b)|(?:(?:hướng dẫn.*lệnh slash|hướng dẫn sử dụng|cách sử dụng ai assistant)\b)/i;
+
+/**
+ * TASK-CARD: builds the structured task list payload mirroring landing page /task response UI.
+ */
+function buildTaskListPayload(snapshot: GroundingSnapshot): TaskListPayload {
+  const tasks: TaskSummaryItem[] = [];
+  const overdueTitles = new Set(
+    snapshot.overdueTasks.map((ot) => `${ot.memberName}:::${ot.title}`)
+  );
+
+  snapshot.members.forEach((m) => {
+    m.activeTasks.forEach((t) => {
+      const isTaskOverdue =
+        overdueTitles.has(`${m.name}:::${t.title}`) ||
+        (t.endDate ? daysOverdue(t.endDate) > 0 : false);
+      tasks.push({
+        title: t.title,
+        memberName: m.name,
+        projectName: t.project,
+        duration: t.duration,
+        statusLabel: isTaskOverdue ? "Trễ hạn" : "Đang làm",
+        statusVariant: isTaskOverdue ? "overdue" : "in_progress",
+      });
+    });
+    m.plannedTasks.forEach((t) => {
+      tasks.push({
+        title: t.title,
+        memberName: m.name,
+        projectName: t.project,
+        duration: t.duration,
+        statusLabel: "Kế hoạch",
+        statusVariant: "planned",
+      });
+    });
+  });
+
+  const suggestedActions: TaskListPayload["suggestedActions"] = [
+    { label: "👉 /assign giao task mới", slashCommand: "/assign" },
+    { label: "⚡ /load xem tải team", slashCommand: "/load" },
+    { label: "🔍 /free ai đang rảnh", slashCommand: "/free" },
+  ];
+
+  return {
+    title: "📋 Danh sách các task đang thực hiện và kế hoạch:",
+    tasks,
+    suggestedActions,
+  };
+}
+
+/**
+ * FREE-CARD: builds the deterministic member-availability payload for the "who's free" card.
+ */
+function buildFreeCardAvailability(snapshot: GroundingSnapshot): MemberAvailability {
+  const members = snapshot.members.filter((m) => m.role !== "leader").map((m) => {
+    const { label, variant } = getEffortStatus(m.totalEffortMinutes, m.activeTasks.length);
+    return {
+      id: m.id,
+      name: m.name,
+      role: m.role,
+      statusLabel: label,
+      statusVariant: variant,
+      effortMinutes: m.totalEffortMinutes,
+      capacityMinutes: 480,
+      skills: m.skills ?? [],
+      activeTaskTitle: m.activeTasks[0]?.title ?? null,
+    };
+  });
+
+  const suggestedActions: MemberAvailability["suggestedActions"] = [];
+  const firstFree = snapshot.freeMembers[0];
+  if (firstFree) {
+    suggestedActions.push({ label: `👉 /assign cho ${firstFree}`, slashCommand: `/assign ${firstFree}` });
+  }
+  suggestedActions.push({ label: "⚡ /load xem toàn team", slashCommand: "/load" });
+
+  return { members, suggestedActions };
+}
+
+function buildOverloadPayload(snapshot: GroundingSnapshot): OverloadPayload {
+  const overloadedMembers = snapshot.members
+    .filter((m) => m.role !== "leader" && (m.status === "overloaded" || m.totalEffortMinutes > 480))
+    .map((m) => {
+      const percent = Number(((m.totalEffortMinutes / 480) * 100).toFixed(1));
+      const firstFree = snapshot.freeMembers[0];
+      return {
+        name: m.name,
+        role: m.role === "devops" ? "Cloud / DevOps Eng" : m.role,
+        effortMinutes: m.totalEffortMinutes,
+        capacityMinutes: 480,
+        percentage: percent,
+        taskCount: m.activeTasks.length,
+        taskTitles: m.activeTasks.map((t) => `${t.title} (${t.effort}m)`),
+        suggestedReassignTarget: firstFree || null,
+      };
+    });
+
+  const firstFree = snapshot.freeMembers[0];
+  const suggestedActions: OverloadPayload["suggestedActions"] = [];
+  if (firstFree && overloadedMembers.length > 0) {
+    suggestedActions.push({
+      label: `/reassign sang ${firstFree}`,
+      slashCommand: `/reassign`,
+    });
+  }
+  suggestedActions.push({ label: "⚡ /load xem toàn team", slashCommand: "/load" });
+
+  return { overloadedMembers, suggestedActions };
+}
+
+function buildEffortPayload(snapshot: GroundingSnapshot): EffortPayload {
+  const assignable = snapshot.members.filter((m) => m.role !== "leader");
+  const totalEffortMinutes = assignable.reduce((sum, m) => sum + m.totalEffortMinutes, 0);
+  const totalCapacityMinutes = assignable.length * 480;
+  const overallPercentage =
+    totalCapacityMinutes > 0 ? Number(((totalEffortMinutes / totalCapacityMinutes) * 100).toFixed(1)) : 0;
+
+  const members: EffortMemberItem[] = assignable.map((m) => ({
+    name: m.name,
+    effortMinutes: m.totalEffortMinutes,
+    capacityMinutes: 480,
+    percentage: Number(((m.totalEffortMinutes / 480) * 100).toFixed(0)),
+  }));
+
+  return {
+    totalEffortMinutes,
+    totalCapacityMinutes,
+    overallPercentage,
+    members,
+  };
+}
+
+function buildLoadPayload(snapshot: GroundingSnapshot): LoadPayload {
+  const assignable = snapshot.members.filter((m) => m.role !== "leader");
+  const members: LoadMemberItem[] = assignable.map((m) => {
+    const percent = Number(((m.totalEffortMinutes / 480) * 100).toFixed(1));
+    const isOverload = m.totalEffortMinutes > 480;
+    const isFree = m.totalEffortMinutes === 0;
+    const isBusy = m.totalEffortMinutes >= 288 && m.totalEffortMinutes <= 480;
+
+    let statusVariant: LoadMemberItem["statusVariant"] = "normal";
+    let statusLabel = "Sẵn sàng";
+    if (isOverload) {
+      statusVariant = "overload";
+      statusLabel = "Quá tải";
+    } else if (isFree) {
+      statusVariant = "free";
+      statusLabel = "Rảnh 100%";
+    } else if (isBusy) {
+      statusVariant = "busy";
+      statusLabel = "Vừa tải";
+    }
+
+    return {
+      name: m.name,
+      role: m.role === "devops" ? "DevOps Eng" : m.role === "leader" ? "DevOps Lead" : m.role,
+      effortMinutes: m.totalEffortMinutes,
+      capacityMinutes: 480,
+      percentage: percent,
+      statusLabel,
+      statusVariant,
+    };
+  });
+
+  return { members };
+}
+
+function buildReportPayload(snapshot: GroundingSnapshot): ReportPayload {
+  const projects: ReportProjectItem[] = snapshot.projects.map((p) => {
+    const hours = (p.totalEffortMinutes / 60).toFixed(1);
+    const prog = snapshot.projectProgress.find((pp) => pp.name === p.name);
+    return {
+      name: p.name,
+      totalEffortMinutes: p.totalEffortMinutes,
+      totalHours: hours,
+      activeTaskCount: p.activeTaskCount,
+      doneTaskCount: prog?.done ?? 0,
+      assignedMembers: p.assignedMembers,
+      warning: p.totalEffortMinutes > 1800 ? "Cận trần" : null,
+    };
+  });
+
+  return { projects };
+}
+
+function buildOverduePayload(snapshot: GroundingSnapshot): OverduePayload {
+  const tasks: OverdueTaskItem[] = snapshot.overdueTasks.map((t) => ({
+    title: t.title,
+    projectName: t.project,
+    memberName: t.memberName,
+    endDate: t.endDate,
+    daysOverdue: t.daysOverdue,
+  }));
+
+  return { tasks };
+}
+
+function buildMembersListPayload(snapshot: GroundingSnapshot): MembersListPayload {
+  const members: MembersListItem[] = snapshot.members.map((m) => {
+    const isOverload = m.totalEffortMinutes > 480;
+    const isFree = m.totalEffortMinutes === 0;
+    const statusLabel = isOverload ? "🔴 Quá tải" : isFree ? "🟢 Rảnh 100%" : "🔵 Đang làm việc";
+
+    return {
+      id: m.id,
+      name: m.name,
+      role: m.role === "leader" ? "DevOps Lead" : "DevOps Eng",
+      effortMinutes: m.totalEffortMinutes,
+      capacityMinutes: 480,
+      statusLabel,
+      statusVariant: isOverload ? "overload" : isFree ? "free" : "normal",
+      skills: m.skills ?? [],
+    };
+  });
+
+  return { members };
+}
+
+function buildProjectsListPayload(snapshot: GroundingSnapshot): ProjectsListPayload {
+  const projects: ProjectsListItem[] = snapshot.projects.map((p) => {
+    const hours = (p.totalEffortMinutes / 60).toFixed(1);
+    const prog = snapshot.projectProgress.find((pp) => pp.name === p.name);
+    return {
+      name: p.name,
+      totalEffortMinutes: p.totalEffortMinutes,
+      totalHours: hours,
+      activeTaskCount: p.activeTaskCount,
+      doneTaskCount: prog?.done ?? 0,
+      assignedMembers: p.assignedMembers,
+    };
+  });
+
+  return { projects };
+}
+
+function buildHelpPayload(): HelpPayload {
+  return {};
+}
+
+function buildMemberInfoPayload(member: Member, snapshot: GroundingSnapshot): MemberInfoPayload {
+  const snapshotMember = snapshot.members.find((m) => m.id === member.id || m.name.toLowerCase() === member.name.toLowerCase());
+  const effortMinutes = snapshotMember?.totalEffortMinutes ?? 0;
+  const capacityMinutes = 480;
+  const percentage = Number(((effortMinutes / capacityMinutes) * 100).toFixed(1));
+  const isOverloaded = effortMinutes > 480;
+  const isFree = effortMinutes === 0;
+  const statusLabel = isOverloaded ? "🔴 Quá tải" : isFree ? "🟢 Rảnh việc" : "🔵 Vừa tải";
+
+  const activeTasks = (snapshotMember?.activeTasks ?? []).map((t) => ({
+    title: t.title,
+    project: t.project,
+    duration: t.duration,
+  }));
+  const plannedTasks = (snapshotMember?.plannedTasks ?? []).map((t) => ({
+    title: t.title,
+    project: t.project,
+    duration: t.duration,
+  }));
+
+  const projects = Array.from(
+    new Set([
+      ...activeTasks.map((t) => t.project),
+      ...plannedTasks.map((t) => t.project),
+    ])
+  ).filter((p) => p && p !== "Unknown");
+
+  return {
+    name: member.name,
+    role: member.role === "leader" ? "DevOps Lead" : "DevOps Eng",
+    position: member.role === "leader" ? "DevOps / SRE Lead" : "Cloud Platform Engineer",
+    effortMinutes,
+    capacityMinutes,
+    percentage,
+    statusLabel,
+    statusVariant: isOverloaded ? "overload" : isFree ? "free" : "normal",
+    skills: member.skills ?? [],
+    activeTasks,
+    plannedTasks,
+    projects,
+  };
+}
 
 function renderTaskChangeAudit(logs: Awaited<ReturnType<typeof getAllTaskChangeLogs>>): string {
   if (logs.length === 0) {
@@ -455,6 +791,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // answers scoped to that member, same as if they'd typed their own name.
     const selfMember = detectSelfQueryTarget(userQuery, currentAskerRole, currentMemberId, allMembers);
     const effectiveQuery = selfMember ? userQuery.replace(FIRST_PERSON_PATTERN, selfMember.name) : userQuery;
+    const derivedCommand = deriveSlashCommandFromText(userQuery) || deriveSlashCommandFromText(effectiveQuery);
 
     // 4a. F-08/AC-08-6: audit trail question is answered directly from taskChangeLogs, no AI.
     if (AUDIT_QUERY_PATTERN.test(userQuery)) {
@@ -475,9 +812,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ answer, chatLogId });
     }
 
-    // 5. Check if user is specifically querying information of a member
+    // 4b. Member-specific lookup (e.g. /status, /info, or "task của Bảo ra sao?") must be resolved
+    // before the generic list cards below (5a-5j) — those cards match on loose keyword substrings
+    // (e.g. TASKS_QUERY_PATTERN matches "task đang làm và kế hoạch", which also appears verbatim in
+    // /info's own resolved prompt), so a query naming a specific member would otherwise be hijacked
+    // by the team-wide card instead of returning that member's info.
+    const isExplicitMemberCommand = derivedCommand === "/info" || derivedCommand === "/status";
     const memberQueryCheck = detectMemberQueryTarget(effectiveQuery, allMembers);
-    if (memberQueryCheck.isMemberQuery) {
+    if (isExplicitMemberCommand || memberQueryCheck.isMemberQuery) {
       if (memberQueryCheck.isPlaceholder) {
         const answer = `⚠️ **Chưa nhập tên thành viên cần tra cứu**\n\nVui lòng nhập tên thành viên cụ thể (Ví dụ: \`/status Bảo\` hoặc \`Tình hình công việc của Bảo ra sao?\`).\n\n📋 **Danh sách thành viên hiện có trong team:**\n${renderMemberList(allMembers, snapshot.members, currentAskerRole)}`;
 
@@ -528,7 +870,204 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           });
           return NextResponse.json({ answer, chatLogId });
         }
+
+        const memberInfoData = buildMemberInfoPayload(matchedMember, snapshot);
+        const answer = `Hồ sơ năng lực & Task của ${matchedMember.name}`;
+        const chatLogId = await createChatLog({
+          memberId: currentMemberId || "leader",
+          mode: currentMode,
+          threadId,
+          rawInput: userQuery,
+          imageUrl: null,
+          aiResponse: { answer, memberInfoData },
+          confirmed: true,
+        });
+        return NextResponse.json({ answer, memberInfoData, chatLogId });
       }
+    }
+
+    // 5a. FREE-CARD: leader-only "who's free" structured card, answered deterministically
+    if (isLeader && currentAskerRole === "leader" && (derivedCommand === "/free" || (!derivedCommand && FREE_QUERY_PATTERN.test(effectiveQuery)))) {
+      const memberAvailability = buildFreeCardAvailability(snapshot);
+      const freeCount = snapshot.freeMembers.length;
+      const answer =
+        freeCount > 0
+          ? `🟢 Hiện có **${freeCount} thành viên** đang rảnh và có thể nhận thêm task: ${snapshot.freeMembers.join(", ")}.`
+          : "⚠️ Hiện không có thành viên nào đang rảnh — toàn bộ đội ngũ đang bận hoặc quá tải.";
+
+      const chatLogId = await createChatLog({
+        memberId: currentMemberId || "leader",
+        mode: currentMode,
+        threadId,
+        rawInput: userQuery,
+        imageUrl: null,
+        aiResponse: { answer, memberAvailability },
+        confirmed: true,
+      });
+
+      return NextResponse.json({ answer, memberAvailability, chatLogId });
+    }
+
+    // 5b. TASK-CARD: structured task list card mirroring landing page UI
+    if (derivedCommand === "/tasks" || (!derivedCommand && TASKS_QUERY_PATTERN.test(effectiveQuery))) {
+      const taskList = buildTaskListPayload(snapshot);
+      const answer = `📋 Danh sách ${taskList.tasks.length} task đang thực hiện và kế hoạch.`;
+
+      const chatLogId = await createChatLog({
+        memberId: currentMemberId || "leader",
+        mode: currentMode,
+        threadId,
+        rawInput: userQuery,
+        imageUrl: null,
+        aiResponse: { answer, taskList },
+        confirmed: true,
+      });
+
+      return NextResponse.json({ answer, taskList, chatLogId });
+    }
+
+    // 5c. OVERLOAD-CARD: structured overload alert card
+    if (derivedCommand === "/overload" || (!derivedCommand && OVERLOAD_QUERY_PATTERN.test(effectiveQuery))) {
+      const overloadData = buildOverloadPayload(snapshot);
+      const answer = `⚠️ Cảnh báo quá tải: Phát hiện ${overloadData.overloadedMembers.length} thành viên vượt ngưỡng an toàn.`;
+
+      const chatLogId = await createChatLog({
+        memberId: currentMemberId || "leader",
+        mode: currentMode,
+        threadId,
+        rawInput: userQuery,
+        imageUrl: null,
+        aiResponse: { answer, overloadData },
+        confirmed: true,
+      });
+
+      return NextResponse.json({ answer, overloadData, chatLogId });
+    }
+
+    // 5d. EFFORT-CARD: structured effort distribution card with progress bar
+    if (derivedCommand === "/effort" || (!derivedCommand && EFFORT_QUERY_PATTERN.test(effectiveQuery))) {
+      const effortData = buildEffortPayload(snapshot);
+      const answer = `📊 Tổng hợp phân bổ Effort & thời lượng toàn đội ngũ hôm nay: ${effortData.totalEffortMinutes}m / ${effortData.totalCapacityMinutes}m (${effortData.overallPercentage}%).`;
+
+      const chatLogId = await createChatLog({
+        memberId: currentMemberId || "leader",
+        mode: currentMode,
+        threadId,
+        rawInput: userQuery,
+        imageUrl: null,
+        aiResponse: { answer, effortData },
+        confirmed: true,
+      });
+
+      return NextResponse.json({ answer, effortData, chatLogId });
+    }
+
+    // 5e. LOAD-CARD: structured workload and bandwidth card
+    if (derivedCommand === "/load" || (!derivedCommand && LOAD_QUERY_PATTERN.test(effectiveQuery))) {
+      const loadData = buildLoadPayload(snapshot);
+      const answer = `⚡ Tình trạng tải công việc và băng thông (Bandwidth) từng kỹ sư.`;
+
+      const chatLogId = await createChatLog({
+        memberId: currentMemberId || "leader",
+        mode: currentMode,
+        threadId,
+        rawInput: userQuery,
+        imageUrl: null,
+        aiResponse: { answer, loadData },
+        confirmed: true,
+      });
+
+      return NextResponse.json({ answer, loadData, chatLogId });
+    }
+
+    // 5f. REPORT-CARD: structured project effort allocation report card
+    if (derivedCommand === "/report" || (!derivedCommand && REPORT_QUERY_PATTERN.test(effectiveQuery))) {
+      const reportData = buildReportPayload(snapshot);
+      const answer = `📑 Báo cáo phân bổ Effort theo từng dự án (${reportData.projects.length} dự án).`;
+
+      const chatLogId = await createChatLog({
+        memberId: currentMemberId || "leader",
+        mode: currentMode,
+        threadId,
+        rawInput: userQuery,
+        imageUrl: null,
+        aiResponse: { answer, reportData },
+        confirmed: true,
+      });
+
+      return NextResponse.json({ answer, reportData, chatLogId });
+    }
+
+    // 5g. OVERDUE-CARD: structured overdue tasks warning card
+    if (derivedCommand === "/overdue" || (!derivedCommand && OVERDUE_QUERY_PATTERN.test(effectiveQuery))) {
+      const overdueData = buildOverduePayload(snapshot);
+      const answer = `🚨 Phát hiện ${overdueData.tasks.length} task đang bị trễ hạn hoặc cận kề deadline.`;
+
+      const chatLogId = await createChatLog({
+        memberId: currentMemberId || "leader",
+        mode: currentMode,
+        threadId,
+        rawInput: userQuery,
+        imageUrl: null,
+        aiResponse: { answer, overdueData },
+        confirmed: true,
+      });
+
+      return NextResponse.json({ answer, overdueData, chatLogId });
+    }
+
+    // 5h. MEMBERS-CARD: structured members roster card
+    if (derivedCommand === "/members" || (!derivedCommand && MEMBERS_QUERY_PATTERN.test(effectiveQuery))) {
+      const membersListData = buildMembersListPayload(snapshot);
+      const answer = `👥 Danh sách ${membersListData.members.length} thành viên đội ngũ DevOps & SRE.`;
+
+      const chatLogId = await createChatLog({
+        memberId: currentMemberId || "leader",
+        mode: currentMode,
+        threadId,
+        rawInput: userQuery,
+        imageUrl: null,
+        aiResponse: { answer, membersListData },
+        confirmed: true,
+      });
+
+      return NextResponse.json({ answer, membersListData, chatLogId });
+    }
+
+    // 5i. PROJECTS-CARD: structured projects list card
+    if (derivedCommand === "/projects" || (!derivedCommand && PROJECTS_QUERY_PATTERN.test(effectiveQuery))) {
+      const projectsListData = buildProjectsListPayload(snapshot);
+      const answer = `Danh sách các dự án hiện có (${projectsListData.projects.length} dự án).`;
+
+      const chatLogId = await createChatLog({
+        memberId: currentMemberId || "leader",
+        mode: currentMode,
+        threadId,
+        rawInput: userQuery,
+        imageUrl: null,
+        aiResponse: { answer, projectsListData },
+        confirmed: true,
+      });
+
+      return NextResponse.json({ answer, projectsListData, chatLogId });
+    }
+
+    // 5j. HELP-CARD: structured help and slash commands guide card
+    if (derivedCommand === "/help" || (!derivedCommand && HELP_QUERY_PATTERN.test(effectiveQuery))) {
+      const helpData = buildHelpPayload();
+      const answer = `💡 Hướng dẫn sử dụng DevOps AI Assistant & Hệ thống Slash Commands.`;
+
+      const chatLogId = await createChatLog({
+        memberId: currentMemberId || "leader",
+        mode: currentMode,
+        threadId,
+        rawInput: userQuery,
+        imageUrl: null,
+        aiResponse: { answer, helpData },
+        confirmed: true,
+      });
+
+      return NextResponse.json({ answer, helpData, chatLogId });
     }
 
     // 4. Standard Q&A flow with grounding
