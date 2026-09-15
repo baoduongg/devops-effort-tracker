@@ -19,18 +19,14 @@ import { Avatar } from "@astryxdesign/core/Avatar";
 import { IconButton } from "@astryxdesign/core/IconButton";
 import { HStack, VStack, StackItem } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
-import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
 import { useAuthStore } from "@/store/auth.store";
-import { signOutUser, updateUserRole } from "@/services/auth.service";
+import { signOutUser } from "@/services/auth.service";
 import { DataManagerDialog } from "@/components/dev/data-manager-dialog";
-import type { UserRole } from "@/types/user";
 
 export function Sidebar(): React.JSX.Element {
   const pathname = usePathname();
   const user = useAuthStore((state) => state.user);
-  const setRole = useAuthStore((state) => state.setRole);
   const [isDataManagerOpen, setIsDataManagerOpen] = useState(false);
-  const [switchingRole, setSwitchingRole] = useState(false);
 
   const isLeader = user?.role === "leader";
 
@@ -62,26 +58,12 @@ export function Sidebar(): React.JSX.Element {
       label: isLeader ? "AI Ask (Leader)" : "AI Log Work",
       icon: MessagesSquare,
     },
-    {
-      href: "/notifications",
-      label: "Thông báo",
-      icon: Bell,
-    },
+    // {
+    //   href: "/notifications",
+    //   label: "Thông báo",
+    //   icon: Bell,
+    // },
   ];
-
-  async function handleToggleRole(): Promise<void> {
-    if (!user || switchingRole) return;
-    const nextRole: UserRole = isLeader ? "devops" : "leader";
-    setSwitchingRole(true);
-    try {
-      setRole(nextRole);
-      await updateUserRole(user.uid, nextRole);
-    } catch (err) {
-      console.error("Failed to update user role", err);
-    } finally {
-      setSwitchingRole(false);
-    }
-  }
 
   return (
     <>
@@ -94,25 +76,14 @@ export function Sidebar(): React.JSX.Element {
           />
         }
         topContent={
-          <VStack gap={2} className="px-2 pt-1">
-            <SegmentedControl
-              label="Chuyển vai trò"
-              value={isLeader ? "leader" : "devops"}
-              onChange={() => {
-                if (switchingRole) return;
-                void handleToggleRole();
-              }}
-              layout="fill"
-              size="sm"
-              isDisabled={switchingRole}
-            >
-              <SegmentedControlItem value="leader" label="Leader" />
-              <SegmentedControlItem value="devops" label="DevOps" />
-            </SegmentedControl>
-            <Text type="supporting" size="xsm" color="secondary" className="uppercase tracking-wide">
-              {isLeader ? "LEADER VIEW" : "DEVOPS VIEW"}
-            </Text>
-          </VStack>
+          <div className="px-2 pt-1">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08]">
+              <span className={`w-2 h-2 rounded-full ${isLeader ? "bg-amber-400" : "bg-sky-400"}`} />
+              <span className="text-xs font-mono font-medium text-neutral-300">
+                {isLeader ? "LEADER VIEW" : "DEVOPS VIEW"}
+              </span>
+            </div>
+          </div>
         }
         footer={
           user && (
@@ -167,13 +138,13 @@ export function Sidebar(): React.JSX.Element {
             />
           ))}
         </SideNavSection>
-        <SideNavSection title="Hệ thống">
+        {/* <SideNavSection title="Hệ thống">
           <SideNavItem
             label="Quản lý dữ liệu"
             icon={Database}
             onClick={() => setIsDataManagerOpen(true)}
           />
-        </SideNavSection>
+        </SideNavSection> */}
       </SideNav>
 
       <DataManagerDialog
