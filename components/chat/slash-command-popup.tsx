@@ -103,13 +103,10 @@ export function SlashCommandPopup({
     <div
       role="dialog"
       aria-label="Danh sách lệnh nhanh"
-      className="absolute bottom-full left-0 right-0 mb-2 z-50 rounded-xl bg-neutral-900/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150 flex flex-col max-h-[320px]"
-      style={{
-        boxShadow: "0 16px 36px -10px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08)",
-      }}
+      className="absolute bottom-full left-0 right-0 mb-2 z-50 rounded-2xl bg-[#0b0f19]/95 backdrop-blur-2xl border border-white/[0.12] shadow-[0_20px_60px_-10px_rgba(0,0,0,0.9)] overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-150 flex flex-col max-h-[340px]"
     >
       {/* Header bar */}
-      <div className="px-3 py-2 border-b border-white/[0.08] bg-white/[0.02] flex items-center justify-between flex-shrink-0">
+      <div className="px-3.5 py-2.5 border-b border-white/[0.08] bg-white/[0.02] flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
           <Zap size={13} className="text-sky-400" />
           <span className="text-xs font-semibold text-neutral-200">Lệnh nhanh</span>
@@ -117,7 +114,7 @@ export function SlashCommandPopup({
             &bull; {mode === "devops" ? "DevOps" : "Leader"}
           </span>
           {searchQuery && (
-            <span className="text-xs font-mono text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+            <span className="text-xs font-mono text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
               {searchQuery}
             </span>
           )}
@@ -125,7 +122,7 @@ export function SlashCommandPopup({
         <button
           type="button"
           onClick={onClose}
-          className="text-neutral-500 hover:text-neutral-200 p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer"
+          className="text-neutral-500 hover:text-neutral-200 p-1 rounded-md hover:bg-white/10 transition-colors cursor-pointer"
           title="Đóng bảng lệnh (Esc)"
         >
           <X size={14} />
@@ -138,12 +135,12 @@ export function SlashCommandPopup({
         className="flex-1 overflow-y-auto p-1.5 space-y-0.5 scrollbar-thin scrollbar-thumb-white/10"
       >
         {commands.length === 0 ? (
-          <div className="py-6 px-4 text-center">
+          <div className="py-7 px-4 text-center">
             <p className="text-xs text-neutral-400">
               Không tìm thấy lệnh khớp với &ldquo;{searchQuery}&rdquo;
             </p>
-            <p className="text-sm text-neutral-500 mt-1">
-              Thử gõ <span className="font-mono text-sky-400">/help</span> để xem danh sách lệnh
+            <p className="text-sm text-neutral-500 mt-1 font-mono">
+              Thử gõ <span className="text-sky-400 font-semibold">/help</span> để xem danh sách lệnh
             </p>
           </div>
         ) : (
@@ -156,7 +153,7 @@ export function SlashCommandPopup({
             return (
               <div key={cmd.id}>
                 {showCategoryHeader && (
-                  <div className="px-2 pt-2 pb-1 text-xs font-semibold tracking-wider text-neutral-400 uppercase">
+                  <div className="px-2.5 pt-2.5 pb-1 text-[11px] font-bold tracking-wider text-neutral-400 uppercase font-mono">
                     {CATEGORY_NAMES[cmd.category] || cmd.category}
                   </div>
                 )}
@@ -164,15 +161,15 @@ export function SlashCommandPopup({
                   type="button"
                   data-index={idx}
                   onClick={() => onSelect(cmd)}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-lg transition-all flex items-center justify-between gap-2.5 group cursor-pointer ${
+                  className={`w-full text-left px-3 py-2 rounded-xl transition-all duration-150 flex items-center justify-between gap-2.5 group cursor-pointer border ${
                     isSelected
-                      ? "bg-sky-500/20 text-white border border-sky-500/30 shadow-sm"
-                      : "hover:bg-white/[0.04] text-neutral-300 border border-transparent"
+                      ? "bg-sky-500/20 text-white border-sky-500/40 shadow-sm shadow-sky-500/10"
+                      : "hover:bg-white/[0.04] text-neutral-300 border-transparent"
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <div
-                      className={`p-1 rounded-md flex-shrink-0 transition-colors ${
+                      className={`p-1.5 rounded-lg flex-shrink-0 transition-colors ${
                         isSelected
                           ? "bg-sky-500 text-white shadow-sm shadow-sky-500/30"
                           : "bg-white/[0.06] text-neutral-400 group-hover:text-neutral-200"
@@ -190,7 +187,7 @@ export function SlashCommandPopup({
                           {cmd.label}
                         </span>
                       </div>
-                      <p className="text-sm text-neutral-400 truncate mt-0.5">
+                      <p className="text-xs text-neutral-400 truncate mt-0.5">
                         {cmd.description}
                       </p>
                     </div>
@@ -198,7 +195,7 @@ export function SlashCommandPopup({
 
                   <div className="flex-shrink-0 flex items-center gap-1">
                     {isSelected && (
-                      <span className="text-xs font-medium text-sky-300 bg-sky-500/20 border border-sky-400/30 px-1.5 py-0.5 rounded flex items-center gap-1">
+                      <span className="text-[11px] font-mono font-medium text-sky-300 bg-sky-500/25 border border-sky-400/30 px-2 py-0.5 rounded-md flex items-center gap-1">
                         {cmd.isInstantPrompt ? "Hỏi ngay" : "Điền mẫu"}
                         <CornerDownLeft size={10} />
                       </span>
@@ -212,22 +209,22 @@ export function SlashCommandPopup({
       </div>
 
       {/* Footer shortcut tips */}
-      <div className="px-3 py-1.5 bg-black/40 border-t border-white/[0.06] flex items-center justify-between text-xs text-neutral-400 flex-shrink-0">
-        <div className="flex items-center gap-2.5">
+      <div className="px-3.5 py-2 bg-black/50 border-t border-white/[0.06] flex items-center justify-between text-xs text-neutral-400 flex-shrink-0">
+        <div className="flex items-center gap-3">
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.2 rounded bg-white/10 font-mono text-neutral-300">↑↓</kbd>
-            <span>Di chuyển</span>
+            <kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[10px] text-neutral-300 border border-white/10">↑↓</kbd>
+            <span className="text-[11px]">Di chuyển</span>
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.2 rounded bg-white/10 font-mono text-neutral-300">Enter</kbd>
-            <span>Chọn</span>
+            <kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[10px] text-neutral-300 border border-white/10">Enter</kbd>
+            <span className="text-[11px]">Chọn</span>
           </span>
           <span className="flex items-center gap-1">
-            <kbd className="px-1 py-0.2 rounded bg-white/10 font-mono text-neutral-300">Esc</kbd>
-            <span>Đóng</span>
+            <kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[10px] text-neutral-300 border border-white/10">Esc</kbd>
+            <span className="text-[11px]">Đóng</span>
           </span>
         </div>
-        <div className="text-neutral-400">{commands.length} lệnh</div>
+        <div className="text-neutral-400 font-mono text-[11px]">{commands.length} lệnh</div>
       </div>
     </div>
   );

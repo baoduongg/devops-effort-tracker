@@ -5,6 +5,7 @@ import { LandingHero } from "@/components/landing/landing-hero";
 import { LandingScreenSimulator } from "@/components/landing/landing-screen-simulator";
 import { LandingAiSandbox } from "@/components/landing/landing-ai-sandbox";
 import { LandingSlashCommands } from "@/components/landing/landing-slash-commands";
+import { LandingChatops } from "@/components/landing/landing-chatops";
 import { LandingComparison } from "@/components/landing/landing-comparison";
 import { LandingRoleTabs } from "@/components/landing/landing-role-tabs";
 import { LandingTechStack } from "@/components/landing/landing-tech-stack";
@@ -37,19 +38,22 @@ export default function LandingPage() {
       {/* 4. Slash Commands & Live Execution Preview Showcase */}
       <LandingSlashCommands />
 
-      {/* 5. Efficiency & Visibility Comparison */}
+      {/* 5. ChatOps Realtime Notifications & Webhooks */}
+      <LandingChatops />
+
+      {/* 6. Efficiency & Visibility Comparison */}
       <LandingComparison />
 
-      {/* 6. Role-Tailored Value Proposition (DevOps vs Tech Lead) */}
+      {/* 7. Role-Tailored Value Proposition (DevOps vs Tech Lead) */}
       <LandingRoleTabs />
 
-      {/* 7. Enterprise Tech Stack Architecture */}
+      {/* 8. Enterprise Tech Stack Architecture */}
       <LandingTechStack />
 
-      {/* 8. Cosmic Aurora Conversion CTA */}
+      {/* 9. Cosmic Aurora Conversion CTA */}
       <LandingCta />
 
-      {/* 9. Agency Footer */}
+      {/* 10. Agency Footer */}
       <LandingFooter />
     </div>
   );

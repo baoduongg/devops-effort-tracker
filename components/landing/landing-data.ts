@@ -246,10 +246,10 @@ export const TECH_STACK_ITEMS = [
   },
   {
     idx: "04",
-    title: "Astryx Design System",
-    desc: "Hệ thống 160+ UI tokens & components chuẩn mực, mang lại trải nghiệm thị giác cao cấp và nhất quán.",
-    color: "text-emerald-400",
-    bg: "bg-emerald-500/15",
-    border: "hover:border-emerald-500/30",
+    title: "ChatOps & Webhook Engine",
+    desc: "Tự động phát thông báo real-time tới Slack, Mattermost, Discord, Telegram và xuất Daily Digest PNG.",
+    color: "text-cyan-400",
+    bg: "bg-cyan-500/15",
+    border: "hover:border-cyan-500/30",
   },
 ];

@@ -25,6 +25,7 @@ import { GanttDayHeader } from "@/components/dashboard/gantt-day-header";
 import { isOverdue, daysOverdue } from "@/lib/overdue";
 import { formatTaskEffort } from "@/lib/effort";
 import { getProjectColor } from "@/lib/project-colors";
+import { getGanttTaskStyle } from "@/lib/status-colors";
 import { parseDateLocal, calculateDefaultEndDate } from "@/lib/date";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -65,6 +66,7 @@ const STATUS_LABELS: Record<TaskStatus, { label: string; colorClass: string; bgC
     bgClass: "bg-emerald-500/10",
   },
 };
+
 
 export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProps): React.JSX.Element {
   const [weekOffset, setWeekOffset] = useState(0);
@@ -229,8 +231,9 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                     // Hide if completely outside current window
                     if (taskEnd < windowStartMs || taskStart > windowEndMs) return null;
 
-                    const color = getProjectColor(project?.color);
                     const isHovered = hoveredTaskId === task.id;
+                    const visual = getGanttTaskStyle(task);
+                    const durationLabel = formatTaskEffort(task);
 
                     return (
                       <div
@@ -241,34 +244,44 @@ export function MemberTimelineGantt({ tasks, projects }: MemberTimelineGanttProp
                           onClick={() => setSelectedTask(task)}
                           onMouseEnter={() => setHoveredTaskId(task.id)}
                           onMouseLeave={() => setHoveredTaskId(null)}
-                          className={`absolute h-8 rounded-lg px-2.5 text-xs flex items-center justify-between text-white shadow-md transition-all cursor-pointer group ${
+                          className={`absolute h-8 rounded-lg pl-2.5 pr-2.5 text-xs flex items-center justify-between text-white transition-all cursor-pointer group bg-gradient-to-r ${visual.gradient} border ${visual.border} ${visual.shadow} ${
                             isPlanned
-                              ? "border border-dashed border-white/60 opacity-90 hover:opacity-100"
-                              : "border border-white/15"
-                          } ${isDone ? "opacity-55 grayscale hover:opacity-80" : ""} ${
-                            isHovered ? "ring-2 ring-sky-400 scale-[1.01] z-20 brightness-110 shadow-lg" : ""
+                              ? "border-dashed opacity-90 hover:opacity-100"
+                              : ""
+                          } ${isDone ? "opacity-85 hover:opacity-100" : ""} ${
+                            isHovered ? "ring-2 ring-white/60 scale-[1.01] z-20 brightness-110 shadow-xl" : ""
                           }`}
                           style={{
                             left: `${leftPct}%`,
                             width: `${widthPct}%`,
-                            backgroundColor: color,
                           }}
-                          title={`Nhấn để xem chi tiết: ${task.title} (${project?.name ?? "Project"})`}
+                          title={`Nhấn để xem chi tiết: ${task.title} (${project?.name ?? "Project"})${
+                            visual.isOverdue ? ` — Quá hạn ${visual.overdueDays} ngày` : ""
+                          }`}
                         >
                           <div className="flex items-center gap-1.5 min-w-0 pr-1 truncate">
-                            {isDone && <CheckCircle2 size={13} className="text-white flex-shrink-0" />}
-                            {isPlanned && <Clock size={13} className="text-white/80 flex-shrink-0" />}
-                            <span className="font-bold text-sm px-1 py-0.2 rounded bg-black/25 flex-shrink-0">
+                            {isDone && <CheckCircle2 size={13} className="text-emerald-300 flex-shrink-0" />}
+                            {isPlanned && <Clock size={13} className="text-purple-300 flex-shrink-0" />}
+                            {visual.isOverdue && (
+                              <AlertTriangle size={13} className="text-amber-300 flex-shrink-0 animate-pulse" />
+                            )}
+                            <span className="font-bold text-xs px-1.5 py-0.2 rounded bg-black/30 font-mono flex-shrink-0 border border-white/10">
                               {project?.name ?? "Project"}
                             </span>
-                            <span className="truncate font-medium text-xs drop-shadow-sm">
+                            <span className="truncate font-semibold text-xs drop-shadow-sm">
                               {task.title}
                             </span>
                           </div>
 
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            <span className="text-sm px-1.5 py-0.5 rounded bg-black/40 font-bold">
-                              {formatTaskEffort(task)}
+                            <span
+                              className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold ${
+                                visual.isOverdue
+                                  ? "bg-rose-950/80 text-rose-200 border border-rose-400/30"
+                                  : "bg-black/35 text-white/90"
+                              }`}
+                            >
+                              {visual.isOverdue ? `Trễ ${visual.overdueDays}d` : durationLabel}
                             </span>
                           </div>
                         </div>

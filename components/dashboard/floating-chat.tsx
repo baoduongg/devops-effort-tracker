@@ -6,7 +6,6 @@ import { Sparkles, X, ExternalLink } from "lucide-react";
 import { Card } from "@astryxdesign/core/Card";
 import { VStack, HStack, StackItem } from "@astryxdesign/core/Stack";
 import { IconButton } from "@astryxdesign/core/IconButton";
-import { Button } from "@astryxdesign/core/Button";
 import { Text } from "@astryxdesign/core/Text";
 import { Icon } from "@astryxdesign/core/Icon";
 import { Divider } from "@astryxdesign/core/Divider";
@@ -28,14 +27,17 @@ export function FloatingChat(): React.JSX.Element {
   if (!isOpen) {
     return (
       <div className="fixed bottom-6 right-6 z-[100]">
-        <Button
-          variant="primary"
-          size="lg"
-          elevation="high"
+        <button
+          type="button"
           onClick={() => setIsOpen(true)}
-          icon={<Icon icon={Sparkles} size="sm" />}
-          label="AI Chat"
-        />
+          className="group inline-flex items-center gap-2.5 pl-4 pr-3 py-2.5 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-white font-semibold text-sm shadow-[0_0_30px_rgba(56,189,248,0.4)] hover:shadow-[0_0_40px_rgba(56,189,248,0.6)] hover:brightness-105 active:scale-[0.96] transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer"
+        >
+          <Sparkles size={16} className="text-white animate-pulse" />
+          <span>AI Copilot</span>
+          <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
+          </span>
+        </button>
       </div>
     );
   }

@@ -30,6 +30,12 @@ const DEVOPS_ROLE_CARDS: RoleCardItem[] = [
     title: "Chủ Động Bắt Cặp Phối Hợp",
     desc: "Biết được đồng đội nào đang rảnh việc hoặc có kỹ năng phù hợp để chủ động nhờ hỗ trợ giải quyết sự cố hạ tầng.",
   },
+  {
+    num: "04",
+    tag: "ChatOps Direct Ping",
+    title: "Nhận Task & Alert Qua Chat",
+    desc: "Không cần F5 app. Nhận notification mention @tên ngay trên Slack/Mattermost kèm deadline, link task và tự động đồng bộ trạng thái khi log việc.",
+  },
 ];
 
 const LEAD_ROLE_CARDS: RoleCardItem[] = [
@@ -50,6 +56,12 @@ const LEAD_ROLE_CARDS: RoleCardItem[] = [
     tag: "Proactive Risk Alerts",
     title: "Cảnh Báo Rủi Ro Tức Thì",
     desc: "Hệ thống tự động phát hiện task trễ hạn, tạo notification cảnh báo để bạn xử lý trước khi ảnh hưởng đến tiến độ bàn giao.",
+  },
+  {
+    num: "04",
+    tag: "ChatOps Daily Digest",
+    title: "Báo Cáo Tự Động Kèm Ảnh PNG",
+    desc: "Tự động tổng hợp báo cáo tiến độ ngày kèm ảnh infographic canvas trực tiếp vào channel standup, cắt giảm triệt để các cuộc họp báo cáo rườm rà.",
   },
 ];
 
@@ -124,23 +136,27 @@ export function LandingRoleTabs() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -20, scale: 0.98 }}
           transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-6"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"
         >
           {cards.map((card) => (
             <motion.div
               key={card.num}
-              whileHover={{ y: -8, scale: 1.02 }}
-              transition={{ type: "spring", stiffness: 350, damping: 25 }}
-              className={`p-8 rounded-3xl bg-gradient-to-b from-white/[0.05] to-white/[0.01] border border-white/[0.08] ${borderHover} transition-colors space-y-3`}
+              whileHover={{ y: -6 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className={`p-2 rounded-[2rem] bg-white/[0.03] border border-white/[0.08] ${borderHover} shadow-[0_20px_40px_rgba(0,0,0,0.4)] transition-colors`}
             >
-              <div
-                className={`w-10 h-10 rounded-xl ${accentBg} ${accentColor} flex items-center justify-center font-mono font-bold text-sm`}
-              >
-                {card.num}
+              <div className="rounded-[calc(2rem-0.5rem)] p-7 bg-[#0c1017] border border-white/[0.05] shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)] h-full flex flex-col justify-between space-y-4">
+                <div className="space-y-3">
+                  <div
+                    className={`w-10 h-10 rounded-xl ${accentBg} ${accentColor} flex items-center justify-center font-mono font-bold text-sm border border-white/[0.08]`}
+                  >
+                    {card.num}
+                  </div>
+                  <div className={`${accentColor} font-bold text-xs uppercase tracking-wider font-mono`}>{card.tag}</div>
+                  <div className="text-lg font-bold text-white leading-snug">{card.title}</div>
+                  <p className="text-sm text-neutral-300 leading-relaxed">{card.desc}</p>
+                </div>
               </div>
-              <div className={`${accentColor} font-bold text-sm`}>{card.tag}</div>
-              <div className="text-xl font-bold text-white">{card.title}</div>
-              <p className="text-sm text-neutral-300 leading-relaxed">{card.desc}</p>
             </motion.div>
           ))}
         </motion.div>

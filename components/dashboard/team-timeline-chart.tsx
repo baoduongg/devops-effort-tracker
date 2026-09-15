@@ -26,6 +26,7 @@ import { formatTaskEffort } from "@/lib/effort";
 import { parseDateLocal, calculateDefaultEndDate } from "@/lib/date";
 import { assignLanes } from "@/lib/gantt-lanes";
 import { getProjectColor } from "@/lib/project-colors";
+import { getGanttTaskStyle } from "@/lib/status-colors";
 import type { Member } from "@/types/member";
 import type { Task, TaskStatus } from "@/types/task";
 import type { Project } from "@/types/project";
@@ -120,16 +121,16 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
     <Card elevation="low">
       <VStack gap={4}>
         {/* Timeline Header & Navigation */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.08] pb-3">
           <HStack gap={2} vAlign="center">
-            <span className="p-1.5 rounded-lg bg-accent/10 text-accent border border-accent/20">
+            <span className="p-2 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
               <CalendarIcon size={16} />
             </span>
             <div className="flex flex-col">
               <Text weight="semibold" size="lg">
-                Lịch trình Phân bổ & Tiến độ
+                Lịch trình Phân bổ &amp; Tiến độ (Gantt)
               </Text>
-              <Text type="supporting" size="sm">
+              <Text type="supporting" size="sm" className="font-mono">
                 {days[0].toLocaleDateString("vi-VN", { month: "short", day: "numeric" })} -{" "}
                 {days[days.length - 1].toLocaleDateString("vi-VN", { month: "short", day: "numeric", year: "numeric" })}
               </Text>
@@ -164,15 +165,15 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
         <div className="overflow-x-auto">
           <div className="min-w-[820px]">
             {/* Days Header */}
-            <div className="grid grid-cols-[220px_1fr] border-b border-border pb-2">
-              <Text type="supporting" size="sm" weight="semibold" className="px-3 uppercase tracking-wider">
-                DevOps Member
+            <div className="grid grid-cols-[220px_1fr] border-b border-white/[0.08] pb-2">
+              <Text type="supporting" size="sm" weight="semibold" className="px-3 uppercase tracking-wider font-mono">
+                Kỹ sư / Thành viên
               </Text>
               <GanttDayHeader days={days} />
             </div>
 
             {/* Member Timeline Rows */}
-            <VStack gap={0} className="divide-y divide-border">
+            <VStack gap={0} className="divide-y divide-white/[0.06]">
               {members.map((member) => {
                 const memberTasks = tasks.filter((t) => {
                   if (t.memberId !== member.id) return false;
@@ -189,10 +190,10 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
                 }));
                 const lanes = assignLanes(dayRanges);
                 const laneCount = Math.max(1, ...lanes.map((l) => l.lane + 1));
-                const rowHeight = laneCount * 26;
+                const rowHeight = laneCount * 28;
 
                 return (
-                  <HStack key={member.id} gap={0} vAlign="center" className="py-3" style={{ minHeight: rowHeight + 12 }}>
+                  <HStack key={member.id} gap={0} vAlign="center" className="py-2.5" style={{ minHeight: rowHeight + 12 }}>
                     <div className="w-[220px] flex-shrink-0 px-3 flex items-center gap-2.5">
                       <Avatar name={member.name} src={member.photoURL ?? undefined} size="md" tooltip={false} />
                       <div className="truncate">
@@ -201,51 +202,65 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
                             {member.name}
                           </Text>
                         </Link>
-                        <Text type="supporting" size="sm">
-                          {memberTasks.length} task{memberTasks.length === 1 ? "" : "s"} trong kỳ
+                        <Text type="supporting" size="xsm" className="font-mono text-neutral-400">
+                          {memberTasks.length} task{memberTasks.length === 1 ? "" : "s"}
                         </Text>
                       </div>
                     </div>
 
-                    <div className="relative flex-1 rounded-xl bg-surface border border-border overflow-hidden" style={{ minHeight: rowHeight }}>
+                    <div className="relative flex-1 rounded-xl bg-black/40 border border-white/[0.06] overflow-hidden" style={{ minHeight: rowHeight }}>
                       <div className="absolute inset-0 grid grid-cols-14 pointer-events-none">
                         {days.map((d, i) => {
                           const isToday = d.toDateString() === new Date().toDateString();
-                          return <div key={i} className={`border-r border-border h-full ${isToday ? "bg-accent/[0.08]" : ""}`} />;
+                          return <div key={i} className={`border-r border-white/[0.04] h-full ${isToday ? "bg-sky-500/[0.07]" : ""}`} />;
                         })}
                       </div>
 
                       {lanes.length === 0 ? (
-                        <Text type="supporting" size="sm" className="relative z-10 text-center py-1 block">
-                          Chưa có task trong khoảng này
-                        </Text>
+                        <div className="relative z-10 flex items-center gap-1.5 text-xs text-emerald-400/90 italic font-mono px-3 py-1.5">
+                          <CheckCircle2 size={13} />
+                          <span>Trống lịch trình — Có thể gán task mới</span>
+                        </div>
                       ) : (
                         lanes.map(({ task, start, end, lane }) => {
                           const project = projectMap.get(task.projectId);
                           const isDone = task.status === "done";
                           const isPlanned = task.status === "planned";
-                          const color = getProjectColor(project?.color);
+                          const visual = getGanttTaskStyle(task);
                           const leftPct = (start / days.length) * 100;
                           const widthPct = ((end - start + 1) / days.length) * 100;
+                          const durationLabel = formatTaskEffort(task);
 
                           return (
                             <div
                               key={task.id}
                               onClick={() => setSelectedTask({ task, memberName: member.name })}
-                              className={`absolute h-[22px] rounded-md px-2 text-xs flex items-center gap-1 cursor-pointer transition-transform hover:scale-[1.01] z-10 ${
-                                isPlanned ? "border border-dashed border-white/50 opacity-85" : "border border-white/10"
-                              } ${isDone ? "opacity-50 grayscale" : "text-body"}`}
+                              className={`absolute h-[24px] rounded-lg px-2 text-xs flex items-center justify-between gap-1.5 text-white cursor-pointer transition-all duration-200 hover:scale-[1.01] hover:brightness-110 z-10 bg-gradient-to-r ${visual.gradient} border ${visual.border} ${visual.shadow} ${
+                                isPlanned ? "border-dashed opacity-90" : ""
+                              } ${isDone ? "opacity-85" : ""}`}
                               style={{
                                 left: `${leftPct}%`,
                                 width: `${widthPct}%`,
-                                top: lane * 26 + 2,
-                                backgroundColor: color,
+                                top: lane * 28 + 2,
                               }}
-                              title={`${task.title} · ${project?.name ?? "Project"} · ${formatTaskEffort(task)}`}
+                              title={`${task.title} · ${project?.name ?? "Project"} · ${durationLabel}${visual.isOverdue ? ` · Quá hạn ${visual.overdueDays} ngày` : ""}`}
                             >
-                              {isDone && <CheckCircle2 size={11} className="flex-shrink-0" />}
-                              {isPlanned && <Clock size={11} className="flex-shrink-0 opacity-80" />}
-                              <span className="truncate font-medium text-sm">{task.title}</span>
+                              <span className="truncate font-semibold flex items-center gap-1.5 min-w-0">
+                                {isDone && <CheckCircle2 size={12} className="flex-shrink-0 text-emerald-300" />}
+                                {isPlanned && <Clock size={12} className="flex-shrink-0 text-purple-300" />}
+                                {visual.isOverdue && <AlertTriangle size={12} className="flex-shrink-0 text-amber-300 animate-pulse" />}
+                                <span className="truncate">{task.title}</span>
+                              </span>
+
+                              <span
+                                className={`text-[10px] font-mono px-1.5 py-0.2 rounded shrink-0 ${
+                                  visual.isOverdue
+                                    ? "bg-rose-950/80 text-rose-200 border border-rose-400/30 font-bold"
+                                    : "bg-black/30 text-white/90"
+                                }`}
+                              >
+                                {visual.isOverdue ? `Trễ ${visual.overdueDays}d` : durationLabel}
+                              </span>
                             </div>
                           );
                         })
@@ -259,36 +274,25 @@ export function TeamTimelineChart({ members, tasks, projects }: TeamTimelineChar
         </div>
 
         {/* Legend */}
-        <HStack gap={4} wrap="wrap" vAlign="center" className="pt-3 border-t border-border">
+        <HStack gap={4} wrap="wrap" vAlign="center" className="pt-3 border-t border-white/[0.08] text-xs">
           <Text type="supporting" size="sm" weight="semibold">
-            Dự án:
-          </Text>
-          {projects.map((p) => (
-            <HStack key={p.id} gap={1.5} vAlign="center">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getProjectColor(p.color) }} />
-              <Text size="sm">{p.name}</Text>
-            </HStack>
-          ))}
-          <Text type="supporting" size="sm">
-            •
+            Trạng thái Task:
           </Text>
           <HStack gap={1.5} vAlign="center">
-            <span className="w-3.5 h-2.5 rounded bg-sky-500" />
-            <Text type="supporting" size="sm">
-              Đang làm
-            </Text>
+            <span className="w-5 h-2.5 rounded bg-gradient-to-r from-sky-500 to-blue-600 border border-sky-400/50 shadow-sm" />
+            <Text size="sm">Đang làm</Text>
           </HStack>
           <HStack gap={1.5} vAlign="center">
-            <span className="w-3.5 h-2.5 rounded bg-purple-500 border border-dashed border-white/60" />
-            <Text type="supporting" size="sm">
-              Kế hoạch
-            </Text>
+            <span className="w-5 h-2.5 rounded bg-gradient-to-r from-purple-500 to-indigo-600 border border-purple-400/50 border-dashed shadow-sm" />
+            <Text size="sm">Kế hoạch</Text>
           </HStack>
           <HStack gap={1.5} vAlign="center">
-            <span className="w-3.5 h-2.5 rounded bg-neutral-600 opacity-50" />
-            <Text type="supporting" size="sm">
-              Đã xong
-            </Text>
+            <span className="w-5 h-2.5 rounded bg-gradient-to-r from-rose-500 to-amber-600 border border-rose-400/50 shadow-sm" />
+            <Text size="sm" className="text-rose-300 font-semibold">Trễ hạn</Text>
+          </HStack>
+          <HStack gap={1.5} vAlign="center">
+            <span className="w-5 h-2.5 rounded bg-gradient-to-r from-emerald-500 to-teal-600 border border-emerald-400/50 shadow-sm" />
+            <Text size="sm">Hoàn thành</Text>
           </HStack>
         </HStack>
       </VStack>

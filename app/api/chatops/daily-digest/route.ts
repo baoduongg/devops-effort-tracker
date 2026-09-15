@@ -12,28 +12,56 @@ function formatDigest(
   snapshot: Awaited<ReturnType<typeof buildGroundingSnapshot>>,
   emailByName: Map<string, string>
 ): string {
-  const displayName = (name: string) => toMention(emailByName.get(name)) || name;
-  const today = new Date().toLocaleDateString("vi-VN");
-  const lines = [`📋 Daily Report — ${today}`, ``];
+  const displayName = (name: string) => toMention(emailByName.get(name)) || `**${name}**`;
+  const today = new Date().toLocaleDateString("vi-VN", {
+    weekday: "long",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const membersWithTasks = snapshot.members.filter((m) => m.activeTasks.length > 0);
+  const overdueCount = snapshot.overdueTasks.length;
+  const statusSummary =
+    overdueCount === 0
+      ? "🟢 Không có task quá hạn"
+      : `⚠️ Có **${overdueCount} task** cần xử lý gấp`;
 
-  lines.push(`⚠️ Quá hạn (${snapshot.overdueTasks.length}):`);
-  if (snapshot.overdueTasks.length === 0) {
-    lines.push(`Không có task quá hạn 🎉`);
+  const lines = [
+    `### 📋 Daily Progress Report — ${today}`,
+    ``,
+    `> **📊 Tình trạng:** ${statusSummary} | **👥 Nhân sự active:** **${membersWithTasks.length}/${snapshot.members.length}** kỹ sư`,
+    ``,
+    `#### ⚠️ Task Quá Hạn (${overdueCount})`,
+  ];
+
+  if (overdueCount === 0) {
+    lines.push(`> *Không có task nào bị trễ hạn 🎉*`);
   } else {
     snapshot.overdueTasks.forEach((t) => {
-      lines.push(`- ${t.title} (${t.project}) — ${displayName(t.memberName)}, trễ ${t.daysOverdue} ngày`);
+      lines.push(
+        `- 🚨 **${t.title}** (*${t.project}*) — ${displayName(t.memberName)}, **trễ ${t.daysOverdue} ngày**`
+      );
     });
   }
 
-  lines.push(``, `🏃 Active task theo member:`);
-  const membersWithTasks = snapshot.members.filter((m) => m.activeTasks.length > 0);
+  lines.push(``, `#### 🏃 Active Task Theo Thành Viên`);
   if (membersWithTasks.length === 0) {
-    lines.push(`Không có task đang active.`);
+    lines.push(`> *Không có task nào đang active.*`);
   } else {
     membersWithTasks.forEach((m) => {
-      lines.push(`- ${displayName(m.name)} (${m.status}): ${m.activeTasks.map((t) => t.title).join(", ")}`);
+      const isOverloaded = m.status === "quá tải" || m.status === "overloaded";
+      const isFree = m.status === "rảnh" || m.status === "free";
+      const icon = isOverloaded ? "🔴" : isFree ? "🟢" : "🔵";
+      const taskList = m.activeTasks.map((t) => `\`${t.title}\``).join(", ");
+      lines.push(`- ${icon} ${displayName(m.name)} *(${m.status})*: ${taskList}`);
     });
   }
+
+  lines.push(
+    ``,
+    `---`,
+    `*Ảnh đồ họa tổng hợp (PNG Infographic) đã được đính kèm bên dưới.*`
+  );
 
   return lines.join("\n");
 }

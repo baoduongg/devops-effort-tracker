@@ -26,21 +26,25 @@ export function LandingNavbar(): React.JSX.Element {
         </Link>
 
         {/* Nav Links (Desktop) */}
-        <div className="hidden md:flex items-center gap-7 text-sm font-medium text-neutral-300">
+        <div className="hidden md:flex items-center gap-6 text-sm font-medium text-neutral-300">
           <a href="#screens" className="hover:text-white transition-colors">
             Giao diện thực tế
           </a>
           <a href="#ai-sandbox" className="hover:text-white transition-colors">
-            Trợ lý AI RunAgents
+            Trợ lý AI
           </a>
           <a href="#slash-commands" className="hover:text-white transition-colors">
             Slash Commands
           </a>
+          <a href="#chatops" className="hover:text-cyan-300 text-cyan-400/90 transition-colors flex items-center gap-1.5 font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+            ChatOps
+          </a>
           <a href="#features" className="hover:text-white transition-colors">
-            Tính năng cốt lõi
+            So sánh
           </a>
           <a href="#roles" className="hover:text-white transition-colors">
-            Góc nhìn vai trò
+            Vai trò
           </a>
         </div>
 

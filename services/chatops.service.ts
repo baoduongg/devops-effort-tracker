@@ -35,17 +35,16 @@ export function notifyTaskCreated(notice: TaskCreatedNotice): Promise<void> {
   const deadline = notice.endDate ?? "Chưa xác định";
 
   const message = [
-    `Chào ${mention || notice.memberName}, bạn vừa được giao một task mới:`,
+    `### 🚀 Giao Task Mới Cho Thành Viên`,
     ``,
-    `Task: ${notice.title}`,
+    `Chào **${mention || notice.memberName}**, bạn vừa được giao một task mới trong hệ thống:`,
     ``,
-    `Dự án: ${notice.projectName}`,
+    `> **📋 Task:** \`${notice.title}\``,
+    `> **📁 Dự án:** **${notice.projectName}**`,
+    `> **⏰ Hạn chót:** \`${deadline}\``,
+    `> **🔗 Chi tiết:** [Xem & Cập nhật Task](${notice.link})`,
     ``,
-    `Hạn chót: ${deadline}`,
-    ``,
-    `Chi tiết: [Link](${notice.link})`,
-    ``,
-    `Cần thêm thông tin hay hỗ trợ gì cứ hú ${notice.creatorName} liền nha. Chúc bạn một ngày làm việc mượt mà, không bug! 🚀`,
+    `*Cần thêm thông tin hay hỗ trợ gì cứ hú **${notice.creatorName}** liền nha. Chúc bạn một ngày làm việc mượt mà, không bug! 🚀*`,
   ].join("\n");
 
   return sendChatOpsMessage(message);
@@ -74,13 +73,16 @@ export function notifyTaskStatusChanged(notice: TaskStatusChangedNotice): Promis
   const icon = notice.newStatus === "done" ? "✅" : "🔄";
 
   const message = [
-    `${icon} Task đổi trạng thái: ${notice.title}`,
+    `### ${icon} Cập Nhật Trạng Thái Task`,
     ``,
-    `Dự án: ${notice.projectName}`,
-    `Người thực hiện: ${mention || notice.memberName}`,
-    `Trạng thái: ${oldLabel} → ${newLabel}`,
+    `Task **${notice.title}** vừa được cập nhật trạng thái mới:`,
     ``,
-    `Chi tiết: [Link](${notice.link})`,
+    `> **📁 Dự án:** **${notice.projectName}**`,
+    `> **👤 Người thực hiện:** **${mention || notice.memberName}**`,
+    `> **🔄 Trạng thái:** \`${oldLabel}\` ➔ **\`${newLabel}\`**`,
+    `> **🔗 Chi tiết:** [Xem Task](${notice.link})`,
+    ``,
+    `*Tiến độ Sprint đã được tự động cập nhật lên Gantt Timeline và Ma Trận Năng Lực.*`,
   ].join("\n");
 
   return sendChatOpsMessage(message);
@@ -99,12 +101,15 @@ export function notifyTaskReassigned(notice: TaskReassignedNotice): Promise<void
   const mention = toMention(notice.newMemberEmail);
 
   const message = [
-    `🔁 Task được chuyển người thực hiện: ${notice.title}`,
+    `### 🔁 Chuyển Giao Người Phụ Trách Task`,
     ``,
-    `Dự án: ${notice.projectName}`,
-    `Từ: ${notice.oldMemberName} → Đến: ${mention || notice.newMemberName}`,
+    `Task **${notice.title}** đã được điều chuyển nhân sự:`,
     ``,
-    `Chi tiết: [Link](${notice.link})`,
+    `> **📁 Dự án:** **${notice.projectName}**`,
+    `> **👤 Chuyển từ:** \`${notice.oldMemberName}\` ➔ **${mention || notice.newMemberName}**`,
+    `> **🔗 Chi tiết:** [Xem Task](${notice.link})`,
+    ``,
+    `*Vui lòng kiểm tra lại kế hoạch và cập nhật effort tương ứng.*`,
   ].join("\n");
 
   return sendChatOpsMessage(message);
@@ -124,13 +129,17 @@ export function notifyTaskOverdue(notice: TaskOverdueNotice): Promise<void> {
   const mention = toMention(notice.memberEmail);
 
   const message = [
-    `⚠️ Task quá hạn: ${notice.title}`,
+    `### ⚠️ Cảnh Báo Task Quá Hạn`,
     ``,
-    `Dự án: ${notice.projectName}`,
-    `Người thực hiện: ${mention || notice.memberName}`,
-    `Trễ ${notice.overdueDays} ngày (hạn ${notice.dueDate})`,
+    `Phát hiện task quá hạn cần được kiểm tra và xử lý gấp:`,
     ``,
-    `Chi tiết: [Link](${notice.link})`,
+    `> **📋 Task:** \`${notice.title}\``,
+    `> **📁 Dự án:** **${notice.projectName}**`,
+    `> **👤 Người phụ trách:** **${mention || notice.memberName}**`,
+    `> **🚨 Tình trạng:** **Trễ ${notice.overdueDays} ngày** *(Hạn chót: \`${notice.dueDate}\`)*`,
+    `> **🔗 Chi tiết:** [Cập nhật tiến độ ngay](${notice.link})`,
+    ``,
+    `*Vui lòng cập nhật lại tình trạng thực tế hoặc liên hệ Tech Lead để điều chỉnh timeline nếu có blocker.*`,
   ].join("\n");
 
   return sendChatOpsMessage(message);
@@ -149,11 +158,16 @@ export function notifyMemberOverloaded(notice: MemberOverloadedNotice): Promise<
   const hours = (notice.effortMinutes / 60).toFixed(1);
 
   const message = [
-    `🔥 Cảnh báo quá tải: ${mention || notice.memberName}`,
+    `### 🔥 Cảnh Báo Quá Tải Năng Lực Kỹ Sư`,
     ``,
-    `Đang có ${notice.activeTaskCount} task active, tổng ${hours}h effort (>8h/ngày).`,
+    `Phát hiện tải công việc của **${mention || notice.memberName}** vượt quá ngưỡng an toàn (**>8h/ngày**):`,
     ``,
-    `Chi tiết: [Link](${notice.link})`,
+    `> **👤 Nhân sự:** **${mention || notice.memberName}**`,
+    `> **📊 Tổng tải hiện tại:** **\`${hours}h\` effort** *(vượt ngưỡng 8h/ngày)*`,
+    `> **⚡ Số task active:** **\`${notice.activeTaskCount}\` task** đang chạy song song`,
+    `> **🔗 Chi tiết:** [Xem Ma trận Năng Lực](${notice.link})`,
+    ``,
+    `*Khuyến nghị: Dùng lệnh \`/reassign\` hoặc mở Ma Trận Năng Lực để san sẻ bớt task sang kỹ sư đang rảnh.*`,
   ].join("\n");
 
   return sendChatOpsMessage(message);

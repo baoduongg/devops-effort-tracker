@@ -67,10 +67,10 @@ export function StatCard({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 h-full flex flex-col justify-between select-none ${
+      className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] h-full flex flex-col justify-between select-none ${
         isSelected
-          ? `${cfg.selectedContainer} translate-y-[-2px]`
-          : "bg-[#0F172A]/70 border-slate-800/80 hover:border-slate-700 hover:bg-[#1E293B]/70 hover:shadow-lg hover:translate-y-[-1px]"
+          ? `${cfg.selectedContainer} translate-y-[-2px] shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)]`
+          : "bg-[#0F172A]/70 border-slate-800/80 hover:border-slate-700 hover:bg-[#1E293B]/70 hover:shadow-lg hover:translate-y-[-1px] shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]"
       }`}
     >
       {/* Ambient Top-Right Glow when Selected */}
@@ -92,7 +92,7 @@ export function StatCard({
             isSelected ? cfg.iconBgSelected : cfg.iconBgDefault
           }`}
         >
-          <IconComponent size={20} className={isSelected ? "scale-105 transition-transform" : ""} />
+          <IconComponent size={20} className={isSelected ? "scale-105 transition-transform duration-300" : ""} />
         </div>
 
         {isSelected && (
@@ -108,7 +108,7 @@ export function StatCard({
       {/* Body: Big Value & Label */}
       <div className="flex flex-col gap-0.5 relative z-10">
         <span
-          className={`text-2xl sm:text-3xl font-extrabold tracking-tight font-mono transition-colors duration-200 ${
+          className={`text-2xl sm:text-3xl font-extrabold tracking-tight font-mono tabular-nums transition-colors duration-200 ${
             isSelected ? cfg.numberColorSelected : "text-slate-100"
           }`}
         >

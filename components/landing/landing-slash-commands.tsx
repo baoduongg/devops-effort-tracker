@@ -183,8 +183,9 @@ export function LandingSlashCommands() {
           whileInView={{ opacity: 1, x: 0, filter: "blur(0px)" }}
           viewport={{ once: true, margin: "-60px" }}
           transition={{ duration: 0.75, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-          className="lg:col-span-7 rounded-3xl bg-[#0b0f19] border border-white/[0.1] shadow-2xl overflow-hidden sticky top-24"
+          className="lg:col-span-7 p-2 rounded-[2rem] bg-gradient-to-b from-white/[0.08] to-white/[0.02] border border-white/[0.09] shadow-[0_25px_80px_rgba(0,0,0,0.85)] backdrop-blur-2xl sticky top-24"
         >
+          <div className="rounded-[calc(2rem-0.5rem)] bg-[#0b0f19] border border-white/[0.06] overflow-hidden shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]">
           <AnimatePresence mode="wait">
             {isInstantPrompt ? (
               /* ========================================================= */
@@ -416,6 +417,7 @@ export function LandingSlashCommands() {
               </motion.div>
             )}
           </AnimatePresence>
+          </div>
         </motion.div>
       </div>
     </motion.section>

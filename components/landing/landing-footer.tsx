@@ -15,21 +15,21 @@ export function LandingFooter() {
           <span className="text-neutral-500">· Powered by RunAgents (claude-sonnet-cc) & Firebase</span>
         </div>
 
-        <div className="flex items-center gap-7 text-sm font-medium">
+        <div className="flex items-center gap-6 text-sm font-medium">
           <Link href="/dashboard" className="hover:text-white transition-colors">
             Dashboard
           </Link>
-          <Link href="/login" className="hover:text-white transition-colors">
-            Đăng nhập
-          </Link>
           <a href="#screens" className="hover:text-white transition-colors">
-            Giao diện thực tế
+            Giao diện
           </a>
           <a href="#ai-sandbox" className="hover:text-white transition-colors">
             Trợ lý AI
           </a>
           <a href="#slash-commands" className="hover:text-white transition-colors">
             Slash Commands
+          </a>
+          <a href="#chatops" className="hover:text-cyan-300 text-cyan-400 font-medium transition-colors">
+            ChatOps
           </a>
         </div>
 

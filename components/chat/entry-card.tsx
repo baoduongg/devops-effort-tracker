@@ -256,15 +256,13 @@ export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): Reac
                   icon={<User size={12} />}
                 />
               )}
-              <Token
-                label={durationStr}
-                size="sm"
-                color={edited.effortMinutes > 480 ? "red" : edited.effortMinutes >= 240 ? "yellow" : "teal"}
-                icon={<Clock size={12} />}
-              />
-              <HStack gap={1} vAlign="center">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-semibold tabular-nums bg-sky-500/15 text-sky-300 border border-sky-500/30">
+                <Clock size={12} />
+                {durationStr}
+              </span>
+              <HStack gap={1} vAlign="center" className="font-mono text-xs">
                 <Icon icon={CalendarDays} size="xsm" color="secondary" />
-                <Text type="supporting">
+                <Text type="supporting" className="font-mono text-xs">
                   {edited.startDate}
                   {edited.endDate && edited.endDate !== edited.startDate ? ` → ${edited.endDate}` : ""}
                 </Text>
