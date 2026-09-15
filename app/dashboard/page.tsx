@@ -1,36 +1,14 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import {
-  Users,
-  Calendar,
-  Layers,
-  FolderGit2,
-  RotateCcw,
-  CheckCircle2,
-  AlertTriangle,
-  Clock,
-  Search,
-  Sparkles,
-  Plus,
-} from "lucide-react";
-import { VStack, HStack, StackItem } from "@astryxdesign/core/Stack";
+import { useState } from "react";
+import { Users, Layers, Sparkles, Plus } from "lucide-react";
+import { VStack, HStack } from "@astryxdesign/core/Stack";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
 import { Skeleton } from "@astryxdesign/core/Skeleton";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
 import { Button } from "@astryxdesign/core/Button";
-import { TextInput } from "@astryxdesign/core/TextInput";
-import { Selector } from "@astryxdesign/core/Selector";
-import { SegmentedControl, SegmentedControlItem } from "@astryxdesign/core/SegmentedControl";
-import { Card } from "@astryxdesign/core/Card";
-import { StatCard } from "@/components/dashboard/stat-card";
-import { subscribeMembers } from "@/services/members.service";
-import { getProjects } from "@/services/projects.service";
-import { subscribeAllTasks } from "@/services/tasks.service";
-import { subscribeNotifications, createNotification } from "@/services/notifications.service";
-import { notifyTaskOverdue } from "@/services/chatops.service";
 import { useMembersStore } from "@/store/members.store";
 import { useAuthStore } from "@/store/auth.store";
 import { DevOpsWorkspace } from "@/components/dashboard/devops-workspace";
@@ -40,218 +18,39 @@ import { PMTeamRoster } from "@/components/dashboard/pm-team-roster";
 import { TeamTimelineChart } from "@/components/dashboard/team-timeline-chart";
 import { ProjectAllocationGrid } from "@/components/dashboard/project-allocation-grid";
 import { FloatingChat } from "@/components/dashboard/floating-chat";
-import { isOverdue, daysOverdue } from "@/lib/overdue";
-import type { Project } from "@/types/project";
-import type { Task } from "@/types/task";
-import type { Notification } from "@/types/notification";
-
-type DashboardTab = "roster" | "timeline" | "projects";
+import { CapacityKpiBar } from "@/components/dashboard/CapacityKpiBar";
+import { DashboardFilterBar, type DashboardTab } from "@/components/dashboard/DashboardFilterBar";
+import { useDashboardData } from "@/components/dashboard/hooks/useDashboardData";
+import { useOverdueNotifications } from "@/components/dashboard/hooks/useOverdueNotifications";
+import { useTeamCapacityStats, type CapacityFilter } from "@/components/dashboard/hooks/useTeamCapacityStats";
 
 export default function DashboardPage(): React.JSX.Element {
   const user = useAuthStore((state) => state.user);
   const members = useMembersStore((state) => state.members);
-  const setMembers = useMembersStore((state) => state.setMembers);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [projectsLoaded, setProjectsLoaded] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  // View switch for devops user
+  const { tasks, projects, projectsLoaded, notifications, loading } = useDashboardData();
+
   const [devopsViewMode, setDevopsViewMode] = useState<"personal" | "team">("personal");
-
-  // Filters & Tabs state
   const [activeTab, setActiveTab] = useState<DashboardTab>("roster");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
-  const [selectedCapacity, setSelectedCapacity] = useState<string>("all");
-  const [showOverdueOnly, setShowOverdueOnly] = useState(false);
+  const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>("all");
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
 
-
-
-  useEffect(() => {
-    const unsubscribeMembers = subscribeMembers((next) => {
-      setMembers(next);
-      setLoading(false);
-    });
-    const unsubscribeTasks = subscribeAllTasks((nextTasks) => {
-      setTasks(nextTasks);
-    });
-    const unsubscribeNotifications = subscribeNotifications(setNotifications);
-    getProjects().then((next) => {
-      setProjects(next);
-      setProjectsLoaded(true);
-    });
-
-    return () => {
-      unsubscribeMembers();
-      unsubscribeTasks();
-      unsubscribeNotifications();
-    };
-  }, [setMembers]);
-
-  // Aggregate stats dynamically from real tasks
-  const inProgressTasks = useMemo(() => tasks.filter((t) => t.status === "in_progress"), [tasks]);
-
-  const memberEffortMap = useMemo(() => {
-    const map = new Map<string, number>();
-    inProgressTasks.forEach((t) => {
-      map.set(t.memberId, (map.get(t.memberId) ?? 0) + t.effortMinutes);
-    });
-    return map;
-  }, [inProgressTasks]);
-
-  const memberActiveTasksCountMap = useMemo(() => {
-    const map = new Map<string, number>();
-    inProgressTasks.forEach((t) => {
-      map.set(t.memberId, (map.get(t.memberId) ?? 0) + 1);
-    });
-    return map;
-  }, [inProgressTasks]);
-
-  // Filter out the currently logged-in user from the team dashboard view
-  const displayMembers = useMemo(() => {
-    if (!user) return members;
-    return members.filter((m) => {
-      const isSameMemberId = Boolean(user.memberId && m.id === user.memberId);
-      const isSameEmail = Boolean(
-        user.email && m.email && m.email.toLowerCase() === user.email.toLowerCase()
-      );
-      return !isSameMemberId && !isSameEmail;
-    });
-  }, [members, user]);
-
-  // Status counts for PM quick glance (across other team members)
-  const availableMembersCount = useMemo(() => {
-    return displayMembers.filter((m) => {
-      const effort = memberEffortMap.get(m.id) ?? 0;
-      const count = memberActiveTasksCountMap.get(m.id) ?? 0;
-      return count === 0 || effort === 0;
-    }).length;
-  }, [displayMembers, memberEffortMap, memberActiveTasksCountMap]);
-
-  const overloadedCount = useMemo(() => {
-    return displayMembers.filter((m) => (memberEffortMap.get(m.id) ?? 0) > 480).length;
-  }, [displayMembers, memberEffortMap]);
-
-  const activeWorkingCount = useMemo(() => {
-    return displayMembers.filter((m) => {
-      const effort = memberEffortMap.get(m.id) ?? 0;
-      const count = memberActiveTasksCountMap.get(m.id) ?? 0;
-      return count > 0 && effort > 0 && effort <= 480;
-    }).length;
-  }, [displayMembers, memberEffortMap, memberActiveTasksCountMap]);
-
-  // Derived overdue tasks
-  const overdueTasks = useMemo(() => tasks.filter(isOverdue), [tasks]);
-  const overdueMemberIds = useMemo(() => new Set(overdueTasks.map((t) => t.memberId)), [overdueTasks]);
-
-  // Notify once per task the first time it's detected overdue
-  useEffect(() => {
-    if (!projectsLoaded) return;
-    if (overdueTasks.length === 0) return;
-    const alreadyNotified = new Set(
-      notifications.filter((n) => n.type === "overdue_task").map((n) => n.relatedTaskId)
-    );
-    overdueTasks.forEach((task) => {
-      if (alreadyNotified.has(task.id)) return;
-      const member = members.find((m) => m.id === task.memberId);
-      const project = projects.find((p) => p.id === task.projectId);
-      const overdueDays = daysOverdue(task.endDate as string);
-      const dueDate = new Date(task.endDate as string);
-      const formattedDate = `${String(dueDate.getDate()).padStart(2, "0")}/${String(
-        dueDate.getMonth() + 1
-      ).padStart(2, "0")}/${dueDate.getFullYear()}`;
-      createNotification(
-        {
-          type: "overdue_task",
-          title: `${task.title} đã quá hạn`,
-          message: `${member?.name ?? "Unassigned"} — ${project?.name ?? "No project"} — trễ ${overdueDays} ngày (hạn ${formattedDate})`,
-          severity: "warning",
-          relatedProjectId: task.projectId,
-          relatedTaskId: task.id,
-          relatedMemberId: task.memberId,
-          read: false,
-        },
-        `overdue_task_${task.id}`
-      );
-      notifyTaskOverdue({
-        title: task.title,
-        memberName: member?.name ?? "Unassigned",
-        memberEmail: member?.email,
-        projectName: project?.name ?? "No project",
-        overdueDays,
-        dueDate: formattedDate,
-        link: `${window.location.origin}/tasks`,
-      });
-    });
-  }, [overdueTasks, projectsLoaded, members, projects, notifications]);
-
-  // Filter options for Astryx Selector
-  const projectOptions = useMemo(() => {
-    return [
-      { value: "all", label: `Tất cả dự án (${projects.length})` },
-      ...projects.map((p) => ({ value: p.id, label: p.name })),
-    ];
-  }, [projects]);
-
-  // Filter members based on Search, Project, Capacity, and Overdue
-  const filteredMembers = useMemo(() => {
-    return displayMembers.filter((member) => {
-      const totalEffort = memberEffortMap.get(member.id) ?? 0;
-      const activeCount = memberActiveTasksCountMap.get(member.id) ?? 0;
-      const memberTasks = tasks.filter((t) => t.memberId === member.id);
-
-      // Search Query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = member.name.toLowerCase().includes(q);
-        const matchesSkill = member.skills.some((s) => s.toLowerCase().includes(q));
-        const matchesTask = memberTasks.some((t) => t.title.toLowerCase().includes(q));
-        if (!matchesName && !matchesSkill && !matchesTask) return false;
-      }
-
-      // Project Filter
-      if (selectedProjectId !== "all") {
-        const hasProject = memberTasks.some((t) => t.projectId === selectedProjectId);
-        if (!hasProject) return false;
-      }
-
-      // Capacity Filter
-      if (selectedCapacity === "available") {
-        if (activeCount > 0 && totalEffort > 0) return false;
-      } else if (selectedCapacity === "working") {
-        if (activeCount === 0 || totalEffort === 0 || totalEffort > 480) return false;
-      } else if (selectedCapacity === "overloaded") {
-        if (totalEffort <= 480) return false;
-      }
-
-      // Overdue Filter
-      if (showOverdueOnly && !overdueMemberIds.has(member.id)) return false;
-
-      return true;
-    });
-  }, [
+  const {
     displayMembers,
-    memberEffortMap,
-    memberActiveTasksCountMap,
-    tasks,
-    searchQuery,
-    selectedProjectId,
-    selectedCapacity,
-    showOverdueOnly,
-    overdueMemberIds,
-  ]);
+    availableMembersCount,
+    overloadedCount,
+    activeWorkingCount,
+    overdueTasks,
+    projectOptions,
+    filteredMembers,
+    hasActiveFilters,
+    currentMember,
+  } = useTeamCapacityStats(members, tasks, user, searchQuery, selectedProjectId, capacityFilter, projects);
 
-  const hasActiveFilters = searchQuery || selectedProjectId !== "all" || selectedCapacity !== "all" || showOverdueOnly;
+  useOverdueNotifications(overdueTasks, projectsLoaded, members, projects, notifications);
 
-  const currentMember = useMemo(
-    () => members.find((m) => m.id === user?.memberId) ?? null,
-    [members, user?.memberId]
-  );
-
-  // If role is DevOps and viewing personal mode, render DevOpsWorkspace
   if (user?.role === "devops" && devopsViewMode === "personal") {
     return (
       <VStack gap={4}>
@@ -265,13 +64,7 @@ export default function DashboardPage(): React.JSX.Element {
           />
         </div>
 
-        <DevOpsWorkspace
-          user={user}
-          member={currentMember}
-          tasks={tasks}
-          projects={projects}
-          members={members}
-        />
+        <DevOpsWorkspace user={user} member={currentMember} tasks={tasks} projects={projects} members={members} />
         <FloatingChat />
       </VStack>
     );
@@ -279,20 +72,13 @@ export default function DashboardPage(): React.JSX.Element {
 
   return (
     <VStack gap={5}>
-      {/* If DevOps is viewing team mode, show a return button banner */}
       {user?.role === "devops" && devopsViewMode === "team" && (
         <HStack gap={3} vAlign="center" className="p-2.5 px-3.5 rounded-xl bg-accent/10 border border-accent/25 justify-between text-xs">
           <Text size="xsm" color="accent">Bạn đang xem góc nhìn điều hành toàn đội DevOps.</Text>
-          <Button
-            label="Quay lại Dashboard"
-            variant="secondary"
-            size="sm"
-            onClick={() => setDevopsViewMode("personal")}
-          />
+          <Button label="Quay lại Dashboard" variant="secondary" size="sm" onClick={() => setDevopsViewMode("personal")} />
         </HStack>
       )}
 
-      {/* Header: Title, Description & View Switcher */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-1 border-b border-border">
         <VStack gap={1}>
           <HStack gap={2} vAlign="center">
@@ -306,134 +92,41 @@ export default function DashboardPage(): React.JSX.Element {
           </Text>
         </VStack>
 
-        <Button
-          label="Tạo Task mới"
-          icon={<Plus size={15} />}
-          variant="primary"
-          onClick={() => setIsCreateTaskModalOpen(true)}
-        />
+        <Button label="Tạo Task mới" icon={<Plus size={15} />} variant="primary" onClick={() => setIsCreateTaskModalOpen(true)} />
       </div>
 
-      {/* Unified Executive KPI & Quick Filter Bar */}
       {!loading && members.length > 0 && (
-        <Card elevation="low">
-          <VStack gap={3}>
-            {/* KPI Metric Chips */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCapacity("all");
-                  setShowOverdueOnly(false);
-                }}
-                className="text-left"
-              >
-                <StatCard label="Tổng DevOps" value={String(displayMembers.length)} icon={Users} tone="primary" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCapacity(selectedCapacity === "available" && !showOverdueOnly ? "all" : "available");
-                  setShowOverdueOnly(false);
-                }}
-                className="text-left"
-              >
-                <StatCard label="Trống việc / Rảnh" value={String(availableMembersCount)} icon={CheckCircle2} tone="success" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCapacity(selectedCapacity === "working" && !showOverdueOnly ? "all" : "working");
-                  setShowOverdueOnly(false);
-                }}
-                className="text-left"
-              >
-                <StatCard label="Vừa tải (50-100%)" value={String(activeWorkingCount)} icon={Clock} tone="primary" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCapacity(selectedCapacity === "overloaded" && !showOverdueOnly ? "all" : "overloaded");
-                  setShowOverdueOnly(false);
-                }}
-                className="text-left"
-              >
-                <StatCard label="Quá tải (>100%)" value={String(overloadedCount)} icon={AlertTriangle} tone="destructive" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowOverdueOnly((prev) => !prev);
-                  setSelectedCapacity("all");
-                }}
-                className="text-left"
-              >
-                <StatCard label="Trễ hạn" value={String(overdueTasks.length)} icon={AlertTriangle} tone="warning" />
-              </button>
-            </div>
-
-
-          </VStack>
-        </Card>
+        <CapacityKpiBar
+          capacityFilter={capacityFilter}
+          onCapacityFilterChange={setCapacityFilter}
+          displayMembersCount={displayMembers.length}
+          availableMembersCount={availableMembersCount}
+          activeWorkingCount={activeWorkingCount}
+          overloadedCount={overloadedCount}
+          overdueCount={overdueTasks.length}
+        />
       )}
 
-      {/* Overdue Tasks Alert Banner (if any exist) */}
-      {!loading && overdueTasks.length > 0 && !showOverdueOnly && (
+      {!loading && overdueTasks.length > 0 && capacityFilter !== "overdue" && (
         <OverdueTasksList tasks={overdueTasks} members={members} projects={projects} />
       )}
-      {/* Filter Search & Project Controls */}
-      <HStack gap={3} vAlign="center" wrap="wrap" className="pt-2 border-t border-border">
-        <SegmentedControl
-          label="Chế độ xem"
-          value={activeTab}
-          onChange={(v) => setActiveTab(v as DashboardTab)}
-        >
-          <SegmentedControlItem value="roster" label="Bảng nhân sự" icon={<Layers size={14} strokeWidth={2} />} />
-          <SegmentedControlItem value="timeline" label="Lịch trình Gantt" icon={<Calendar size={14} strokeWidth={2} />} />
-          <SegmentedControlItem value="projects" label="Theo Dự án" icon={<FolderGit2 size={14} strokeWidth={2} />} />
-        </SegmentedControl>
 
-        <StackItem size="fill">
-          <TextInput
-            label="Tìm kiếm DevOps"
-            isLabelHidden
-            placeholder="Tìm theo tên DevOps, kỹ năng hoặc task đang làm..."
-            value={searchQuery}
-            onChange={setSearchQuery}
-            startIcon={Search}
-            hasClear
-          />
-        </StackItem>
+      <DashboardFilterBar
+        activeTab={activeTab}
+        onActiveTabChange={setActiveTab}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
+        projectOptions={projectOptions}
+        selectedProjectId={selectedProjectId}
+        onSelectedProjectIdChange={setSelectedProjectId}
+        hasActiveFilters={Boolean(hasActiveFilters)}
+        onClearFilters={() => {
+          setSearchQuery("");
+          setSelectedProjectId("all");
+          setCapacityFilter("all");
+        }}
+      />
 
-        <div className="w-full sm:w-64">
-          <Selector
-            label="Dự án"
-            isLabelHidden
-            options={projectOptions}
-            value={selectedProjectId}
-            onChange={(v) => setSelectedProjectId(String(v))}
-          />
-        </div>
-
-        {hasActiveFilters && (
-          <Button
-            label="Bỏ lọc"
-            icon={<RotateCcw size={13} />}
-            variant="ghost"
-            onClick={() => {
-              setSearchQuery("");
-              setSelectedProjectId("all");
-              setSelectedCapacity("all");
-              setShowOverdueOnly(false);
-            }}
-          />
-        )}
-      </HStack>
-      {/* Main Content Area */}
       {loading ? (
         <VStack gap={3}>
           {Array.from({ length: 4 }).map((_, i) => (
@@ -454,10 +147,8 @@ export default function DashboardPage(): React.JSX.Element {
         <ProjectAllocationGrid projects={projects} tasks={tasks} members={filteredMembers} />
       )}
 
-      {/* Floating AI Chat Assistant */}
       <FloatingChat />
 
-      {/* Create Task Modal Dialog */}
       <TaskCreateModal
         isOpen={isCreateTaskModalOpen}
         onOpenChange={setIsCreateTaskModalOpen}

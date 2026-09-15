@@ -35,10 +35,10 @@ export function OverdueTasksList({ tasks, members, projects }: OverdueTasksListP
       <HStack gap={2} vAlign="center" className="pb-2">
         <AlertTriangle size={17} className="text-error" />
         <StackItem size="fill">
-          <Text weight="semibold">{tasks.length} overdue tasks need attention</Text>
+          <Text weight="semibold">{tasks.length} Task trễ hạn</Text>
         </StackItem>
         <Button
-          label={isOpen ? "Hide" : "Show"}
+          label={isOpen ? "Ẩn" : "Hiện"}
           icon={<ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />}
           variant="ghost"
           size="sm"
