@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Sparkles, Clock, Calendar, CheckCircle2, Users, Zap, Plus } from "lucide-react";
+import Link from "next/link";
+import { Sparkles, Clock, Calendar, CheckCircle2, Users, Zap, Plus, Send } from "lucide-react";
 import { VStack, HStack } from "@astryxdesign/core/Stack";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
@@ -128,6 +129,15 @@ export function DevOpsWorkspace({
         </div>
 
         <HStack gap={2} vAlign="center">
+          <Link
+            href="/daily-digest"
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-sky-500/15 hover:from-emerald-500/25 hover:via-teal-500/20 hover:to-sky-500/25 text-emerald-300 hover:text-emerald-100 border border-emerald-500/30 hover:border-emerald-400/50 shadow-[0_0_15px_rgba(16,185,129,0.12)] hover:shadow-[0_0_20px_rgba(16,185,129,0.22)] transition-all font-medium text-sm group"
+          >
+            <span className="p-1 rounded-md bg-emerald-500/20 text-emerald-300 group-hover:scale-110 transition-transform flex items-center justify-center">
+              <Send size={13} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+            </span>
+            <span>Daily Digest</span>
+          </Link>
           <Button
             label="Tạo Task mới"
             icon={<Plus size={15} />}

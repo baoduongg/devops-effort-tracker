@@ -115,6 +115,33 @@ export function notifyTaskReassigned(notice: TaskReassignedNotice): Promise<void
   return sendChatOpsMessage(message);
 }
 
+interface TaskDeletedNotice {
+  title: string;
+  memberName: string;
+  memberEmail?: string;
+  projectName: string;
+  deletedByName: string;
+}
+
+export function notifyTaskDeleted(notice: TaskDeletedNotice): Promise<void> {
+  const mention = toMention(notice.memberEmail);
+
+  const message = [
+    `### 🗑️ Task Đã Bị Xóa`,
+    ``,
+    `Task sau đây đã bị xóa khỏi hệ thống:`,
+    ``,
+    `> **📋 Task:** \`${notice.title}\``,
+    `> **📁 Dự án:** **${notice.projectName}**`,
+    `> **👤 Người phụ trách:** **${mention || notice.memberName}**`,
+    `> **🧑‍💻 Xóa bởi:** **${notice.deletedByName}**`,
+    ``,
+    `*Nếu đây không phải chủ ý, vui lòng liên hệ Tech Lead để khôi phục.*`,
+  ].join("\n");
+
+  return sendChatOpsMessage(message);
+}
+
 interface TaskOverdueNotice {
   title: string;
   memberName: string;

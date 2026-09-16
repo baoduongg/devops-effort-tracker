@@ -60,7 +60,10 @@ function formatDigest(
   lines.push(
     ``,
     `---`,
-    `*Ảnh đồ họa tổng hợp (PNG Infographic) đã được đính kèm bên dưới.*`
+    `*Ảnh đồ họa tổng hợp (PNG Infographic) đã được đính kèm bên dưới.* `,
+    `-----`,
+    `---`,
+    `![image](${process.env.HOST}/api/chatops/daily-digest?format=image)`,
   );
 
   return lines.join("\n");

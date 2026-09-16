@@ -91,7 +91,7 @@ export default function DailyDigestChatOpsPage(): React.JSX.Element {
         {status === "success" && (
           <div className="relative mb-6">
             <div className="w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.25)]">
-              <CheckCircle2 size={42} className="animate-bounce" />
+              <CheckCircle2 size={42} />
             </div>
             <div className="absolute -bottom-1 -right-1 bg-sky-500 text-white p-1 rounded-full border-2 border-[#0F172A]">
               <Send size={12} />
@@ -122,8 +122,8 @@ export default function DailyDigestChatOpsPage(): React.JSX.Element {
                 ? "Báo cáo Daily Digest (đã đính kèm ảnh tổng hợp) đã được gửi thành công!"
                 : "Báo cáo Daily Digest đã được gửi thành công!"
               : status === "error"
-              ? `Lưu ý khi gửi: ${errorMessage || "Đã kích hoạt gửi tin"}`
-              : "Hệ thống đang trích xuất dữ liệu, vẽ ảnh báo cáo và đăng tải..."}
+                ? `Lưu ý khi gửi: ${errorMessage || "Đã kích hoạt gửi tin"}`
+                : "Hệ thống đang trích xuất dữ liệu, vẽ ảnh báo cáo và đăng tải..."}
           </p>
           <p className="text-amber-300/90 text-xs sm:text-sm mt-2 flex items-center justify-center gap-1.5 font-medium bg-amber-500/10 py-2 px-3 rounded-lg border border-amber-500/20">
             <span>⚠️</span>
@@ -158,7 +158,7 @@ export default function DailyDigestChatOpsPage(): React.JSX.Element {
             className="flex-1 min-w-[120px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-sm transition-all border border-slate-700"
           >
             <X size={16} />
-            Đóng trang ({countdown}s)
+            <span className="flex flex-col">Đóng trang </span>
           </button>
 
           <Link

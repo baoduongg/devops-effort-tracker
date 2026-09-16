@@ -1,10 +1,16 @@
+function maskSecret(value: string | undefined): string {
+  if (!value) return "";
+  if (value.length <= 8) return "***";
+  return `${value.slice(0, 4)}...${value.slice(-4)}`;
+}
+
 export async function uploadChatOpsFile(
   fileBuffer: Buffer | Uint8Array,
   filename = "daily-digest.png",
   mimeType = "image/png"
 ): Promise<string | null> {
   const url = process.env.CHAT_OPS_URL_FOR_POSTS;
-  const authToken = process.env.MM_AUTHTOKEN;
+  const authToken = process.env.MM_AUTHTOKEN_USER;
   const csrf = process.env.MM_CSRF;
   const channelId = process.env.CHANNEL_ID;
 
@@ -20,6 +26,10 @@ export async function uploadChatOpsFile(
     formData.append("channel_id", channelId);
     const blob = new Blob([new Uint8Array(fileBuffer)], { type: mimeType });
     formData.append("files", blob, filename);
+
+    console.log(
+      `[ChatOps][curl] curl -X POST '${filesUrl}' -H 'x-csrf-token: ${maskSecret(csrf)}' -H 'cookie: MMAUTHTOKEN=${maskSecret(authToken)}' -F 'channel_id=${channelId}' -F 'files=@${filename}'`
+    );
 
     const response = await fetch(filesUrl, {
       method: "POST",
@@ -51,11 +61,9 @@ export async function postToChatOps(
 ): Promise<{ ok: boolean; error?: string; status?: number }> {
   const url = process.env.CHAT_OPS_URL_FOR_POSTS;
   const authToken = process.env.MM_AUTHTOKEN;
-  const csrf = process.env.MM_CSRF;
-  const userId = process.env.FROM_USER_ID;
   const channelId = process.env.CHANNEL_ID;
 
-  if (!url || !authToken || !csrf || !userId || !channelId) {
+  if (!url || !authToken || !channelId) {
     console.warn("[ChatOps] Missing ChatOps env vars, skipping notification");
     return { ok: false, error: "ChatOps not configured", status: 502 };
   }
@@ -64,22 +72,23 @@ export async function postToChatOps(
     const payload: {
       message: string;
       channel_id: string;
-      user_id: string;
       file_ids?: string[];
     } = {
       message,
       channel_id: channelId,
-      user_id: userId,
     };
 
     if (fileIds && fileIds.length > 0) {
       payload.file_ids = fileIds;
     }
 
+    console.log(
+      `[ChatOps][curl] curl -X POST '${url}' -H 'cookie: MMAUTHTOKEN=${maskSecret(authToken)}' -H 'Content-Type: application/json' -d '${JSON.stringify(payload)}'`
+    );
+
     const response = await fetch(url, {
       method: "POST",
       headers: {
-        "x-csrf-token": csrf,
         cookie: `MMAUTHTOKEN=${authToken}`,
         "Content-Type": "application/json",
       },

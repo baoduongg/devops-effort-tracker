@@ -31,7 +31,7 @@ import {
 import { confirmChatLog, getChatLogsByThread, chatLogsToMessages } from "@/services/chatLogs.service";
 import { getThreadsByMember, createThread, touchThread } from "@/services/chatThreads.service";
 import { createTaskChangeLog } from "@/services/taskChangeLogs.service";
-import { notifyTaskCreated } from "@/services/chatops.service";
+import { notifyTaskCreated, notifyTaskStatusChanged, notifyTaskReassigned, notifyTaskDeleted } from "@/services/chatops.service";
 import {
   getAvailableSlashCommands,
   resolveSlashCommand,
@@ -724,6 +724,13 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
       if (currentMember) {
         await syncMemberEffortStatus(currentMember.id);
       }
+      notifyTaskDeleted({
+        title: proposal.taskSnapshot.title,
+        memberName: proposal.taskSnapshot.assigneeName ?? "Chưa gán",
+        memberEmail: currentMember?.email,
+        projectName: proposal.taskSnapshot.projectName,
+        deletedByName: user?.displayName ?? "Leader",
+      });
     } else {
       // ISSUE-07: dùng appliedChanges (bản leader đã sửa) để apply thật, proposal.changes (bản AI
       // đề xuất ban đầu, không đổi) chỉ dùng để ghi taskChangeLogs.proposedChanges bên dưới.
@@ -769,17 +776,43 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
       // same formula as task creation (handleConfirmEntry) — old assignee (if reassigned) too.
       // newMemberId is a real member id only on reassignment; null (unassign) or undefined (no
       // assignee change) both fall through to resyncing the previous/current assignee below.
+      let currentMemberForNotify = allMembers.find((m) => m.name === proposal.taskSnapshot.assigneeName);
       if (newMemberId) {
-        const previousMemberId = allMembers.find((m) => m.name === proposal.taskSnapshot.assigneeName)?.id;
+        const previousMemberId = currentMemberForNotify?.id;
         if (previousMemberId && previousMemberId !== newMemberId) {
           await syncMemberEffortStatus(previousMemberId);
         }
         await syncMemberEffortStatus(newMemberId);
-      } else {
-        const currentMember = allMembers.find((m) => m.name === proposal.taskSnapshot.assigneeName);
-        if (currentMember) {
-          await syncMemberEffortStatus(currentMember.id);
-        }
+        currentMemberForNotify = allMembers.find((m) => m.id === newMemberId);
+      } else if (currentMemberForNotify) {
+        await syncMemberEffortStatus(currentMemberForNotify.id);
+      }
+
+      const finalTitle = changes.title ?? proposal.taskSnapshot.title;
+      const finalProjectName = changes.projectName ?? proposal.taskSnapshot.projectName;
+      const link = `${window.location.origin}/tasks`;
+
+      // Mirror task-edit-modal: reassignment takes priority over a plain status-change notice.
+      if (changes.assigneeName !== undefined && changes.assigneeName !== proposal.taskSnapshot.assigneeName) {
+        const oldMember = allMembers.find((m) => m.name === proposal.taskSnapshot.assigneeName);
+        notifyTaskReassigned({
+          title: finalTitle,
+          projectName: finalProjectName,
+          oldMemberName: oldMember?.name ?? proposal.taskSnapshot.assigneeName ?? "Chưa gán",
+          newMemberName: currentMemberForNotify?.name ?? "Chưa gán",
+          newMemberEmail: currentMemberForNotify?.email,
+          link,
+        });
+      } else if (changes.status !== undefined && changes.status !== proposal.taskSnapshot.status) {
+        notifyTaskStatusChanged({
+          title: finalTitle,
+          memberName: currentMemberForNotify?.name ?? proposal.taskSnapshot.assigneeName ?? "Chưa gán",
+          memberEmail: currentMemberForNotify?.email,
+          projectName: finalProjectName,
+          oldStatus: proposal.taskSnapshot.status,
+          newStatus: changes.status,
+          link,
+        });
       }
     }
 
