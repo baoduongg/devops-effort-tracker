@@ -105,8 +105,16 @@ async function runDigest(providedSecret: string | null): Promise<NextResponse> {
   return NextResponse.json({ ok: true, fileAttached: Boolean(fileId) });
 }
 
+function getProvidedSecret(request: Request, searchSecret?: string | null): string | null {
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.substring(7);
+  }
+  return searchSecret || request.headers.get("x-cron-secret") || null;
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
-  return runDigest(request.headers.get("x-cron-secret"));
+  return runDigest(getProvidedSecret(request));
 }
 
 export async function GET(request: Request): Promise<Response> {
@@ -126,6 +134,7 @@ export async function GET(request: Request): Promise<Response> {
     return generateDailyDigestImageResponse({ snapshot, members, dateStr });
   }
 
-  return runDigest(secret);
+  return runDigest(getProvidedSecret(request, secret));
 }
+
 
