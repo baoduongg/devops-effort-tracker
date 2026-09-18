@@ -28,6 +28,7 @@ export const appTheme = defineTheme({
     "--color-background-card": "#0D1014",
     "--color-background-popover": "#12151C",
     "--color-background-muted": "#14171E",
+    "--color-background-inverted": "#1B1E27",
     "--color-text-primary": "#E9ECF2",
     "--color-text-secondary": "#8B93A6",
     "--color-text-disabled": "#5C6478",

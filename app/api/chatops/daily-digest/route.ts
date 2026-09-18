@@ -4,16 +4,13 @@ export const dynamic = "force-dynamic";
 import { buildGroundingSnapshot } from "@/services/grounding.service";
 import { getMembers } from "@/services/members.service";
 import { toMention } from "@/services/chatops.service";
-import { postToChatOps, uploadChatOpsFile } from "@/lib/chatops-post";
-import {
-  generateDailyDigestImageResponse,
-  renderDailyDigestImageBuffer,
-} from "@/lib/daily-digest-image";
+import { postToChatOps } from "@/lib/chatops-post";
+import { generateDailyDigestImageResponse } from "@/lib/daily-digest-image";
 
 function formatDigest(
   snapshot: Awaited<ReturnType<typeof buildGroundingSnapshot>>,
   emailByName: Map<string, string>,
-  imageAttached: boolean
+  imageId: string
 ): string {
   const displayName = (name: string) => toMention(emailByName.get(name)) || `**${name}**`;
   const today = new Date().toLocaleDateString("vi-VN", {
@@ -60,15 +57,12 @@ function formatDigest(
     });
   }
 
-  lines.push(``, `---`);
-  if (imageAttached) {
-    lines.push(
-      `*Ảnh đồ họa tổng hợp (PNG Infographic) đã được đính kèm bên dưới.* \n\n`,
-      `![image](${process.env.HOST}/api/chatops/daily-digest?format=image)`
-    );
-  } else {
-    lines.push(`*⚠️ Không thể tạo ảnh đồ họa tổng hợp lần này, vui lòng xem chi tiết ở trên.*`);
-  }
+  lines.push(
+    ``,
+    `---`,
+    `*Ảnh đồ họa tổng hợp (PNG Infographic):* \n\n`,
+    `![image](${process.env.HOST}/api/chatops/daily-digest?format=image&id=${imageId})`
+  );
 
   return lines.join("\n");
 }
@@ -81,35 +75,15 @@ async function runDigest(providedSecret: string | null): Promise<NextResponse> {
 
   const [snapshot, members] = await Promise.all([buildGroundingSnapshot(), getMembers()]);
   const emailByName = new Map(members.map((m) => [m.name, m.email]));
-  const dateStr = new Date().toLocaleDateString("vi-VN", {
-    weekday: "long",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
 
-  // Render + upload image FIRST so the message text accurately reflects whether it succeeded
-  let fileId: string | null = null;
-  try {
-    const imageBuffer = await renderDailyDigestImageBuffer(snapshot, members, dateStr);
-    const dateTag = new Date().toISOString().split("T")[0];
-    fileId = await uploadChatOpsFile(
-      imageBuffer,
-      `daily-digest-${dateTag}.png`,
-      "image/png"
-    );
-  } catch (err) {
-    console.warn("[DailyDigest] Failed to generate/upload digest image", err);
-  }
-
-  const message = formatDigest(snapshot, emailByName, Boolean(fileId));
-  const fileIds = fileId ? [fileId] : undefined;
+  const imageId = `${Date.now()}`;
+  const message = formatDigest(snapshot, emailByName, imageId);
   const result = await postToChatOps(message);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status ?? 502 });
   }
 
-  return NextResponse.json({ ok: true, fileAttached: Boolean(fileId) });
+  return NextResponse.json({ ok: true });
 }
 
 function getProvidedSecret(request: Request, searchSecret?: string | null): string | null {
