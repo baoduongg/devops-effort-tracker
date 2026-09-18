@@ -593,20 +593,20 @@ export function generateDailyDigestImageResponse({
                     m.status === "overloaded"
                       ? "rgba(239, 68, 68, 0.15)"
                       : m.status === "busy"
-                      ? "rgba(245, 158, 11, 0.15)"
-                      : "rgba(16, 185, 129, 0.15)";
+                        ? "rgba(245, 158, 11, 0.15)"
+                        : "rgba(16, 185, 129, 0.15)";
                   const statusColor =
                     m.status === "overloaded"
                       ? "#EF4444"
                       : m.status === "busy"
-                      ? "#F59E0B"
-                      : "#10B981";
+                        ? "#F59E0B"
+                        : "#10B981";
                   const statusLabel =
                     m.status === "overloaded"
                       ? "Quá tải"
                       : m.status === "busy"
-                      ? "Bận"
-                      : "Sẵn sàng";
+                        ? "Bận"
+                        : "Sẵn sàng";
 
                   const isOverdueMember = overdueMemberNames.has(m.name);
 
@@ -718,7 +718,6 @@ export function generateDailyDigestImageResponse({
           }}
         >
           <span>DevOps Effort Tracker • Automated Daily Dispatch</span>
-          <span>Tạo lúc: {new Date().toLocaleTimeString("vi-VN")}</span>
         </div>
       </div>
     ),
