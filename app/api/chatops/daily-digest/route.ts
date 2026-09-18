@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 import { buildGroundingSnapshot } from "@/services/grounding.service";
 import { getMembers } from "@/services/members.service";
 import { toMention } from "@/services/chatops.service";
@@ -63,7 +65,7 @@ function formatDigest(
     `*Ảnh đồ họa tổng hợp (PNG Infographic) đã được đính kèm bên dưới.* `,
     `-----`,
     `---`,
-    `![image](${process.env.HOST}/api/chatops/daily-digest?format=image)`,
+    `![image](${process.env.HOST}/api/chatops/daily-digest?format=image&t=${Date.now()})`,
   );
 
   return lines.join("\n");

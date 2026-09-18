@@ -34,34 +34,21 @@ MORE CLI:
   upgrade --apply    run after any @astryxdesign/core bump
 <!-- ASTRYX:END -->
 
-## Subagent Team
+## web-dev-team Subagent Pipeline
 
-Solo-dev virtual team in `.claude/agents/`, 7 roles:
+Subagent team in `.claude/agents/` (source: `~/.claude/agent-teams/web-dev-team/`), 10 roles.
 
-1. **system-architect** — design/data-flow/module boundaries before code. Read-only.
-2. **backend-engineer** — API routes, service layer, types, leader/devops permission logic.
-3. **frontend-engineer** — components, pages, Zustand wiring, Astryx UI.
-4. **ai-feature-engineer** — AI Ask flow: `services/nvidia.service.ts`, `services/grounding.service.ts`, `app/api/ai/*`, prompt/validation/token limits.
-5. **code-reviewer** — reviews diffs for type safety, naming, service-layer separation, no placeholder code. Read-only, no edits.
-6. **qa-engineer** — test plans/cases, prioritizing leader/devops permission flows and AI Ask. No automated suite in this repo — manual plans plus `pnpm lint`/`pnpm build` checks.
-7. **debugger** — reproduce → isolate → fix. No guessing at fixes without a confirmed root cause.
+For new feature requests, run the web-dev-team pipeline in this order:
 
-**Standard workflow for a new feature:**
+1. agents-orchestrator — coordinates the pipeline
+2. product-manager — produces the spec (user stories, acceptance criteria)
+3. software-architect — designs module boundaries and data flow
+4. frontend-developer + backend-architect — implement in parallel
+5. code-reviewer — reviews the diff
+6. test-automation-engineer — writes/updates end-to-end tests
+7. appsec-engineer — reviews security-sensitive surfaces
+8. reality-checker — final verification gate (defaults to "NEEDS WORK" without strong evidence)
+9. devops-automator — prepares deployment
 
-```
-system-architect (design)
-        │
-        ▼
-backend-engineer  +  frontend-engineer   (parallel)
-        │
-        ▼
-code-reviewer (review diff)
-        │
-        ▼
-qa-engineer (test plan/cases)
-        │
-        ▼
-debugger (only if a test fails or a bug is found)
-```
-
-For features touching AI Ask specifically, ai-feature-engineer runs alongside backend-engineer/frontend-engineer in the parallel step, owning `app/api/ai/*` prompt/grounding logic while backend-engineer owns any plain CRUD it depends on.
+Skip steps that clearly don't apply (e.g. no security-sensitive surface touched, no deploy needed),
+but do not skip product-manager or software-architect for anything beyond a trivial fix.

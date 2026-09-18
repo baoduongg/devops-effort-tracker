@@ -133,8 +133,8 @@ export default function ProjectsPage(): React.JSX.Element {
                 <FolderGit2 size={16} />
               </span>
               <div className="flex flex-col">
-                <span className="text-xs text-neutral-400 font-medium">Tổng số Dự án</span>
-                <Text type="display-3" weight="semibold" hasTabularNumbers className="text-neutral-100">
+                <span className="text-sm text-neutral-400 font-medium">Tổng số Dự án</span>
+                <Text weight="semibold" hasTabularNumbers className="text-neutral-100 text-xl">
                   {projects.length} dự án
                 </Text>
               </div>
@@ -147,8 +147,8 @@ export default function ProjectsPage(): React.JSX.Element {
                 <Layers size={16} />
               </span>
               <div className="flex flex-col">
-                <span className="text-xs text-neutral-400 font-medium">Tổng tải phân bổ</span>
-                <Text type="display-3" weight="semibold" hasTabularNumbers className="text-emerald-300">
+                <span className="text-sm text-neutral-400 font-medium">Tổng tải phân bổ</span>
+                <Text weight="semibold" hasTabularNumbers className="text-emerald-300 text-xl">
                   {formatEffortDuration(totalEffortAcrossProjects)} Effort
                 </Text>
               </div>
@@ -161,8 +161,8 @@ export default function ProjectsPage(): React.JSX.Element {
                 <Clock size={16} />
               </span>
               <div className="flex flex-col">
-                <span className="text-xs text-neutral-400 font-medium">Task đang thực hiện</span>
-                <Text type="display-3" weight="semibold" hasTabularNumbers className="text-purple-300">
+                <span className="text-sm text-neutral-400 font-medium">Task đang thực hiện</span>
+                <Text weight="semibold" hasTabularNumbers className="text-purple-300 text-xl">
                   {activeTasksCount} tasks
                 </Text>
               </div>
@@ -184,7 +184,7 @@ export default function ProjectsPage(): React.JSX.Element {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-neutral-300 mb-1.5">Tên Dự án *</label>
+                <label className="block text-sm font-semibold text-neutral-300 mb-1.5">Tên Dự án *</label>
                 <input
                   type="text"
                   required
@@ -196,7 +196,7 @@ export default function ProjectsPage(): React.JSX.Element {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-neutral-300 mb-1.5">Mô tả dự án</label>
+                <label className="block text-sm font-semibold text-neutral-300 mb-1.5">Mô tả dự án</label>
                 <input
                   type="text"
                   placeholder="Mô tả ngắn về mục tiêu hoặc phạm vi..."
@@ -207,16 +207,15 @@ export default function ProjectsPage(): React.JSX.Element {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-neutral-300 mb-1.5">Màu đại diện</label>
+                <label className="block text-sm font-semibold text-neutral-300 mb-1.5">Màu đại diện</label>
                 <div className="flex items-center gap-2 pt-1">
                   {PROJECT_COLOR_SWATCHES.map((color) => (
                     <button
                       key={color}
                       type="button"
                       onClick={() => setNewProjectColor(color)}
-                      className={`w-6 h-6 rounded-full transition-transform ${
-                        newProjectColor === color ? "scale-125 ring-2 ring-white ring-offset-2 ring-offset-neutral-900" : "opacity-75 hover:opacity-100"
-                      }`}
+                      className={`w-6 h-6 rounded-full transition-transform ${newProjectColor === color ? "scale-125 ring-2 ring-white ring-offset-2 ring-offset-neutral-900" : "opacity-75 hover:opacity-100"
+                        }`}
                       style={{ backgroundColor: color }}
                     />
                   ))}
@@ -288,7 +287,7 @@ export default function ProjectsPage(): React.JSX.Element {
                             {project.name}
                           </Text>
                           {isUserAssigned && (
-                            <span className="text-xs font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            <span className="text-sm font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                               Của bạn ({formatEffortDuration(userEffortInProject)})
                             </span>
                           )}
@@ -300,7 +299,7 @@ export default function ProjectsPage(): React.JSX.Element {
                     </HStack>
 
                     <div
-                      className="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 flex-shrink-0"
+                      className="px-2.5 py-1 rounded-lg text-sm font-bold flex items-center gap-1 flex-shrink-0"
                       style={{
                         backgroundColor: `${projColor}15`,
                         color: projColor,
@@ -317,13 +316,13 @@ export default function ProjectsPage(): React.JSX.Element {
                   <div className="bg-white/[0.02] p-3 rounded-xl border border-white/[0.05] flex flex-col gap-2">
                     <HStack gap={1} vAlign="center">
                       <Users size={13} className="text-neutral-400" />
-                      <span className="text-xs font-semibold text-neutral-300">
+                      <span className="text-sm font-semibold text-neutral-300">
                         Nhân sự phân bổ ({assignedMembers.length})
                       </span>
                     </HStack>
 
                     {assignedMembers.length === 0 ? (
-                      <span className="text-xs text-neutral-500 italic">
+                      <span className="text-sm text-neutral-500 italic">
                         Chưa có DevOps nào được phân bổ.
                       </span>
                     ) : (
@@ -346,7 +345,7 @@ export default function ProjectsPage(): React.JSX.Element {
 
                   {/* Tasks Summary */}
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between text-xs text-neutral-400">
+                    <div className="flex items-center justify-between text-sm text-neutral-400">
                       <span className="font-medium">Tiến độ công việc:</span>
                       <HStack gap={1}>
                         <span className="text-sky-400 font-semibold">{inProgressTasks.length} đang làm</span>
