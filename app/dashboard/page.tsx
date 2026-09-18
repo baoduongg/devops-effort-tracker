@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { Users, Layers, Sparkles, Plus, Send } from "lucide-react";
 import { VStack, HStack } from "@astryxdesign/core/Stack";
 import { Heading } from "@astryxdesign/core/Heading";
@@ -24,6 +23,7 @@ import { DashboardFilterBar, type DashboardTab } from "@/components/dashboard/Da
 import { useDashboardData } from "@/components/dashboard/hooks/useDashboardData";
 import { useOverdueNotifications } from "@/components/dashboard/hooks/useOverdueNotifications";
 import { useTeamCapacityStats, type CapacityFilter } from "@/components/dashboard/hooks/useTeamCapacityStats";
+import { useDailyDigestTrigger } from "@/components/dashboard/hooks/useDailyDigestTrigger";
 
 export default function DashboardPage(): React.JSX.Element {
   const user = useAuthStore((state) => state.user);
@@ -37,6 +37,7 @@ export default function DashboardPage(): React.JSX.Element {
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>("all");
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
+  const { trigger: triggerDailyDigest, isSending: isSendingDigest } = useDailyDigestTrigger();
 
   const {
     displayMembers,
@@ -94,15 +95,17 @@ export default function DashboardPage(): React.JSX.Element {
         </VStack>
 
         <HStack gap={2} vAlign="center">
-          <Link
-            href="/daily-digest"
-            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-sky-500/15 hover:from-emerald-500/25 hover:via-teal-500/20 hover:to-sky-500/25 text-emerald-300 hover:text-emerald-100 border border-emerald-500/30 hover:border-emerald-400/50 shadow-[0_0_15px_rgba(16,185,129,0.12)] hover:shadow-[0_0_20px_rgba(16,185,129,0.22)] transition-all font-medium text-sm group"
+          <button
+            type="button"
+            onClick={triggerDailyDigest}
+            disabled={isSendingDigest}
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-sky-500/15 hover:from-emerald-500/25 hover:via-teal-500/20 hover:to-sky-500/25 text-emerald-300 hover:text-emerald-100 border border-emerald-500/30 hover:border-emerald-400/50 shadow-[0_0_15px_rgba(16,185,129,0.12)] hover:shadow-[0_0_20px_rgba(16,185,129,0.22)] transition-all font-medium text-sm group disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span className="p-1 rounded-md bg-emerald-500/20 text-emerald-300 group-hover:scale-110 transition-transform flex items-center justify-center">
               <Send size={13} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </span>
             <span>Daily Digest</span>
-          </Link>
+          </button>
           <Button
             label="Tạo Task mới"
             icon={<Plus size={15} />}

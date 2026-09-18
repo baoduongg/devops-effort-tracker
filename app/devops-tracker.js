@@ -37,7 +37,7 @@ export const devopsTrackerTheme = {
     "--color-icon-disabled": "light-dark(#8F909E, #5D5D6A)",
     "--color-background-card": "#0D1014",
     "--color-background-popover": "#12151C",
-    "--color-background-inverted": "light-dark(#1B1B22, #FCFCFF)",
+    "--color-background-inverted": "#1B1E27",
     "--color-border": "rgba(255,255,255,0.07)",
     "--color-border-emphasized": "rgba(255,255,255,0.10)",
     "--color-skeleton": "light-dark(#AAAAB9, #454652)",
