@@ -161,19 +161,14 @@ export default function DailyDigestChatOpsPage(): React.JSX.Element {
             <span className="flex flex-col">Đóng trang </span>
           </button>
 
-          <a
+          <Link
             href="/api/chatops/daily-digest?format=image"
             target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => {
-              e.preventDefault();
-              window.open(`/api/chatops/daily-digest?format=image&t=${Date.now()}`, "_blank");
-            }}
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 hover:text-sky-200 font-medium text-sm transition-all border border-sky-500/30"
           >
             <ExternalLink size={15} />
             Xem ảnh báo cáo
-          </a>
+          </Link>
 
           <Link
             href="/dashboard"

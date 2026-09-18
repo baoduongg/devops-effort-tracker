@@ -63,9 +63,7 @@ function formatDigest(
     ``,
     `---`,
     `*Ảnh đồ họa tổng hợp (PNG Infographic) đã được đính kèm bên dưới.* `,
-    `-----`,
-    `---`,
-    `![image](${process.env.HOST}/api/chatops/daily-digest?format=image&t=${Date.now()})`,
+    `![image](${process.env.HOST}/api/chatops/daily-digest?format=image)`,
   );
 
   return lines.join("\n");
@@ -136,7 +134,9 @@ export async function GET(request: Request): Promise<Response> {
       month: "2-digit",
       day: "2-digit",
     });
-    return generateDailyDigestImageResponse({ snapshot, members, dateStr });
+    const imageResponse = generateDailyDigestImageResponse({ snapshot, members, dateStr });
+    imageResponse.headers.set("Cache-Control", "no-store, must-revalidate");
+    return imageResponse;
   }
 
   return runDigest(getProvidedSecret(request, secret));
