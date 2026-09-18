@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import Link from "next/link";
 import { Sparkles, Clock, Calendar, CheckCircle2, Users, Zap, Plus, Send } from "lucide-react";
 import { VStack, HStack } from "@astryxdesign/core/Stack";
 import { Heading } from "@astryxdesign/core/Heading";
@@ -22,6 +21,7 @@ import { WorkloadKpiCards } from "./devops/WorkloadKpiCards";
 import { TeamAvailabilityTab } from "./devops/TeamAvailabilityTab";
 import { useTaskStatusUpdate } from "./devops/useTaskStatusUpdate";
 import { NEXT_STATUS_BY_TAB, TASK_CARD_CONFIG, type TaskCardTab } from "./devops/task-card-config";
+import { useDailyDigestTrigger } from "./hooks/useDailyDigestTrigger";
 
 interface DevOpsWorkspaceProps {
   user: AppUser;
@@ -42,6 +42,7 @@ export function DevOpsWorkspace({
 }: DevOpsWorkspaceProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("active");
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
+  const { trigger: triggerDailyDigest, isSending: isSendingDigest } = useDailyDigestTrigger();
 
   const memberId = user.memberId;
   const myTasks = useMemo(() => {
@@ -129,15 +130,17 @@ export function DevOpsWorkspace({
         </div>
 
         <HStack gap={2} vAlign="center">
-          <Link
-            href="/daily-digest"
-            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-sky-500/15 hover:from-emerald-500/25 hover:via-teal-500/20 hover:to-sky-500/25 text-emerald-300 hover:text-emerald-100 border border-emerald-500/30 hover:border-emerald-400/50 shadow-[0_0_15px_rgba(16,185,129,0.12)] hover:shadow-[0_0_20px_rgba(16,185,129,0.22)] transition-all font-medium text-sm group"
+          <button
+            type="button"
+            onClick={triggerDailyDigest}
+            disabled={isSendingDigest}
+            className="inline-flex items-center gap-2 h-9 px-3.5 rounded-lg bg-gradient-to-r from-emerald-500/15 via-teal-500/10 to-sky-500/15 hover:from-emerald-500/25 hover:via-teal-500/20 hover:to-sky-500/25 text-emerald-300 hover:text-emerald-100 border border-emerald-500/30 hover:border-emerald-400/50 shadow-[0_0_15px_rgba(16,185,129,0.12)] hover:shadow-[0_0_20px_rgba(16,185,129,0.22)] transition-all font-medium text-sm group disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span className="p-1 rounded-md bg-emerald-500/20 text-emerald-300 group-hover:scale-110 transition-transform flex items-center justify-center">
               <Send size={13} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </span>
             <span>Daily Digest</span>
-          </Link>
+          </button>
           <Button
             label="Tạo Task mới"
             icon={<Plus size={15} />}

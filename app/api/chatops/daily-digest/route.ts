@@ -12,7 +12,8 @@ import {
 
 function formatDigest(
   snapshot: Awaited<ReturnType<typeof buildGroundingSnapshot>>,
-  emailByName: Map<string, string>
+  emailByName: Map<string, string>,
+  imageAttached: boolean
 ): string {
   const displayName = (name: string) => toMention(emailByName.get(name)) || `**${name}**`;
   const today = new Date().toLocaleDateString("vi-VN", {
@@ -59,12 +60,15 @@ function formatDigest(
     });
   }
 
-  lines.push(
-    ``,
-    `---`,
-    `*Ảnh đồ họa tổng hợp (PNG Infographic) đã được đính kèm bên dưới.* `,
-    `![image](${process.env.HOST}/api/chatops/daily-digest?format=image)`,
-  );
+  lines.push(``, `---`);
+  if (imageAttached) {
+    lines.push(
+      `*Ảnh đồ họa tổng hợp (PNG Infographic) đã được đính kèm bên dưới.* \n\n`,
+      `![image](${process.env.HOST}/api/chatops/daily-digest?format=image)`
+    );
+  } else {
+    lines.push(`*⚠️ Không thể tạo ảnh đồ họa tổng hợp lần này, vui lòng xem chi tiết ở trên.*`);
+  }
 
   return lines.join("\n");
 }
@@ -77,7 +81,6 @@ async function runDigest(providedSecret: string | null): Promise<NextResponse> {
 
   const [snapshot, members] = await Promise.all([buildGroundingSnapshot(), getMembers()]);
   const emailByName = new Map(members.map((m) => [m.name, m.email]));
-  const message = formatDigest(snapshot, emailByName);
   const dateStr = new Date().toLocaleDateString("vi-VN", {
     weekday: "long",
     year: "numeric",
@@ -85,7 +88,7 @@ async function runDigest(providedSecret: string | null): Promise<NextResponse> {
     day: "2-digit",
   });
 
-  // Generate image and upload to ChatOps
+  // Render + upload image FIRST so the message text accurately reflects whether it succeeded
   let fileId: string | null = null;
   try {
     const imageBuffer = await renderDailyDigestImageBuffer(snapshot, members, dateStr);
@@ -99,8 +102,9 @@ async function runDigest(providedSecret: string | null): Promise<NextResponse> {
     console.warn("[DailyDigest] Failed to generate/upload digest image", err);
   }
 
+  const message = formatDigest(snapshot, emailByName, Boolean(fileId));
   const fileIds = fileId ? [fileId] : undefined;
-  const result = await postToChatOps(message, fileIds);
+  const result = await postToChatOps(message);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status ?? 502 });
   }
