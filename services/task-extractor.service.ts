@@ -1,4 +1,4 @@
-import { callAiText, callAiVision, type AiProvider } from "@/services/ai-provider.service";
+import { callAiText, callAiVision, retryAiJsonOnce, type AiProvider } from "@/services/ai-provider.service";
 import { formattedEntrySchema } from "@/lib/schemas";
 import { getMembers, findBestSuitableMember, findMemberByName } from "@/services/members.service";
 import { formatEffortDuration } from "@/lib/effort";
@@ -180,13 +180,15 @@ ${inputText ? `Additional user note: ${inputText}\n` : ""}Return ONLY the JSON o
 
     if (!parsed.success) {
       console.warn("Initial format-entry parse failed, retrying with text model correction...", raw);
-      const retryRaw = await callAiText(
+      parsed = await retryAiJsonOnce(
         systemPrompt,
-        `The previous response was not valid JSON or was missing fields.\nRaw response: "${raw}"\nOriginal text: "${inputText || "Screenshot analysis"}"\nReturn ONLY the single JSON object starting with { and ending with }.`,
+        raw,
+        extractJsonFromAiText,
+        (candidate) => formattedEntrySchema.safeParse(candidate),
+        (rawText) =>
+          `The previous response was not valid JSON or was missing fields.\nRaw response: "${rawText}"\nOriginal text: "${inputText || "Screenshot analysis"}"\nReturn ONLY the single JSON object starting with { and ending with }.`,
         provider
       );
-      const retryCandidate = extractJsonFromAiText(retryRaw);
-      parsed = formattedEntrySchema.safeParse(retryCandidate);
     }
 
     if (!parsed.success) {

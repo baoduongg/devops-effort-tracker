@@ -1,24 +1,22 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Save, Clock } from "lucide-react";
+import { Save } from "lucide-react";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { HStack } from "@astryxdesign/core/Stack";
-import { Grid } from "@astryxdesign/core/Grid";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { NumberInput } from "@astryxdesign/core/NumberInput";
-import { DateInput } from "@astryxdesign/core/DateInput";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Button } from "@astryxdesign/core/Button";
-import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { updateTask } from "@/services/tasks.service";
 import { syncMemberEffortStatus } from "@/services/members.service";
 import { notifyTaskStatusChanged, notifyTaskReassigned } from "@/services/chatops.service";
-import { formatEffortDuration, EFFORT_DURATION_PRESETS } from "@/lib/effort";
+import { useEffortInput } from "@/hooks/use-effort-input";
+import { formatEffortDuration, minutesToEffortUnit, pickDisplayEffortUnit } from "@/lib/effort";
 import { formatDateLocal, parseDateLocal } from "@/lib/date";
 import type { Project } from "@/types/project";
 import type { Member } from "@/types/member";
 import type { Task, TaskStatus } from "@/types/task";
+import { TaskEffortStatusFields } from "@/components/tasks/task-effort-status-fields";
 
 interface TaskEditModalProps {
   isOpen: boolean;
@@ -28,12 +26,6 @@ interface TaskEditModalProps {
   members: Member[];
   onTaskUpdated?: (taskId: string) => void;
 }
-
-const STATUS_OPTIONS = [
-  { value: "in_progress", label: "Đang thực hiện (In Progress)" },
-  { value: "planned", label: "Kế hoạch (Planned)" },
-  { value: "done", label: "Hoàn thành (Done)" },
-];
 
 // Task dates come back as full ISO datetime strings; DateInput needs YYYY-MM-DD
 function toDateInputValue(iso: string | null): string {
@@ -58,7 +50,11 @@ function TaskEditForm({
   const [description, setDescription] = useState(task?.description ?? "");
   const [projectId, setProjectId] = useState<string>(task?.projectId ?? "");
   const [memberId, setMemberId] = useState<string>(task?.memberId ?? "");
-  const [effortMinutes, setEffortMinutes] = useState<number>(task?.effortMinutes ?? 60);
+  const initialEffortUnit = pickDisplayEffortUnit(task?.effortMinutes ?? 60);
+  const { effortValue, setEffortValue, effortUnit, handleEffortUnitChange, effortMinutes } = useEffortInput(
+    minutesToEffortUnit(task?.effortMinutes ?? 60, initialEffortUnit),
+    initialEffortUnit
+  );
   const [status, setStatus] = useState<TaskStatus>(task?.status ?? "in_progress");
   const [startDate, setStartDate] = useState<string>(toDateInputValue(task?.startDate ?? null));
   const [endDate, setEndDate] = useState<string | null>(task?.endDate ? toDateInputValue(task.endDate) : null);
@@ -93,10 +89,15 @@ function TaskEditForm({
       return;
     }
 
+    const resolvedMinutes = Math.round(effortMinutes);
+    if (resolvedMinutes < 1) {
+      setError("Thời lượng thực hiện phải lớn hơn hoặc bằng 1 phút.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
-    const resolvedMinutes = Math.max(1, Math.round(effortMinutes || 60));
     const previousMemberId = task.memberId;
     const previousStatus = task.status;
 
@@ -188,71 +189,19 @@ function TaskEditForm({
             onChange={setMemberId}
           />
 
-          <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/[0.08]">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-300 font-medium flex items-center gap-1.5">
-                <Clock size={13} className="text-sky-400" />
-                Thời lượng thực hiện: <span className="text-sky-300 font-semibold">{formatEffortDuration(effortMinutes)}</span>
-              </span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              {EFFORT_DURATION_PRESETS.map((p) => (
-                <button
-                  key={p.minutes}
-                  type="button"
-                  onClick={() => setEffortMinutes(p.minutes)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                    effortMinutes === p.minutes
-                      ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
-                      : "bg-white/[0.03] text-neutral-300 border-white/[0.08] hover:bg-white/[0.08] hover:text-white"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="pt-2">
-              <NumberInput
-                label="Số phút tùy chỉnh"
-                min={1}
-                max={4800}
-                step={15}
-                units="phút"
-                value={effortMinutes}
-                onChange={(v) => setEffortMinutes(v ?? 60)}
-              />
-            </div>
-          </div>
-
-          <Selector
-            label="Trạng thái"
-            options={STATUS_OPTIONS}
-            value={status}
-            onChange={(v) => setStatus(v as TaskStatus)}
+          <TaskEffortStatusFields
+            effortValue={effortValue}
+            onEffortValueChange={setEffortValue}
+            effortUnit={effortUnit}
+            onEffortUnitChange={handleEffortUnitChange}
+            effortMinutes={effortMinutes}
+            status={status}
+            onStatusChange={setStatus}
+            startDate={startDate}
+            onStartDateChange={(v) => setStartDate(v ?? startDate)}
+            endDate={endDate}
+            onEndDateChange={setEndDate}
           />
-
-          <Grid columns={2} gap={3}>
-            <DateInput
-              label="Ngày bắt đầu"
-              format="date"
-              width="100%"
-              isRequired
-              value={startDate as ISODateString}
-              onChange={(v) => setStartDate(v ?? startDate)}
-            />
-
-            <DateInput
-              label="Hạn hoàn thành (Deadline)"
-              format="date"
-              width="100%"
-              hasClear
-              placeholder="Tùy chọn"
-              value={(endDate || undefined) as ISODateString | undefined}
-              onChange={(v) => setEndDate(v || null)}
-            />
-          </Grid>
 
           <TextInput
             label="Ghi chú chi tiết (Tùy chọn)"

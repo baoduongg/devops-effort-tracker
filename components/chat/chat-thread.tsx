@@ -215,10 +215,10 @@ export function ChatThread({
           }
         >
           <ChatMessageBubble>
-            <HStack gap={2} vAlign="center" className="py-1 px-2">
-              <Spinner size="sm" label="Đang suy nghĩ" />
-              <Text type="supporting" size="sm" className="text-neutral-400">
-                AI đang xử lý thông tin…
+            <HStack gap={3} vAlign="center" className="py-1.5 px-2.5">
+              <Spinner size="sm" shade="subtle" />
+              <Text type="body" size="sm" color="secondary">
+                Đang suy nghĩ…
               </Text>
             </HStack>
           </ChatMessageBubble>

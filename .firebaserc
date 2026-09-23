@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "fir-devops-19ec2",
+    "prod": "fir-devops-19ec2",
+    "dev": "local-devops-tracking"
+  }
+}

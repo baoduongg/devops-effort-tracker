@@ -9,6 +9,13 @@ import { Selector } from "@astryxdesign/core/Selector";
 import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Button } from "@astryxdesign/core/Button";
 import type { MemberInput, MemberStatus } from "@/types/member";
+import {
+  effortUnitToMinutes,
+  minutesToEffortUnit,
+  pickDisplayEffortUnit,
+  EFFORT_UNIT_OPTIONS,
+  type EffortUnit,
+} from "@/lib/effort";
 
 interface MemberFormProps {
   initialValues?: Partial<MemberInput>;
@@ -41,7 +48,18 @@ export function MemberForm({
   const [skills, setSkills] = useState((initialValues?.skills ?? []).join(", "));
   const [role, setRole] = useState<"leader" | "devops">(initialValues?.role ?? "devops");
   const [status, setStatus] = useState<MemberStatus>(initialValues?.status ?? "available");
-  const [effortMinutes, setEffortMinutes] = useState(initialValues?.effortMinutes ?? 0);
+  const [effortUnit, setEffortUnit] = useState<EffortUnit>(
+    pickDisplayEffortUnit(initialValues?.effortMinutes ?? 0)
+  );
+  const [effortValue, setEffortValue] = useState<number>(
+    minutesToEffortUnit(initialValues?.effortMinutes ?? 0, effortUnit)
+  );
+  const effortMinutes = effortUnitToMinutes(effortValue, effortUnit);
+
+  function handleEffortUnitChange(unit: EffortUnit): void {
+    setEffortValue(1);
+    setEffortUnit(unit);
+  }
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e: React.FormEvent): Promise<void> {
@@ -81,7 +99,7 @@ export function MemberForm({
           placeholder="Kubernetes, Terraform, CI/CD, AWS..."
           description="Phân cách bằng dấu phẩy"
         />
-        <Grid columns={2} gap={4}>
+        <Grid columns={3} gap={4}>
           <Selector
             label="Trạng thái"
             options={statusOptions}
@@ -89,13 +107,17 @@ export function MemberForm({
             onChange={(v) => setStatus(v as MemberStatus)}
           />
           <NumberInput
-            label="Mức tải (phút)"
+            label="Mức tải"
             min={0}
-            max={4800}
-            step={15}
-            units="phút"
-            value={effortMinutes}
-            onChange={(v) => setEffortMinutes(v ?? 0)}
+            step={effortUnit === "minutes" ? 5 : 1}
+            value={effortValue}
+            onChange={(v) => setEffortValue(v ?? 0)}
+          />
+          <Selector
+            label="Đơn vị"
+            options={EFFORT_UNIT_OPTIONS}
+            value={effortUnit}
+            onChange={(v) => handleEffortUnitChange(v as EffortUnit)}
           />
         </Grid>
         <HStack gap={3} justify="end" className="pt-2">
