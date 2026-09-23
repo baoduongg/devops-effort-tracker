@@ -16,6 +16,7 @@ import { Token } from "@astryxdesign/core/Token";
 import { Text } from "@astryxdesign/core/Text";
 import { Icon } from "@astryxdesign/core/Icon";
 import type { TaskChangeProposal } from "@/types/chat";
+import { TASK_STATUS_OPTIONS as STATUS_OPTIONS } from "@/types/task";
 import {
   formatEffortDuration,
   effortUnitToMinutes,
@@ -42,11 +43,6 @@ interface ProposalCardProps {
   onCancel: (proposal: TaskChangeProposal) => Promise<void>;
 }
 
-const STATUS_OPTIONS = [
-  { value: "in_progress", label: "Đang thực hiện (In Progress)" },
-  { value: "planned", label: "Kế hoạch (Planned)" },
-  { value: "done", label: "Hoàn thành (Done)" },
-];
 
 const STATUS_LABEL_MAP: Record<string, string> = {
   in_progress: "In Progress",

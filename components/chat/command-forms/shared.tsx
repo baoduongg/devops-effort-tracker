@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { ChevronDown, Clock } from "lucide-react";
 import type { SlashCommand } from "@/lib/slash-commands";
-import type { TaskStatus } from "@/types/task";
+import { TASK_STATUS_OPTIONS as STATUS_OPTIONS } from "@/types/task";
 import {
   effortUnitToMinutes,
   minutesToEffortUnit,
@@ -10,11 +10,7 @@ import {
   type EffortUnit,
 } from "@/lib/effort";
 
-export const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
-  { value: "in_progress", label: "Đang thực hiện (In Progress)" },
-  { value: "planned", label: "Kế hoạch (Planned)" },
-  { value: "done", label: "Hoàn thành (Done)" },
-];
+export { STATUS_OPTIONS };
 
 export const DURATION_PRESETS = [
   { label: "30p", minutes: 30, text: "30 phút" },

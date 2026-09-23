@@ -1,31 +1,24 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, FolderPlus, Clock } from "lucide-react";
+import { Plus, FolderPlus } from "lucide-react";
 import { Dialog, DialogHeader } from "@astryxdesign/core/Dialog";
 import { HStack } from "@astryxdesign/core/Stack";
-import { Grid } from "@astryxdesign/core/Grid";
 import { TextInput } from "@astryxdesign/core/TextInput";
-import { NumberInput } from "@astryxdesign/core/NumberInput";
-import { DateInput } from "@astryxdesign/core/DateInput";
 import { Selector } from "@astryxdesign/core/Selector";
 import { Button } from "@astryxdesign/core/Button";
-import type { ISODateString } from "@astryxdesign/core/Calendar";
-import { createTask, getTasksByMember } from "@/services/tasks.service";
+import { createTask } from "@/services/tasks.service";
 import { createProject } from "@/services/projects.service";
-import { updateMember } from "@/services/members.service";
+import { syncMemberEffortStatus } from "@/services/members.service";
 import { notifyTaskCreated } from "@/services/chatops.service";
 import { useAuthStore } from "@/store/auth.store";
-import {
-  formatEffortDuration,
-  effortUnitToMinutes,
-  EFFORT_UNIT_OPTIONS,
-  type EffortUnit,
-} from "@/lib/effort";
+import { useEffortInput } from "@/hooks/use-effort-input";
+import { formatEffortDuration } from "@/lib/effort";
 import { PROJECT_COLOR_SWATCHES } from "@/lib/project-colors";
 import type { Project } from "@/types/project";
-import type { Member, MemberStatus } from "@/types/member";
+import type { Member } from "@/types/member";
 import type { TaskStatus } from "@/types/task";
+import { TaskEffortStatusFields } from "@/components/tasks/task-effort-status-fields";
 
 interface TaskCreateModalProps {
   isOpen: boolean;
@@ -36,12 +29,6 @@ interface TaskCreateModalProps {
   defaultProjectId?: string | null;
   onTaskCreated?: (taskId: string) => void;
 }
-
-const STATUS_OPTIONS = [
-  { value: "in_progress", label: "Đang thực hiện (In Progress)" },
-  { value: "planned", label: "Kế hoạch (Planned)" },
-  { value: "done", label: "Hoàn thành (Done)" },
-];
 
 function getTodayString(): string {
   const d = new Date();
@@ -70,17 +57,8 @@ export function TaskCreateModal({
   const [newProjectName, setNewProjectName] = useState("");
 
   const [memberId, setMemberId] = useState<string>("");
-  const [effortValue, setEffortValue] = useState<number>(1);
-  const [effortUnit, setEffortUnit] = useState<EffortUnit>("hours");
-  const effortMinutes = useMemo(
-    () => effortUnitToMinutes(effortValue, effortUnit),
-    [effortValue, effortUnit]
-  );
-
-  function handleEffortUnitChange(unit: EffortUnit): void {
-    setEffortValue(1);
-    setEffortUnit(unit);
-  }
+  const { effortValue, setEffortValue, effortUnit, handleEffortUnitChange, effortMinutes, reset: resetEffort } =
+    useEffortInput(1, "hours");
   const [status, setStatus] = useState<TaskStatus>("in_progress");
   const [startDate, setStartDate] = useState<string>(today);
   const [endDate, setEndDate] = useState<string | null>(null);
@@ -131,8 +109,7 @@ export function TaskCreateModal({
     setNewProjectName("");
     setProjectId("");
     setMemberId("");
-    setEffortValue(1);
-    setEffortUnit("hours");
+    resetEffort(1, "hours");
     setStatus("in_progress");
     setStartDate(getTodayString());
     setEndDate(null);
@@ -193,28 +170,8 @@ export function TaskCreateModal({
       });
 
       // Update assigned member status & effort in Firestore
-      const isTaskActive = status === "in_progress";
       try {
-        const existingTasks = await getTasksByMember(currentMemberId);
-        const otherActiveTasks = existingTasks.filter(
-          (t) => t.id !== taskId && t.status === "in_progress"
-        );
-        const totalEffortMinutes =
-          otherActiveTasks.reduce((sum, t) => sum + (t.effortMinutes || 0), 0) +
-          (isTaskActive ? resolvedMinutes : 0);
-        const activeCount = otherActiveTasks.length + (isTaskActive ? 1 : 0);
-        const newStatus: MemberStatus =
-          activeCount === 0 || totalEffortMinutes === 0
-            ? "available"
-            : totalEffortMinutes > 480
-              ? "overloaded"
-              : "busy";
-
-        await updateMember(currentMemberId, {
-          currentTaskId: isTaskActive ? taskId : (otherActiveTasks[0]?.id || null),
-          effortMinutes: totalEffortMinutes,
-          status: newStatus,
-        });
+        await syncMemberEffortStatus(currentMemberId);
       } catch (err) {
         console.warn("Could not update member effort status:", err);
       }
@@ -320,64 +277,20 @@ export function TaskCreateModal({
             onChange={setMemberId}
           />
 
-          {/* Effort & Duration Presets */}
-          <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/[0.08]">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-300 font-medium flex items-center gap-1.5">
-                <Clock size={13} className="text-sky-400" />
-                Tổng thời lượng thực hiện: <span className="text-sky-300 font-semibold">{formatEffortDuration(effortMinutes)}</span>
-              </span>
-            </div>
-            <p className="text-[11px] text-neutral-500 leading-snug">
-              Tổng thời gian devops cần để hoàn thành task này (quy đổi theo 1 ngày làm việc = 8 giờ). Nếu để trống Deadline, hệ thống tự tính dựa trên giá trị này.
-            </p>
-
-            <Grid columns={2} gap={2} className="pt-1">
-              <NumberInput
-                label="Thời gian"
-                min={1}
-                step={effortUnit === "minutes" ? 5 : 1}
-                value={effortValue}
-                onChange={(v) => setEffortValue(v ?? 1)}
-              />
-              <Selector
-                label="Đơn vị"
-                options={EFFORT_UNIT_OPTIONS}
-                value={effortUnit}
-                onChange={(v) => handleEffortUnitChange(v as EffortUnit)}
-              />
-            </Grid>
-          </div>
-
-          {/* Status */}
-          <Selector
-            label="Trạng thái"
-            options={STATUS_OPTIONS}
-            value={status}
-            onChange={(v) => setStatus(v as TaskStatus)}
+          {/* Effort, Status & Dates */}
+          <TaskEffortStatusFields
+            effortValue={effortValue}
+            onEffortValueChange={setEffortValue}
+            effortUnit={effortUnit}
+            onEffortUnitChange={handleEffortUnitChange}
+            effortMinutes={effortMinutes}
+            status={status}
+            onStatusChange={setStatus}
+            startDate={startDate}
+            onStartDateChange={(v) => setStartDate(v ?? getTodayString())}
+            endDate={endDate}
+            onEndDateChange={setEndDate}
           />
-
-          {/* Dates */}
-          <Grid columns={2} gap={3}>
-            <DateInput
-              label="Ngày bắt đầu"
-              format="date"
-              width="100%"
-              isRequired
-              value={startDate as ISODateString}
-              onChange={(v) => setStartDate(v ?? getTodayString())}
-            />
-
-            <DateInput
-              label="Hạn hoàn thành (Deadline)"
-              format="date"
-              width="100%"
-              hasClear
-              placeholder="Tùy chọn"
-              value={(endDate || undefined) as ISODateString | undefined}
-              onChange={(v) => setEndDate(v || null)}
-            />
-          </Grid>
 
           {/* Description / Notes */}
           <TextInput

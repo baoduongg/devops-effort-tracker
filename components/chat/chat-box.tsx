@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useMemo } from "react";
-import axios from "axios";
 import { VStack, HStack } from "@astryxdesign/core/Stack";
 import { ChatLayout, ChatComposer, ChatComposerInput, ChatComposerDrawer, ChatSendButton } from "@astryxdesign/core/Chat";
 import { Spinner } from "@astryxdesign/core/Spinner";
@@ -19,19 +18,13 @@ import { CommandTemplateModal } from "@/components/chat/command-template-modal";
 import { useChatStore } from "@/store/chat.store";
 import { useAuthStore } from "@/store/auth.store";
 import { useMembersStore } from "@/store/members.store";
-import { createTask, getTasksByMember, updateTask, deleteTask } from "@/services/tasks.service";
-import { getProjectByName, createProject, getProjects } from "@/services/projects.service";
-import {
-  getMembers,
-  updateMember,
-  findBestSuitableMember,
-  findMemberByName,
-  syncMemberEffortStatus,
-} from "@/services/members.service";
-import { confirmChatLog, getChatLogsByThread, chatLogsToMessages } from "@/services/chatLogs.service";
+import { getProjects } from "@/services/projects.service";
+import { getMembers } from "@/services/members.service";
+import { getChatLogsByThread, chatLogsToMessages } from "@/services/chatLogs.service";
 import { getThreadsByMember, createThread, touchThread } from "@/services/chatThreads.service";
 import { createTaskChangeLog } from "@/services/taskChangeLogs.service";
-import { notifyTaskCreated, notifyTaskStatusChanged, notifyTaskReassigned, notifyTaskDeleted } from "@/services/chatops.service";
+import { submitFormatEntry, submitAnswerQuery } from "@/services/chatAi.service";
+import { confirmTaskEntry, confirmTaskProposal } from "@/services/chat-task-actions.service";
 import {
   getAvailableSlashCommands,
   resolveSlashCommand,
@@ -46,9 +39,8 @@ import {
   looksLikeSelfLogEntry,
 } from "@/lib/intent";
 import type { FormattedEntry, TaskChangeProposal, ChatMessage } from "@/types/chat";
-import type { Member, MemberStatus } from "@/types/member";
+import type { Member } from "@/types/member";
 import type { Project } from "@/types/project";
-import { PROJECT_COLOR_SWATCHES } from "@/lib/project-colors";
 
 async function compressImageToBase64(file: File, maxDimension = 1000): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -394,16 +386,15 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
         !looksLikeMutationCommand &&
         (currentImageUrl || isTaskCreationIntent(currentText) || looksLikeSelfLogEntry(currentText))
       ) {
-        const res = await axios.post("/api/ai/format-entry", {
+        const data = await submitFormatEntry({
           memberId: user?.memberId || user?.uid || "leader",
           askerMemberName: user?.displayName || null,
           text: currentText,
-          userInput: currentText,
           imageUrl: currentImageUrl,
           provider: aiProvider,
           threadId: currentThreadId,
         });
-        const { entry, chatLogId, message } = res.data;
+        const { entry, chatLogId, message } = data;
         if (message) {
           appendMessage("devops", {
             id: generateMessageId("ai-notice"),
@@ -419,9 +410,8 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
           confirmed: false,
         });
       } else {
-        const res = await axios.post("/api/ai/answer-query", {
+        const data = await submitAnswerQuery({
           question: currentText,
-          query: currentText,
           memberId: user?.memberId || user?.uid || (mode === "devops" ? "" : "leader"),
           mode,
           // ISSUE-14/ISSUE-17: `mode` is only the UI tab selection (which route/prompt to use) and
@@ -450,7 +440,7 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
           helpData,
           memberInfoData,
           chatLogId,
-        } = res.data;
+        } = data;
         if (entry) {
           if (answer) {
             appendMessage(mode, {
@@ -587,127 +577,14 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
   const members = useMembersStore((state) => state.members);
 
   async function handleConfirmEntry(chatLogId: string, entry: FormattedEntry): Promise<void> {
-    let targetMemberId = user?.memberId || "";
     const allMembers = members.length > 0 ? members : await getMembers();
-
-    if (entry.assigneeName) {
-      const matched = findMemberByName(allMembers, entry.assigneeName);
-      if (matched) {
-        targetMemberId = matched.id;
-      }
-    }
-
-    if (!targetMemberId) {
-      const fallbackMember = findBestSuitableMember(allMembers, entry.title, entry.projectName);
-      if (fallbackMember) {
-        targetMemberId = fallbackMember.id;
-      }
-    }
-
-    if (!targetMemberId) {
-      if (entry.assigneeName) {
-        setError(`Không tìm thấy nhân sự "${entry.assigneeName}" trong danh sách thành viên. Vui lòng kiểm tra lại tên.`);
-      } else {
-        setError("Không có nhân sự nào khả dụng trong hệ thống để gán task.");
-      }
+    const result = await confirmTaskEntry(entry, chatLogId, mode, user, allMembers);
+    if (!result.ok) {
+      setError(result.error);
       return;
     }
-
-    let project = await getProjectByName(entry.projectName);
-    if (!project) {
-      const projectId = await createProject({
-        name: entry.projectName,
-        description: `Dự án ${entry.projectName}`,
-        color: PROJECT_COLOR_SWATCHES[0],
-      });
-      project = {
-        id: projectId,
-        name: entry.projectName,
-        description: `Dự án ${entry.projectName}`,
-        color: PROJECT_COLOR_SWATCHES[0],
-        createdAt: new Date().toISOString(),
-      };
-    }
-
-    const effortMinutes = entry.effortMinutes || 60;
-
-    const taskId = await createTask({
-      memberId: targetMemberId,
-      projectId: project.id,
-      title: entry.title,
-      description: entry.title,
-      effortMinutes,
-      startDate: entry.startDate || new Date().toISOString().split("T")[0],
-      endDate: entry.endDate,
-      status: entry.status || "in_progress",
-      source: "ai_chat",
-    });
-
-    const isTaskActive = (entry.status || "in_progress") === "in_progress";
-    try {
-      const existingTasks = await getTasksByMember(targetMemberId);
-      const otherActiveTasks = existingTasks.filter((t) => t.id !== taskId && t.status === "in_progress");
-      const totalEffortMinutes = otherActiveTasks.reduce((sum, t) => sum + (t.effortMinutes || 0), 0) + (isTaskActive ? effortMinutes : 0);
-      const activeCount = otherActiveTasks.length + (isTaskActive ? 1 : 0);
-      const newStatus: MemberStatus =
-        activeCount === 0 || totalEffortMinutes === 0
-          ? "available"
-          : totalEffortMinutes > 480
-            ? "overloaded"
-            : "busy";
-
-      await updateMember(targetMemberId, {
-        currentTaskId: isTaskActive ? taskId : (otherActiveTasks[0]?.id || null),
-        effortMinutes: totalEffortMinutes,
-        status: newStatus,
-      });
-    } catch (e) {
-      console.warn("Could not sync member status immediately:", e);
-    }
-
-    const targetMember = allMembers.find((m) => m.id === targetMemberId);
-    const memberName = targetMember?.name ?? targetMemberId;
-    notifyTaskCreated({
-      title: entry.title,
-      memberName,
-      memberEmail: targetMember?.email,
-      projectName: project.name,
-      link: `${window.location.origin}/dashboard`,
-      creatorName: user?.displayName ?? "Admin",
-      endDate: entry.endDate,
-    });
-
     if (chatLogId) {
-      try {
-        await confirmChatLog(chatLogId);
-      } catch (logErr) {
-        console.warn("Could not update chat log confirmation:", logErr);
-      }
       updateEntryConfirmed(mode, chatLogId, true);
-
-      // F-09/AC-03-2: audit trail is only for leader-issued create commands via chat (answer-query),
-      // not devops's own work-log entries via format-entry — those aren't a "leader ra lệnh" action.
-      if (mode === "leader") {
-        try {
-          await createTaskChangeLog({
-            // ISSUE-10: actorUid must match the identifier the audit query (answer-query route)
-            // looks up by — that route receives `memberId: user?.memberId || user?.uid || ...`
-            // (see the answer-query axios call below), so writes here use the same precedence
-            // instead of always `user.uid`, otherwise a real leader's memberId never matches.
-            actorUid: user?.memberId || user?.uid || "",
-            actorName: user?.displayName ?? "Leader",
-            action: "create",
-            taskId,
-            taskTitle: entry.title,
-            proposedChanges: { ...entry },
-            appliedChanges: { ...entry, assigneeName: memberName },
-            status: "confirmed",
-            chatLogId,
-          });
-        } catch (auditErr) {
-          console.warn("Could not write taskChangeLogs for create confirm:", auditErr);
-        }
-      }
     }
   }
 
@@ -717,125 +594,12 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
     appliedChanges: TaskChangeProposal["changes"],
   ): Promise<void> {
     const allMembers = members.length > 0 ? members : await getMembers();
-
-    if (proposal.action === "delete") {
-      await deleteTask(proposal.taskId);
-      const currentMember = allMembers.find((m) => m.name === proposal.taskSnapshot.assigneeName);
-      if (currentMember) {
-        await syncMemberEffortStatus(currentMember.id);
-      }
-      notifyTaskDeleted({
-        title: proposal.taskSnapshot.title,
-        memberName: proposal.taskSnapshot.assigneeName ?? "Chưa gán",
-        memberEmail: currentMember?.email,
-        projectName: proposal.taskSnapshot.projectName,
-        deletedByName: user?.displayName ?? "Leader",
-      });
-    } else {
-      // ISSUE-07: dùng appliedChanges (bản leader đã sửa) để apply thật, proposal.changes (bản AI
-      // đề xuất ban đầu, không đổi) chỉ dùng để ghi taskChangeLogs.proposedChanges bên dưới.
-      const changes = appliedChanges;
-      const taskPatch: Record<string, unknown> = {};
-      if (changes.title !== undefined) taskPatch.title = changes.title;
-      if (changes.status !== undefined) taskPatch.status = changes.status;
-      if (changes.startDate !== undefined) taskPatch.startDate = changes.startDate;
-      if (changes.endDate !== undefined) taskPatch.endDate = changes.endDate;
-      if (changes.effortMinutes !== undefined) taskPatch.effortMinutes = changes.effortMinutes;
-
-      if (changes.projectName !== undefined) {
-        let project = await getProjectByName(changes.projectName);
-        if (!project) {
-          const projectId = await createProject({
-            name: changes.projectName,
-            description: `Dự án ${changes.projectName}`,
-            color: PROJECT_COLOR_SWATCHES[0],
-          });
-          project = { id: projectId, name: changes.projectName, description: "", color: PROJECT_COLOR_SWATCHES[0], createdAt: new Date().toISOString() };
-        }
-        taskPatch.projectId = project.id;
-      }
-
-      let newMemberId: string | null | undefined;
-      if (changes.assigneeName === null) {
-        // Chủ ý bỏ người phụ trách (unassign) — không tìm kiếm theo tên, không phải lỗi.
-        newMemberId = null;
-        taskPatch.memberId = null;
-      } else if (changes.assigneeName !== undefined) {
-        const matched = findMemberByName(allMembers, changes.assigneeName);
-        if (!matched) {
-          setError(`Không tìm thấy nhân sự "${changes.assigneeName}" trong danh sách thành viên. Vui lòng kiểm tra lại tên trước khi xác nhận.`);
-          throw new Error("assignee not found");
-        }
-        newMemberId = matched.id;
-        taskPatch.memberId = matched.id;
-      }
-
-      await updateTask(proposal.taskId, taskPatch);
-
-      // F-04/PM decision: resync Member.effortMinutes/status for every member touched, using the
-      // same formula as task creation (handleConfirmEntry) — old assignee (if reassigned) too.
-      // newMemberId is a real member id only on reassignment; null (unassign) or undefined (no
-      // assignee change) both fall through to resyncing the previous/current assignee below.
-      let currentMemberForNotify = allMembers.find((m) => m.name === proposal.taskSnapshot.assigneeName);
-      if (newMemberId) {
-        const previousMemberId = currentMemberForNotify?.id;
-        if (previousMemberId && previousMemberId !== newMemberId) {
-          await syncMemberEffortStatus(previousMemberId);
-        }
-        await syncMemberEffortStatus(newMemberId);
-        currentMemberForNotify = allMembers.find((m) => m.id === newMemberId);
-      } else if (currentMemberForNotify) {
-        await syncMemberEffortStatus(currentMemberForNotify.id);
-      }
-
-      const finalTitle = changes.title ?? proposal.taskSnapshot.title;
-      const finalProjectName = changes.projectName ?? proposal.taskSnapshot.projectName;
-      const link = `${window.location.origin}/tasks`;
-
-      // Mirror task-edit-modal: reassignment takes priority over a plain status-change notice.
-      if (changes.assigneeName !== undefined && changes.assigneeName !== proposal.taskSnapshot.assigneeName) {
-        const oldMember = allMembers.find((m) => m.name === proposal.taskSnapshot.assigneeName);
-        notifyTaskReassigned({
-          title: finalTitle,
-          projectName: finalProjectName,
-          oldMemberName: oldMember?.name ?? proposal.taskSnapshot.assigneeName ?? "Chưa gán",
-          newMemberName: currentMemberForNotify?.name ?? "Chưa gán",
-          newMemberEmail: currentMemberForNotify?.email,
-          link,
-        });
-      } else if (changes.status !== undefined && changes.status !== proposal.taskSnapshot.status) {
-        notifyTaskStatusChanged({
-          title: finalTitle,
-          memberName: currentMemberForNotify?.name ?? proposal.taskSnapshot.assigneeName ?? "Chưa gán",
-          memberEmail: currentMemberForNotify?.email,
-          projectName: finalProjectName,
-          oldStatus: proposal.taskSnapshot.status,
-          newStatus: changes.status,
-          link,
-        });
-      }
-    }
-
-    try {
-      await confirmChatLog(chatLogId);
-    } catch (logErr) {
-      console.warn("Could not update chat log confirmation:", logErr);
+    const result = await confirmTaskProposal(proposal, appliedChanges, chatLogId, user, allMembers);
+    if (!result.ok) {
+      setError(result.error);
+      throw new Error("assignee not found");
     }
     updateProposalConfirmed(mode, chatLogId, true);
-
-    await createTaskChangeLog({
-      // ISSUE-10: see comment on the "create" call site above — must match the identifier
-      // answer-query's audit query looks up by (user.memberId when present, not user.uid).
-      actorUid: user?.memberId || user?.uid || "",
-      actorName: user?.displayName ?? "Leader",
-      action: proposal.action,
-      taskId: proposal.taskId,
-      taskTitle: proposal.taskSnapshot.title,
-      proposedChanges: proposal.changes,
-      appliedChanges: proposal.action === "delete" ? {} : appliedChanges,
-      status: "confirmed",
-      chatLogId,
-    });
   }
 
   async function handleCancelProposal(chatLogId: string, proposal: TaskChangeProposal): Promise<void> {

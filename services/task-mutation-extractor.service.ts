@@ -1,4 +1,4 @@
-import { callAiText, type AiProvider } from "@/services/ai-provider.service";
+import { callAiText, retryAiJsonOnce, type AiProvider } from "@/services/ai-provider.service";
 import { taskChangeProposalSchema } from "@/lib/schemas";
 import { extractJsonFromAiText } from "@/services/task-extractor.service";
 import { getMembers, findMemberByName, findBestSuitableMember } from "@/services/members.service";
@@ -240,20 +240,22 @@ export async function extractTaskMutationFromInput(
   // action === "update": ask AI to extract which fields to change, retry once on invalid JSON.
   const updateSystemPrompt = getUpdateSystemPrompt();
   const raw = await callAiText(updateSystemPrompt, inputText, provider);
-  let candidate = extractJsonFromAiText(raw);
-  let parsed = taskChangeProposalSchema.safeParse({ action: "update", taskId: task.id, ...(candidate as object) });
+  const parseCandidate = (candidate: unknown) =>
+    taskChangeProposalSchema.safeParse({ action: "update", taskId: task.id, ...(candidate as object) });
+  let parsed = parseCandidate(extractJsonFromAiText(raw));
 
   if (!parsed.success) {
-    const retryRaw = await callAiText(
+    parsed = await retryAiJsonOnce(
       updateSystemPrompt,
-      `Phản hồi trước không hợp lệ.\nRaw: "${raw}"\nCâu lệnh gốc: "${inputText}"\nTrả về đúng JSON {"changes": {...}}.`,
+      raw,
+      extractJsonFromAiText,
+      parseCandidate,
+      (rawText) => `Phản hồi trước không hợp lệ.\nRaw: "${rawText}"\nCâu lệnh gốc: "${inputText}"\nTrả về đúng JSON {"changes": {...}}.`,
       provider
     );
-    candidate = extractJsonFromAiText(retryRaw);
-    parsed = taskChangeProposalSchema.safeParse({ action: "update", taskId: task.id, ...(candidate as object) });
   }
 
-  let changes = parsed.success ? parsed.data.changes : {};
+  let changes = parsed.success ? parsed.data!.changes : {};
 
   // If a new assignee was explicitly found via regex (e.g. "sang cho Dương Bảo"), ensure it's in changes
   if (newAssignee && (!changes || !changes.assigneeName)) {

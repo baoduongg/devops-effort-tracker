@@ -1,37 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callAiText } from "@/services/ai-provider.service";
-import { buildGroundingSnapshot, GroundingSnapshot } from "@/services/grounding.service";
+import { buildGroundingSnapshot } from "@/services/grounding.service";
 import { createChatLog } from "@/services/chatLogs.service";
 import { extractTaskEntryFromInput } from "@/services/task-extractor.service";
 import { extractTaskMutationFromInput } from "@/services/task-mutation-extractor.service";
 import { getMembers, findMemberByName, findBestSuitableMember } from "@/services/members.service";
 import { getAllTaskChangeLogs, getTaskChangeLogsByActor } from "@/services/taskChangeLogs.service";
 import { isTaskCreationIntent, isTaskUpdateIntent, isTaskDeleteIntent } from "@/lib/intent";
-import { formatEffortDuration, getEffortStatus } from "@/lib/effort";
-import { daysOverdue } from "@/lib/overdue";
+import { formatEffortDuration } from "@/lib/effort";
 import { deriveSlashCommandFromText } from "@/lib/slash-commands";
+import type { AiResponsePayload } from "@/types/chat";
+import {
+  renderMemberList,
+  renderTaskChangeAudit,
+  renderClarificationAnswer,
+  buildTaskListPayload,
+  buildFreeCardAvailability,
+  buildOverloadPayload,
+  buildEffortPayload,
+  buildLoadPayload,
+  buildReportPayload,
+  buildOverduePayload,
+  buildMembersListPayload,
+  buildProjectsListPayload,
+  buildHelpPayload,
+  buildMemberInfoPayload,
+} from "@/services/chat-card-builders.service";
 import type { Member } from "@/types/member";
-import type {
-  ClarificationRequest,
-  MemberAvailability,
-  TaskListPayload,
-  TaskSummaryItem,
-  OverloadPayload,
-  EffortPayload,
-  LoadPayload,
-  ReportPayload,
-  OverduePayload,
-  MembersListPayload,
-  ProjectsListPayload,
-  HelpPayload,
-  MemberInfoPayload,
-  LoadMemberItem,
-  EffortMemberItem,
-  ReportProjectItem,
-  OverdueTaskItem,
-  MembersListItem,
-  ProjectsListItem,
-} from "@/types/chat";
+import type { ClarificationRequest } from "@/types/chat";
 
 const SYSTEM_PROMPT = `Bạn là Trợ lý AI Quản lý Nguồn lực & Điều phối Nhân sự DevOps (DevOps Effort & Resource Assistant).
 Nhiệm vụ của bạn là giải đáp câu hỏi của Leader / Quản lý một cách CHUYÊN NGHIỆP, RÕ RÀNG, TRỰC QUAN và CHÍNH XÁC dựa trên dữ liệu thực tế được cung cấp.
@@ -191,32 +187,6 @@ function detectMemberQueryTarget(
 }
 
 /**
- * F-12/ISSUE-16(c): when rendering the "here are the members you can pick from" list for a devops
- * asker, leader accounts must be filtered out — devops should only see themselves/peers, never a
- * leader offered as a valid lookup/assignment target. `forMode` is the identity of the person the
- * list is being shown to, not the member being described.
- */
-function renderMemberList(members: Member[], snapshotMembers?: GroundingSnapshot["members"], forMode: "leader" | "devops" = "leader"): string {
-  const visibleMembers = forMode === "devops" ? members.filter((m) => m.role !== "leader") : members;
-  if (!visibleMembers || visibleMembers.length === 0) {
-    return "- *(Chưa có thành viên nào được đăng ký trong hệ thống)*";
-  }
-
-  const snapshotMap = new Map((snapshotMembers || []).map((m) => [m.name.toLowerCase(), m]));
-
-  return visibleMembers
-    .map((m) => {
-      const snap = snapshotMap.get(m.name.toLowerCase());
-      const effortMinutes = snap ? snap.totalEffortMinutes : (m.effortMinutes ?? 0);
-      const statusIcon = effortMinutes > 480 ? "🔴 Quá tải" : effortMinutes > 288 ? "🟡 Vừa tải" : "🟢 Sẵn sàng";
-      const roleText = m.role === "leader" ? "Leader" : "DevOps Engineer";
-      const skillsText = m.skills && m.skills.length > 0 ? ` [${m.skills.slice(0, 3).join(", ")}]` : "";
-      return `- **${m.name}** (${roleText}${skillsText}) — ${statusIcon} (${formatEffortDuration(effortMinutes)} Effort)`;
-    })
-    .join("\n");
-}
-
-/**
  * Resolves the real `role` from Firestore for the given memberId, so the route doesn't blindly
  * trust the client-supplied `mode`. Falls back to trusting `mode` when memberId can't be resolved
  * (e.g. leader's placeholder memberId="leader") — documented assumption, see spec "Phân quyền".
@@ -260,322 +230,6 @@ const PROJECTS_QUERY_PATTERN =
 const HELP_QUERY_PATTERN =
   /(?:^\s*\/(?:help|huongdan|\?)\b)|(?:(?:hướng dẫn.*lệnh slash|hướng dẫn sử dụng|cách sử dụng ai assistant)\b)/i;
 
-/**
- * TASK-CARD: builds the structured task list payload mirroring landing page /task response UI.
- */
-function buildTaskListPayload(snapshot: GroundingSnapshot): TaskListPayload {
-  const tasks: TaskSummaryItem[] = [];
-  const overdueTitles = new Set(
-    snapshot.overdueTasks.map((ot) => `${ot.memberName}:::${ot.title}`)
-  );
-
-  snapshot.members.forEach((m) => {
-    m.activeTasks.forEach((t) => {
-      const isTaskOverdue =
-        overdueTitles.has(`${m.name}:::${t.title}`) ||
-        (t.endDate ? daysOverdue(t.endDate) > 0 : false);
-      tasks.push({
-        title: t.title,
-        memberName: m.name,
-        projectName: t.project,
-        duration: t.duration,
-        statusLabel: isTaskOverdue ? "Trễ hạn" : "Đang làm",
-        statusVariant: isTaskOverdue ? "overdue" : "in_progress",
-      });
-    });
-    m.plannedTasks.forEach((t) => {
-      tasks.push({
-        title: t.title,
-        memberName: m.name,
-        projectName: t.project,
-        duration: t.duration,
-        statusLabel: "Kế hoạch",
-        statusVariant: "planned",
-      });
-    });
-  });
-
-  const suggestedActions: TaskListPayload["suggestedActions"] = [
-    { label: "👉 /assign giao task mới", slashCommand: "/assign" },
-    { label: "⚡ /load xem tải team", slashCommand: "/load" },
-    { label: "🔍 /free ai đang rảnh", slashCommand: "/free" },
-  ];
-
-  return {
-    title: "📋 Danh sách các task đang thực hiện và kế hoạch:",
-    tasks,
-    suggestedActions,
-  };
-}
-
-/**
- * FREE-CARD: builds the deterministic member-availability payload for the "who's free" card.
- */
-function buildFreeCardAvailability(snapshot: GroundingSnapshot): MemberAvailability {
-  const members = snapshot.members.filter((m) => m.role !== "leader").map((m) => {
-    const { label, variant } = getEffortStatus(m.totalEffortMinutes, m.activeTasks.length);
-    return {
-      id: m.id,
-      name: m.name,
-      role: m.role,
-      statusLabel: label,
-      statusVariant: variant,
-      effortMinutes: m.totalEffortMinutes,
-      capacityMinutes: 480,
-      skills: m.skills ?? [],
-      activeTaskTitle: m.activeTasks[0]?.title ?? null,
-    };
-  });
-
-  const suggestedActions: MemberAvailability["suggestedActions"] = [];
-  const firstFree = snapshot.freeMembers[0];
-  if (firstFree) {
-    suggestedActions.push({ label: `👉 /assign cho ${firstFree}`, slashCommand: `/assign ${firstFree}` });
-  }
-  suggestedActions.push({ label: "⚡ /load xem toàn team", slashCommand: "/load" });
-
-  return { members, suggestedActions };
-}
-
-function buildOverloadPayload(snapshot: GroundingSnapshot): OverloadPayload {
-  const overloadedMembers = snapshot.members
-    .filter((m) => m.role !== "leader" && (m.status === "overloaded" || m.totalEffortMinutes > 480))
-    .map((m) => {
-      const percent = Number(((m.totalEffortMinutes / 480) * 100).toFixed(1));
-      const firstFree = snapshot.freeMembers[0];
-      return {
-        name: m.name,
-        role: m.role === "devops" ? "Cloud / DevOps Eng" : m.role,
-        effortMinutes: m.totalEffortMinutes,
-        capacityMinutes: 480,
-        percentage: percent,
-        taskCount: m.activeTasks.length,
-        taskTitles: m.activeTasks.map((t) => `${t.title} (${t.effort}m)`),
-        suggestedReassignTarget: firstFree || null,
-      };
-    });
-
-  const firstFree = snapshot.freeMembers[0];
-  const suggestedActions: OverloadPayload["suggestedActions"] = [];
-  if (firstFree && overloadedMembers.length > 0) {
-    suggestedActions.push({
-      label: `/reassign sang ${firstFree}`,
-      slashCommand: `/reassign`,
-    });
-  }
-  suggestedActions.push({ label: "⚡ /load xem toàn team", slashCommand: "/load" });
-
-  return { overloadedMembers, suggestedActions };
-}
-
-function buildEffortPayload(snapshot: GroundingSnapshot): EffortPayload {
-  const assignable = snapshot.members.filter((m) => m.role !== "leader");
-  const totalEffortMinutes = assignable.reduce((sum, m) => sum + m.totalEffortMinutes, 0);
-  const totalCapacityMinutes = assignable.length * 480;
-  const overallPercentage =
-    totalCapacityMinutes > 0 ? Number(((totalEffortMinutes / totalCapacityMinutes) * 100).toFixed(1)) : 0;
-
-  const members: EffortMemberItem[] = assignable.map((m) => ({
-    name: m.name,
-    effortMinutes: m.totalEffortMinutes,
-    capacityMinutes: 480,
-    percentage: Number(((m.totalEffortMinutes / 480) * 100).toFixed(0)),
-  }));
-
-  return {
-    totalEffortMinutes,
-    totalCapacityMinutes,
-    overallPercentage,
-    members,
-  };
-}
-
-function buildLoadPayload(snapshot: GroundingSnapshot): LoadPayload {
-  const assignable = snapshot.members.filter((m) => m.role !== "leader");
-  const members: LoadMemberItem[] = assignable.map((m) => {
-    const percent = Number(((m.totalEffortMinutes / 480) * 100).toFixed(1));
-    const isOverload = m.totalEffortMinutes > 480;
-    const isFree = m.totalEffortMinutes === 0;
-    const isBusy = m.totalEffortMinutes >= 288 && m.totalEffortMinutes <= 480;
-
-    let statusVariant: LoadMemberItem["statusVariant"] = "normal";
-    let statusLabel = "Sẵn sàng";
-    if (isOverload) {
-      statusVariant = "overload";
-      statusLabel = "Quá tải";
-    } else if (isFree) {
-      statusVariant = "free";
-      statusLabel = "Rảnh 100%";
-    } else if (isBusy) {
-      statusVariant = "busy";
-      statusLabel = "Vừa tải";
-    }
-
-    return {
-      name: m.name,
-      role: m.role === "devops" ? "DevOps Eng" : m.role === "leader" ? "DevOps Lead" : m.role,
-      effortMinutes: m.totalEffortMinutes,
-      capacityMinutes: 480,
-      percentage: percent,
-      statusLabel,
-      statusVariant,
-    };
-  });
-
-  return { members };
-}
-
-function buildReportPayload(snapshot: GroundingSnapshot): ReportPayload {
-  const projects: ReportProjectItem[] = snapshot.projects.map((p) => {
-    const hours = (p.totalEffortMinutes / 60).toFixed(1);
-    const prog = snapshot.projectProgress.find((pp) => pp.name === p.name);
-    return {
-      name: p.name,
-      totalEffortMinutes: p.totalEffortMinutes,
-      totalHours: hours,
-      activeTaskCount: p.activeTaskCount,
-      doneTaskCount: prog?.done ?? 0,
-      assignedMembers: p.assignedMembers,
-      warning: p.totalEffortMinutes > 1800 ? "Cận trần" : null,
-    };
-  });
-
-  return { projects };
-}
-
-function buildOverduePayload(snapshot: GroundingSnapshot): OverduePayload {
-  const tasks: OverdueTaskItem[] = snapshot.overdueTasks.map((t) => ({
-    title: t.title,
-    projectName: t.project,
-    memberName: t.memberName,
-    endDate: t.endDate,
-    daysOverdue: t.daysOverdue,
-  }));
-
-  return { tasks };
-}
-
-function buildMembersListPayload(snapshot: GroundingSnapshot): MembersListPayload {
-  const members: MembersListItem[] = snapshot.members.map((m) => {
-    const isOverload = m.totalEffortMinutes > 480;
-    const isFree = m.totalEffortMinutes === 0;
-    const statusLabel = isOverload ? "🔴 Quá tải" : isFree ? "🟢 Rảnh 100%" : "🔵 Đang làm việc";
-
-    return {
-      id: m.id,
-      name: m.name,
-      role: m.role === "leader" ? "DevOps Lead" : "DevOps Eng",
-      effortMinutes: m.totalEffortMinutes,
-      capacityMinutes: 480,
-      statusLabel,
-      statusVariant: isOverload ? "overload" : isFree ? "free" : "normal",
-      skills: m.skills ?? [],
-    };
-  });
-
-  return { members };
-}
-
-function buildProjectsListPayload(snapshot: GroundingSnapshot): ProjectsListPayload {
-  const projects: ProjectsListItem[] = snapshot.projects.map((p) => {
-    const hours = (p.totalEffortMinutes / 60).toFixed(1);
-    const prog = snapshot.projectProgress.find((pp) => pp.name === p.name);
-    return {
-      name: p.name,
-      totalEffortMinutes: p.totalEffortMinutes,
-      totalHours: hours,
-      activeTaskCount: p.activeTaskCount,
-      doneTaskCount: prog?.done ?? 0,
-      assignedMembers: p.assignedMembers,
-    };
-  });
-
-  return { projects };
-}
-
-function buildHelpPayload(): HelpPayload {
-  return {};
-}
-
-function buildMemberInfoPayload(member: Member, snapshot: GroundingSnapshot): MemberInfoPayload {
-  const snapshotMember = snapshot.members.find((m) => m.id === member.id || m.name.toLowerCase() === member.name.toLowerCase());
-  const effortMinutes = snapshotMember?.totalEffortMinutes ?? 0;
-  const capacityMinutes = 480;
-  const percentage = Number(((effortMinutes / capacityMinutes) * 100).toFixed(1));
-  const isOverloaded = effortMinutes > 480;
-  const isFree = effortMinutes === 0;
-  const statusLabel = isOverloaded ? "🔴 Quá tải" : isFree ? "🟢 Rảnh việc" : "🔵 Vừa tải";
-
-  const activeTasks = (snapshotMember?.activeTasks ?? []).map((t) => ({
-    title: t.title,
-    project: t.project,
-    duration: t.duration,
-  }));
-  const plannedTasks = (snapshotMember?.plannedTasks ?? []).map((t) => ({
-    title: t.title,
-    project: t.project,
-    duration: t.duration,
-  }));
-
-  const projects = Array.from(
-    new Set([
-      ...activeTasks.map((t) => t.project),
-      ...plannedTasks.map((t) => t.project),
-    ])
-  ).filter((p) => p && p !== "Unknown");
-
-  return {
-    name: member.name,
-    role: member.role === "leader" ? "DevOps Lead" : "DevOps Eng",
-    position: member.role === "leader" ? "DevOps / SRE Lead" : "Cloud Platform Engineer",
-    effortMinutes,
-    capacityMinutes,
-    percentage,
-    statusLabel,
-    statusVariant: isOverloaded ? "overload" : isFree ? "free" : "normal",
-    skills: member.skills ?? [],
-    activeTasks,
-    plannedTasks,
-    projects,
-  };
-}
-
-function renderTaskChangeAudit(logs: Awaited<ReturnType<typeof getAllTaskChangeLogs>>): string {
-  if (logs.length === 0) {
-    return "Bạn chưa thực hiện thay đổi (sửa/xóa) task nào qua chat trong hệ thống.";
-  }
-  const actionLabel: Record<string, string> = { create: "Tạo", update: "Sửa", delete: "Xóa" };
-  const statusLabel: Record<string, string> = { confirmed: "đã xác nhận", cancelled: "đã hủy" };
-  const lines = logs
-    .slice(0, 20)
-    .map(
-      (l) =>
-        `- **${actionLabel[l.action] ?? l.action}** task **${l.taskTitle}** — ${statusLabel[l.status] ?? l.status} lúc ${new Date(l.createdAt).toLocaleString("vi-VN")}`
-    );
-  return `📋 **Lịch sử thay đổi task qua chat:**\n${lines.join("\n")}`;
-}
-
-function renderClarificationAnswer(clarification: ClarificationRequest): string {
-  switch (clarification.reason) {
-    case "missing_field":
-      return "Bạn chưa nói rõ muốn đổi thông tin gì (trạng thái/ngày/người phụ trách/mô tả/effort). Vui lòng bổ sung rõ trước khi tôi soạn đề xuất.";
-    case "no_match":
-      return clarification.candidates && clarification.candidates.length > 0
-        ? `Không tìm thấy task/nhân sự khớp với yêu cầu. Danh sách hiện có:\n${clarification.candidates.map((c) => `- ${c.label}`).join("\n")}`
-        : "Không tìm thấy task/nhân sự nào khớp với yêu cầu của bạn. Vui lòng kiểm tra lại tên.";
-    case "ambiguous_match":
-      return `Có nhiều task khớp với yêu cầu, vui lòng chọn rõ:\n${(clarification.candidates ?? []).map((c) => `- ${c.label}`).join("\n")}`;
-    case "target_is_leader":
-      return `Không thể giao/sửa task cho tài khoản có vai trò Leader — task chỉ dành cho kỹ sư DevOps.${
-        clarification.candidates && clarification.candidates.length > 0
-          ? ` Gợi ý: ${clarification.candidates.map((c) => c.label).join(", ")}.`
-          : ""
-      }`;
-    default:
-      return "Cần bạn xác nhận rõ hơn trước khi tiếp tục.";
-  }
-}
-
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const { question, query, memberId, mode, askerRole, provider, threadId } = body as {
@@ -604,6 +258,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "threadId is required" }, { status: 400 });
   }
 
+  // Every branch below writes the same chatLog shape (memberId/mode/threadId/rawInput fixed,
+  // only aiResponse's extra fields and `confirmed` vary) then echoes those same fields back as
+  // the JSON response. `extra` holds the branch-specific fields (answer + at most one payload).
+  async function logAndRespond(extra: AiResponsePayload, confirmed: boolean): Promise<NextResponse> {
+    const chatLogId = await createChatLog({
+      memberId: currentMemberId || "leader",
+      mode: currentMode,
+      threadId: threadId!,
+      rawInput: userQuery,
+      imageUrl: null,
+      aiResponse: extra,
+      confirmed,
+    });
+    return NextResponse.json({ ...extra, chatLogId });
+  }
+
   try {
     const allMembersForRoleCheck = await getMembers();
     const isLeader = await resolveIsLeader(currentMode, currentMemberId, allMembersForRoleCheck);
@@ -617,16 +287,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if ((isDeleteIntent || isUpdateIntent || isCreateIntent) && !isLeader) {
       const answer =
         "⚠️ Bạn không đủ quyền để thêm/sửa/xóa task qua chat. Hành động này chỉ dành cho Leader. Vui lòng dùng cách ghi log công việc tự nhiên hiện có, hoặc nhờ Leader thực hiện thay đổi này.";
-      const chatLogId = await createChatLog({
-        memberId: currentMemberId || "leader",
-        mode: currentMode,
-        threadId,
-        rawInput: userQuery,
-        imageUrl: null,
-        aiResponse: { answer },
-        confirmed: true,
-      });
-      return NextResponse.json({ answer, chatLogId });
+      return logAndRespond({ answer }, true);
     }
 
     // 1. Delete intent (checked first, per F-01 order: delete -> update -> create -> query)
@@ -634,29 +295,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const result = await extractTaskMutationFromInput(userQuery, "delete", provider);
       if (result.clarification) {
         const answer = renderClarificationAnswer(result.clarification);
-        const chatLogId = await createChatLog({
-          memberId: currentMemberId || "leader",
-          mode: currentMode,
-          threadId,
-          rawInput: userQuery,
-          imageUrl: null,
-          aiResponse: { answer, clarification: result.clarification },
-          confirmed: false,
-        });
-        return NextResponse.json({ answer, clarification: result.clarification, chatLogId });
+        return logAndRespond({ answer, clarification: result.clarification }, false);
       }
       if (result.proposal) {
         const answer = `Đang định **xóa vĩnh viễn** task **${result.proposal.taskSnapshot.title}**. Vui lòng kiểm tra kỹ thông tin bên dưới và bấm **Xác nhận** nếu chắc chắn.`;
-        const chatLogId = await createChatLog({
-          memberId: currentMemberId || "leader",
-          mode: currentMode,
-          threadId,
-          rawInput: userQuery,
-          imageUrl: null,
-          aiResponse: { answer, proposal: result.proposal },
-          confirmed: false,
-        });
-        return NextResponse.json({ answer, proposal: result.proposal, chatLogId });
+        return logAndRespond({ answer, proposal: result.proposal }, false);
       }
     }
 
@@ -665,29 +308,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const result = await extractTaskMutationFromInput(userQuery, "update", provider);
       if (result.clarification) {
         const answer = renderClarificationAnswer(result.clarification);
-        const chatLogId = await createChatLog({
-          memberId: currentMemberId || "leader",
-          mode: currentMode,
-          threadId,
-          rawInput: userQuery,
-          imageUrl: null,
-          aiResponse: { answer, clarification: result.clarification },
-          confirmed: false,
-        });
-        return NextResponse.json({ answer, clarification: result.clarification, chatLogId });
+        return logAndRespond({ answer, clarification: result.clarification }, false);
       }
       if (result.proposal) {
         const answer = `Đang định **sửa** task **${result.proposal.taskSnapshot.title}**. Vui lòng kiểm tra thay đổi bên dưới và bấm **Xác nhận** để lưu.`;
-        const chatLogId = await createChatLog({
-          memberId: currentMemberId || "leader",
-          mode: currentMode,
-          threadId,
-          rawInput: userQuery,
-          imageUrl: null,
-          aiResponse: { answer, proposal: result.proposal },
-          confirmed: false,
-        });
-        return NextResponse.json({ answer, proposal: result.proposal, chatLogId });
+        return logAndRespond({ answer, proposal: result.proposal }, false);
       }
     }
 
@@ -701,31 +326,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       if (!mentionsProject) {
         const clarification: ClarificationRequest = { reason: "missing_field", missingFields: ["projectName"] };
         const answer = "Task này thuộc **dự án nào**? Vui lòng cho biết tên dự án trước khi tôi soạn đề xuất.";
-        const chatLogId = await createChatLog({
-          memberId: currentMemberId || "leader",
-          mode: currentMode,
-          threadId,
-          rawInput: userQuery,
-          imageUrl: null,
-          aiResponse: { answer, clarification },
-          confirmed: false,
-        });
-        return NextResponse.json({ answer, clarification, chatLogId });
+        return logAndRespond({ answer, clarification }, false);
       }
 
       if (!mentionsEffort) {
         const clarification: ClarificationRequest = { reason: "missing_field", missingFields: ["effortMinutes"] };
         const answer = "Bạn dự kiến **effort** (thời lượng) cho task này là bao nhiêu? Vui lòng cho biết cụ thể (vd: 2 tiếng, 4 tiếng, 1 ngày).";
-        const chatLogId = await createChatLog({
-          memberId: currentMemberId || "leader",
-          mode: currentMode,
-          threadId,
-          rawInput: userQuery,
-          imageUrl: null,
-          aiResponse: { answer, clarification },
-          confirmed: false,
-        });
-        return NextResponse.json({ answer, clarification, chatLogId });
+        return logAndRespond({ answer, clarification }, false);
       }
 
       const result = await extractTaskEntryFromInput(userQuery, null, provider);
@@ -741,16 +348,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
               candidates: suggestion ? [{ id: suggestion.id, label: suggestion.name }] : [],
             };
             const answer = renderClarificationAnswer(clarification);
-            const chatLogId = await createChatLog({
-              memberId: currentMemberId || "leader",
-              mode: currentMode,
-              threadId,
-              rawInput: userQuery,
-              imageUrl: null,
-              aiResponse: { answer, clarification },
-              confirmed: false,
-            });
-            return NextResponse.json({ answer, clarification, chatLogId });
+            return logAndRespond({ answer, clarification }, false);
           }
         }
 
@@ -762,17 +360,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           answer = `${notificationMessage}\n\n---\n${answer}`;
         }
 
-        const chatLogId = await createChatLog({
-          memberId: currentMemberId || "leader",
-          mode: currentMode,
-          threadId,
-          rawInput: userQuery,
-          imageUrl: null,
-          aiResponse: { answer, entry },
-          confirmed: false,
-        });
-
-        return NextResponse.json({ answer, entry, chatLogId });
+        return logAndRespond({ answer, entry }, false);
       }
     }
 
@@ -800,16 +388,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           ? await getAllTaskChangeLogs()
           : await getTaskChangeLogsByActor(currentMemberId || "leader");
       const answer = renderTaskChangeAudit(logs);
-      const chatLogId = await createChatLog({
-        memberId: currentMemberId || "leader",
-        mode: currentMode,
-        threadId,
-        rawInput: userQuery,
-        imageUrl: null,
-        aiResponse: { answer },
-        confirmed: true,
-      });
-      return NextResponse.json({ answer, chatLogId });
+      return logAndRespond({ answer }, true);
     }
 
     // 4b. Member-specific lookup (e.g. /status, /info, or "task của Bảo ra sao?") must be resolved
@@ -822,36 +401,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (isExplicitMemberCommand || memberQueryCheck.isMemberQuery) {
       if (memberQueryCheck.isPlaceholder) {
         const answer = `⚠️ **Chưa nhập tên thành viên cần tra cứu**\n\nVui lòng nhập tên thành viên cụ thể (Ví dụ: \`/status Bảo\` hoặc \`Tình hình công việc của Bảo ra sao?\`).\n\n📋 **Danh sách thành viên hiện có trong team:**\n${renderMemberList(allMembers, snapshot.members, currentAskerRole)}`;
-
-        const chatLogId = await createChatLog({
-          memberId: currentMemberId || "leader",
-          mode: currentMode,
-          threadId,
-          rawInput: userQuery,
-          imageUrl: null,
-          aiResponse: { answer },
-          confirmed: true,
-        });
-
-        return NextResponse.json({ answer, chatLogId });
+        return logAndRespond({ answer }, true);
       }
 
       if (memberQueryCheck.rawTarget) {
         const matchedMember = findMemberByName(allMembers, memberQueryCheck.rawTarget);
         if (!matchedMember) {
           const answer = `⚠️ **Không tìm thấy thành viên: "${memberQueryCheck.rawTarget}"**\n\nNhân sự **"${memberQueryCheck.rawTarget}"** không tồn tại trong danh sách đội ngũ của hệ thống.\n\n📋 **Danh sách thành viên hiện có trong team:**\n${renderMemberList(allMembers, snapshot.members, currentAskerRole)}\n\n💡 *Vui lòng kiểm tra lại chính tả hoặc chọn một thành viên trong danh sách trên để tra cứu.*`;
-
-          const chatLogId = await createChatLog({
-            memberId: currentMemberId || "leader",
-            mode: currentMode,
-            threadId,
-            rawInput: userQuery,
-            imageUrl: null,
-            aiResponse: { answer },
-            confirmed: true,
-          });
-
-          return NextResponse.json({ answer, chatLogId });
+          return logAndRespond({ answer }, true);
         }
 
         // FB-CHAT-04: requirements.md — devops chỉ được tra cứu về bản thân, không mở rộng quyền
@@ -859,30 +416,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         if (currentAskerRole === "devops" && matchedMember.id !== currentMemberId) {
           const answer =
             "🔒 Bạn chỉ có thể tra cứu thông tin của chính mình qua Chat AI. Vui lòng liên hệ Leader nếu cần xem thông tin của thành viên khác.";
-          const chatLogId = await createChatLog({
-            memberId: currentMemberId || "leader",
-            mode: currentMode,
-            threadId,
-            rawInput: userQuery,
-            imageUrl: null,
-            aiResponse: { answer },
-            confirmed: true,
-          });
-          return NextResponse.json({ answer, chatLogId });
+          return logAndRespond({ answer }, true);
         }
 
         const memberInfoData = buildMemberInfoPayload(matchedMember, snapshot);
         const answer = `Hồ sơ năng lực & Task của ${matchedMember.name}`;
-        const chatLogId = await createChatLog({
-          memberId: currentMemberId || "leader",
-          mode: currentMode,
-          threadId,
-          rawInput: userQuery,
-          imageUrl: null,
-          aiResponse: { answer, memberInfoData },
-          confirmed: true,
-        });
-        return NextResponse.json({ answer, memberInfoData, chatLogId });
+        return logAndRespond({ answer, memberInfoData }, true);
       }
     }
 
@@ -894,180 +433,70 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         freeCount > 0
           ? `🟢 Hiện có **${freeCount} thành viên** đang rảnh và có thể nhận thêm task: ${snapshot.freeMembers.join(", ")}.`
           : "⚠️ Hiện không có thành viên nào đang rảnh — toàn bộ đội ngũ đang bận hoặc quá tải.";
-
-      const chatLogId = await createChatLog({
-        memberId: currentMemberId || "leader",
-        mode: currentMode,
-        threadId,
-        rawInput: userQuery,
-        imageUrl: null,
-        aiResponse: { answer, memberAvailability },
-        confirmed: true,
-      });
-
-      return NextResponse.json({ answer, memberAvailability, chatLogId });
+      return logAndRespond({ answer, memberAvailability }, true);
     }
 
     // 5b. TASK-CARD: structured task list card mirroring landing page UI
     if (derivedCommand === "/tasks" || (!derivedCommand && TASKS_QUERY_PATTERN.test(effectiveQuery))) {
       const taskList = buildTaskListPayload(snapshot);
       const answer = `📋 Danh sách ${taskList.tasks.length} task đang thực hiện và kế hoạch.`;
-
-      const chatLogId = await createChatLog({
-        memberId: currentMemberId || "leader",
-        mode: currentMode,
-        threadId,
-        rawInput: userQuery,
-        imageUrl: null,
-        aiResponse: { answer, taskList },
-        confirmed: true,
-      });
-
-      return NextResponse.json({ answer, taskList, chatLogId });
+      return logAndRespond({ answer, taskList }, true);
     }
 
     // 5c. OVERLOAD-CARD: structured overload alert card
     if (derivedCommand === "/overload" || (!derivedCommand && OVERLOAD_QUERY_PATTERN.test(effectiveQuery))) {
       const overloadData = buildOverloadPayload(snapshot);
       const answer = `⚠️ Cảnh báo quá tải: Phát hiện ${overloadData.overloadedMembers.length} thành viên vượt ngưỡng an toàn.`;
-
-      const chatLogId = await createChatLog({
-        memberId: currentMemberId || "leader",
-        mode: currentMode,
-        threadId,
-        rawInput: userQuery,
-        imageUrl: null,
-        aiResponse: { answer, overloadData },
-        confirmed: true,
-      });
-
-      return NextResponse.json({ answer, overloadData, chatLogId });
+      return logAndRespond({ answer, overloadData }, true);
     }
 
     // 5d. EFFORT-CARD: structured effort distribution card with progress bar
     if (derivedCommand === "/effort" || (!derivedCommand && EFFORT_QUERY_PATTERN.test(effectiveQuery))) {
       const effortData = buildEffortPayload(snapshot);
       const answer = `📊 Tổng hợp phân bổ Effort & thời lượng toàn đội ngũ hôm nay: ${effortData.totalEffortMinutes}m / ${effortData.totalCapacityMinutes}m (${effortData.overallPercentage}%).`;
-
-      const chatLogId = await createChatLog({
-        memberId: currentMemberId || "leader",
-        mode: currentMode,
-        threadId,
-        rawInput: userQuery,
-        imageUrl: null,
-        aiResponse: { answer, effortData },
-        confirmed: true,
-      });
-
-      return NextResponse.json({ answer, effortData, chatLogId });
+      return logAndRespond({ answer, effortData }, true);
     }
 
     // 5e. LOAD-CARD: structured workload and bandwidth card
     if (derivedCommand === "/load" || (!derivedCommand && LOAD_QUERY_PATTERN.test(effectiveQuery))) {
       const loadData = buildLoadPayload(snapshot);
       const answer = `⚡ Tình trạng tải công việc và băng thông (Bandwidth) từng kỹ sư.`;
-
-      const chatLogId = await createChatLog({
-        memberId: currentMemberId || "leader",
-        mode: currentMode,
-        threadId,
-        rawInput: userQuery,
-        imageUrl: null,
-        aiResponse: { answer, loadData },
-        confirmed: true,
-      });
-
-      return NextResponse.json({ answer, loadData, chatLogId });
+      return logAndRespond({ answer, loadData }, true);
     }
 
     // 5f. REPORT-CARD: structured project effort allocation report card
     if (derivedCommand === "/report" || (!derivedCommand && REPORT_QUERY_PATTERN.test(effectiveQuery))) {
       const reportData = buildReportPayload(snapshot);
       const answer = `📑 Báo cáo phân bổ Effort theo từng dự án (${reportData.projects.length} dự án).`;
-
-      const chatLogId = await createChatLog({
-        memberId: currentMemberId || "leader",
-        mode: currentMode,
-        threadId,
-        rawInput: userQuery,
-        imageUrl: null,
-        aiResponse: { answer, reportData },
-        confirmed: true,
-      });
-
-      return NextResponse.json({ answer, reportData, chatLogId });
+      return logAndRespond({ answer, reportData }, true);
     }
 
     // 5g. OVERDUE-CARD: structured overdue tasks warning card
     if (derivedCommand === "/overdue" || (!derivedCommand && OVERDUE_QUERY_PATTERN.test(effectiveQuery))) {
       const overdueData = buildOverduePayload(snapshot);
       const answer = `🚨 Phát hiện ${overdueData.tasks.length} task đang bị trễ hạn hoặc cận kề deadline.`;
-
-      const chatLogId = await createChatLog({
-        memberId: currentMemberId || "leader",
-        mode: currentMode,
-        threadId,
-        rawInput: userQuery,
-        imageUrl: null,
-        aiResponse: { answer, overdueData },
-        confirmed: true,
-      });
-
-      return NextResponse.json({ answer, overdueData, chatLogId });
+      return logAndRespond({ answer, overdueData }, true);
     }
 
     // 5h. MEMBERS-CARD: structured members roster card
     if (derivedCommand === "/members" || (!derivedCommand && MEMBERS_QUERY_PATTERN.test(effectiveQuery))) {
       const membersListData = buildMembersListPayload(snapshot);
       const answer = `👥 Danh sách ${membersListData.members.length} thành viên đội ngũ DevOps & SRE.`;
-
-      const chatLogId = await createChatLog({
-        memberId: currentMemberId || "leader",
-        mode: currentMode,
-        threadId,
-        rawInput: userQuery,
-        imageUrl: null,
-        aiResponse: { answer, membersListData },
-        confirmed: true,
-      });
-
-      return NextResponse.json({ answer, membersListData, chatLogId });
+      return logAndRespond({ answer, membersListData }, true);
     }
 
     // 5i. PROJECTS-CARD: structured projects list card
     if (derivedCommand === "/projects" || (!derivedCommand && PROJECTS_QUERY_PATTERN.test(effectiveQuery))) {
       const projectsListData = buildProjectsListPayload(snapshot);
       const answer = `Danh sách các dự án hiện có (${projectsListData.projects.length} dự án).`;
-
-      const chatLogId = await createChatLog({
-        memberId: currentMemberId || "leader",
-        mode: currentMode,
-        threadId,
-        rawInput: userQuery,
-        imageUrl: null,
-        aiResponse: { answer, projectsListData },
-        confirmed: true,
-      });
-
-      return NextResponse.json({ answer, projectsListData, chatLogId });
+      return logAndRespond({ answer, projectsListData }, true);
     }
 
     // 5j. HELP-CARD: structured help and slash commands guide card
     if (derivedCommand === "/help" || (!derivedCommand && HELP_QUERY_PATTERN.test(effectiveQuery))) {
       const helpData = buildHelpPayload();
       const answer = `💡 Hướng dẫn sử dụng DevOps AI Assistant & Hệ thống Slash Commands.`;
-
-      const chatLogId = await createChatLog({
-        memberId: currentMemberId || "leader",
-        mode: currentMode,
-        threadId,
-        rawInput: userQuery,
-        imageUrl: null,
-        aiResponse: { answer, helpData },
-        confirmed: true,
-      });
-
-      return NextResponse.json({ answer, helpData, chatLogId });
+      return logAndRespond({ answer, helpData }, true);
     }
 
     // 4. Standard Q&A flow with grounding
@@ -1077,17 +506,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       provider
     );
 
-    const chatLogId = await createChatLog({
-      memberId: currentMemberId || "leader",
-      mode: currentMode,
-      threadId,
-      rawInput: userQuery,
-      imageUrl: null,
-      aiResponse: { answer },
-      confirmed: true,
-    });
-
-    return NextResponse.json({ answer, chatLogId });
+    return logAndRespond({ answer }, true);
   } catch (error) {
     console.error("answer-query error:", error);
     return NextResponse.json({ error: "Failed to reach AI service" }, { status: 502 });
