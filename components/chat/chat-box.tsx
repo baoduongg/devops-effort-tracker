@@ -812,7 +812,7 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
             <div className="flex items-center justify-between px-1 text-[11px] text-neutral-400">
               <span className="flex items-center gap-1 font-mono">
                 <Sparkles size={11} className="text-amber-400" />
-                RunAgents (Claude 3.5 Sonnet) &bull; Zero-hallucination
+                RunAgents AI &bull; Powered by Claude
               </span>
               <span className="hidden sm:flex items-center gap-2">
                 <span>Gõ <kbd className="px-1 py-0.2 rounded bg-white/10 font-mono text-neutral-300 text-[10px]">/</kbd> để xem lệnh nhanh</span>
