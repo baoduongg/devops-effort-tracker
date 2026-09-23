@@ -18,20 +18,22 @@ describe("buildToolsForRole", () => {
         "create_task",
         "update_task",
         "delete_task",
+        "list_free_members",
         "answer_general_question",
       ])
     );
     expect(tools.length).toBe(CHAT_TOOLS.length);
   });
 
-  it("excludes create_task/update_task/delete_task for a devops asker", () => {
+  it("excludes create_task/update_task/delete_task/list_free_members for a devops asker", () => {
     const tools = buildToolsForRole(false);
     const names = tools.map((t) => t.name);
     expect(names).not.toContain("create_task");
     expect(names).not.toContain("update_task");
     expect(names).not.toContain("delete_task");
-    expect(names).toContain("list_free_members");
+    expect(names).not.toContain("list_free_members");
     expect(names).toContain("answer_general_question");
+    expect(tools.length).toBe(CHAT_TOOLS.length - 4);
   });
 
   it("every tool has a non-empty description and valid input_schema", () => {

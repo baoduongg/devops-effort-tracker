@@ -170,7 +170,9 @@ export const CHAT_TOOLS: ClaudeTool[] = [...CARD_TOOLS, ...MUTATION_TOOLS, GENER
 
 export function buildToolsForRole(isLeader: boolean): ClaudeTool[] {
   if (isLeader) return CHAT_TOOLS;
-  return [...CARD_TOOLS, GENERAL_TOOL];
+  // list_free_members restores old pre-rewrite behavior: leader-only, since a devops asker's
+  // grounding snapshot is already scoped to just themself, making the "who's free" card meaningless.
+  return CARD_TOOLS.filter((t) => t.name !== "list_free_members").concat(GENERAL_TOOL);
 }
 
 interface RunChatToolLoopParams {
