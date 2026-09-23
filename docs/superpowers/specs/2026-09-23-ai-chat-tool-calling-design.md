@@ -54,18 +54,25 @@ và cờ `provider` client vẫn giữ nguyên cho các chỗ khác (vd task-ext
 5. Với tool `answer_general_question` (thay thế nhánh LLM tự do cuối cùng, dùng khi câu hỏi không khớp
    card/mutation nào — vd hỏi về tính năng, hỏi tổng hợp linh hoạt): model trả lời trực tiếp bằng text,
    không cần thêm round trip, dùng system prompt + grounding snapshot y như nhánh hiện tại.
-6. Với tool `create_task`/`update_task`/`delete_task`: model trả `tool_use` với args (title, projectName,
-   assigneeName, effortMinutes, ...) trích xuất trực tiếp từ câu hỏi bằng chính model đang chạy — **bỏ
-   luôn bước gọi phụ `extractTaskEntryFromInput`/`extractTaskMutationFromInput` qua AI riêng** (hiện tại
-   đang gọi AI 2 lần: 1 lần đoán intent bằng regex, 1 lần gọi AI khác để extract JSON). Tool schema định
-   nghĩa rõ input shape (title, projectName, effortMinutes, assigneeName, startDate, endDate, status),
-   Claude tool-calling tự điền đúng kiểu, đỡ 1 lệnh gọi AI + đỡ toàn bộ `extractJsonFromAiText` parsing
-   fallback (raw text JSON parsing không còn cần thiết vì tool input đã có schema-validated JSON).
-   Việc validate field bắt buộc (projectName, effortMinutes) chuyển thành **tool `input_schema` required
-   fields** — nếu thiếu, Claude tự hỏi lại (không cần code check `mentionsProject`/`mentionsEffort` bằng
-   regex như hiện tại, dòng 323-336).
-   Logic hậu xử lý (match assignee với danh sách thành viên thật, chặn giao cho leader, suggest người
-   phù hợp khi tên không khớp) **giữ nguyên**, chỉ đổi input đến từ tool args thay vì từ AI-extract JSON.
+6. Với tool `create_task`/`update_task`/`delete_task`: tool input chỉ cần **1 field** —
+   `rawText: string` (nguyên văn câu hỏi của user, hoặc phần liên quan tới task nếu model muốn tách).
+   Server nhận `tool_use` này rồi gọi thẳng **nguyên xi** `extractTaskEntryFromInput(rawText, null,
+   "claude")` (cho create) hoặc `extractTaskMutationFromInput(rawText, "update"|"delete", "claude")`
+   (cho update/delete) — **không viết lại** logic trích xuất field, KHÔNG chuyển field shape vào tool
+   `input_schema`.
+   Lý do giữ nguyên thay vì để Claude tool-calling tự điền field (như spec bản đầu định làm):
+   `extractTaskMutationFromInput` (`services/task-mutation-extractor.service.ts`) làm nhiều việc hơn
+   "trích JSON" — nó **resolve `taskIdentifier` thành 1 task thật có trong Firestore** bằng cách match
+   tên thành viên + từ khoá tiêu đề vào danh sách task thực tế (`matchTasks`, dòng 118-165), trả về
+   `clarification: no_match/ambiguous_match` nếu không chắc, và **cross-validate từng field model đoán
+   ra với sự xuất hiện literal của từ khoá trong câu gốc** (`FIELD_KEYWORDS` cross-check, dòng 265-292)
+   để chặn model tự bịa field không được nhắc tới. Đây là hallucination guard quan trọng cho thao tác
+   ghi dữ liệu — không thể thay thế an toàn bằng việc để model tự điền `taskIdentifier`/`changes` trực
+   tiếp qua tool args, vì khi đó mất hết bước đối chiếu với dữ liệu thật.
+   Vậy: **routing** (câu này có phải update-task không) chuyển sang tool-calling; **extraction** (field
+   nào, task nào) giữ nguyên 100% pipeline cũ. Validate field bắt buộc khi tạo mới (projectName,
+   effortMinutes) vẫn giữ nguyên check `mentionsProject`/`mentionsEffort` y hệt code hiện tại (dòng
+   323-336 route.ts), chỉ chuyển vào trong nhánh xử lý `create_task` tool thay vì if-chain ở route level.
 
 ### Danh sách tool (13)
 
@@ -75,8 +82,9 @@ Card tools (deterministic, không cần AI thực thi, chỉ cần AI **chọn**
 `get_help`, `get_member_info(memberName)`.
 
 Mutation tools (cần confirm trước khi ghi, giữ nguyên UX "soạn đề xuất → user bấm Xác nhận"):
-`create_task(title, projectName, effortMinutes, assigneeName?, startDate?, endDate?, status?)`,
-`update_task(taskIdentifier, changes)`, `delete_task(taskIdentifier)`.
+`create_task(rawText)`, `update_task(rawText)`, `delete_task(rawText)` — mỗi tool chỉ nhận 1 field
+`rawText: string`, server tự route sang extractor cũ tương ứng (xem chi tiết mục "Vòng lặp tool-calling"
+bước 6).
 
 Q&A tự do:
 `answer_general_question` — dùng khi câu hỏi không map vào tool nào ở trên (hỏi về tính năng, hỏi so
@@ -124,15 +132,16 @@ trả lời rõ: không đủ quyền, hành động này chỉ dành cho Leader
 - `services/claude.service.ts` — thêm `callClaudeTool(systemPrompt, userText, tools)` trả về
   `{ toolUse: {name, input} | null, text: string | null }` (mở rộng `callClaudeText`, dùng chung
   client/model, thêm `tools` param vào body request).
-- `lib/intent.ts` — xóa toàn bộ (4 hàm không còn ai gọi). Giữ `isInformationalQuery` **chỉ nếu**
-  còn nơi khác dùng — grep xác nhận trước khi xóa (kiểm tra lúc viết plan).
+- `lib/intent.ts` — **KHÔNG xóa file.** Đã xác nhận (grep): `components/chat/chat-box.tsx` (frontend,
+  dòng 36-39, 383, 387) vẫn dùng `isTaskCreationIntent`, `isTaskUpdateIntent`, `isTaskDeleteIntent`,
+  `looksLikeSelfLogEntry` để quyết định route sang `submitFormatEntry` (devops tự log việc) vs
+  `submitAnswerQuery` (Q&A) — quyết định này nằm ngoài phạm vi spec (mục "Ngoài phạm vi"), không đụng
+  tới. Chỉ xóa **lời gọi các hàm này trong `route.ts`** (dòng 281-283), giữ nguyên toàn bộ `lib/intent.ts`.
 - `services/ai-provider.service.ts` — route `answer-query` gọi thẳng `callClaudeTool` thay vì qua
   `getProvider()`/`callAiText` (không đổi hành vi các route khác dùng `callAiText`).
-- `services/task-extractor.service.ts`, `services/task-mutation-extractor.service.ts` — logic hậu xử
-  lý (match assignee, chặn leader, default field) tách thành hàm thuần `(rawArgs, allMembers) => FormattedEntry`
-  tái sử dụng được từ cả tool dispatcher lẫn (nếu còn dùng) đường cũ; bản thân bước gọi-AI-để-extract-JSON
-  trong 2 file này không còn được route `answer-query` gọi tới nữa (nhưng vẫn có thể còn dùng ở nơi
-  khác — kiểm tra khi viết plan trước khi xóa hẳn).
+- `services/task-extractor.service.ts`, `services/task-mutation-extractor.service.ts` — **không đổi**.
+  Tool dispatcher gọi `extractTaskEntryFromInput`/`extractTaskMutationFromInput` y nguyên với
+  `provider: "claude"` cố định, y hệt cách route.ts hiện tại gọi chúng.
 - `types/chat.ts` — không đổi (payload union đã đúng shape cần).
 - `components/chat/chat-box.tsx:815` — sửa text footer từ "Claude 3.5 Sonnet" thành tên model thật
   đang chạy (đọc từ response hoặc hardcode đúng theo `ANTHROPIC_MODEL`), hoặc bỏ tuyên bố model cụ thể
@@ -164,10 +173,12 @@ trả lời rõ: không đủ quyền, hành động này chỉ dành cho Leader
   proxy này có forward đúng `tools` param theo chuẩn Anthropic Messages API không — nếu proxy strip
   field lạ, tool-calling sẽ fail im lặng. Việc đầu tiên trong plan: test 1 lệnh gọi `tools` thật qua
   proxy này trước khi viết toàn bộ service.
-- **Model tự extract task fields** thay vì extractor riêng: rủi ro model tool-calling kém chính xác hơn
-  extractor prompt chuyên biệt hiện có (prompt task-extractor rất chi tiết về effort/date parsing, xem
-  `task-extractor.service.ts:30-73`). Giảm rủi ro: nhét nguyên đoạn hướng dẫn effort/date parsing đó
-  vào **description của tool `create_task`** thay vì xóa mất, giữ độ chính xác tương đương.
+- **Double AI call cho mutation tools**: 1 lệnh gọi Claude để chọn tool (`create_task`/`update_task`/
+  `delete_task` với `rawText`), rồi extractor cũ tự gọi AI lần 2 để trích field — 2 lệnh gọi AI cho 1
+  thao tác ghi, y hệt số lượng lệnh gọi hiện tại (route.ts hiện tại: 1 lần check regex intent không tốn
+  AI + 1 lần gọi AI extract). Vậy tổng lệnh gọi AI không tăng, chỉ đổi lệnh-gọi-regex-miễn-phí đầu tiên
+  thành lệnh-gọi-AI-để-route — đây là chi phí chính của cả thiết kế này, chấp nhận được để đổi lấy độ
+  chính xác routing.
 
 ## Ngoài phạm vi
 
