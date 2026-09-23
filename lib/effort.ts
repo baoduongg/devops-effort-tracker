@@ -17,6 +17,36 @@ export const EFFORT_DURATION_PRESETS: EffortPreset[] = [
   { label: "1 ngày", minutes: 480, description: "Cả ngày (8 tiếng)" },
 ];
 
+export type EffortUnit = "minutes" | "hours" | "days";
+
+export const EFFORT_UNIT_OPTIONS: { value: EffortUnit; label: string }[] = [
+  { value: "minutes", label: "Phút" },
+  { value: "hours", label: "Giờ" },
+  { value: "days", label: "Ngày" },
+];
+
+// 1 working day = 8h
+const MINUTES_PER_UNIT: Record<EffortUnit, number> = {
+  minutes: 1,
+  hours: 60,
+  days: 480,
+};
+
+export function effortUnitToMinutes(value: number, unit: EffortUnit): number {
+  return Math.round(value * MINUTES_PER_UNIT[unit]);
+}
+
+export function minutesToEffortUnit(minutes: number, unit: EffortUnit): number {
+  return Math.round((minutes / MINUTES_PER_UNIT[unit]) * 100) / 100;
+}
+
+/** Picks the largest unit that divides `minutes` evenly, for a clean default display. */
+export function pickDisplayEffortUnit(minutes: number): EffortUnit {
+  if (minutes > 0 && minutes % MINUTES_PER_UNIT.days === 0) return "days";
+  if (minutes > 0 && minutes % MINUTES_PER_UNIT.hours === 0) return "hours";
+  return "minutes";
+}
+
 /**
  * Formats a duration in minutes to a human-friendly Vietnamese string.
  * Examples:

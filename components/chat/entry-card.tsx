@@ -14,7 +14,14 @@ import { Token } from "@astryxdesign/core/Token";
 import { Text } from "@astryxdesign/core/Text";
 import { Icon } from "@astryxdesign/core/Icon";
 import type { FormattedEntry } from "@/types/chat";
-import { formatEffortDuration, EFFORT_DURATION_PRESETS } from "@/lib/effort";
+import {
+  formatEffortDuration,
+  effortUnitToMinutes,
+  minutesToEffortUnit,
+  pickDisplayEffortUnit,
+  EFFORT_UNIT_OPTIONS,
+  type EffortUnit,
+} from "@/lib/effort";
 
 interface EntryCardProps {
   entry: FormattedEntry;
@@ -49,8 +56,17 @@ export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): Reac
   });
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [effortUnit, setEffortUnit] = useState<EffortUnit>(
+    pickDisplayEffortUnit(entry.effortMinutes || 60)
+  );
 
   const durationStr = formatEffortDuration(edited.effortMinutes);
+  const effortValue = minutesToEffortUnit(edited.effortMinutes, effortUnit);
+
+  function handleEffortUnitChange(unit: EffortUnit): void {
+    setEffortUnit(unit);
+    setEdited({ ...edited, effortMinutes: effortUnitToMinutes(1, unit) });
+  }
 
   async function handleConfirm(): Promise<void> {
     setSubmitting(true);
@@ -153,47 +169,34 @@ export function EntryCard({ entry, confirmed, onConfirm }: EntryCardProps): Reac
               <HStack justify="between" vAlign="center">
                 <span className="text-xs text-neutral-300 font-medium flex items-center gap-1.5">
                   <Clock size={13} className="text-sky-400" />
-                  Thời lượng thực hiện: <span className="text-sky-300 font-semibold">{durationStr}</span>
+                  Tổng thời lượng thực hiện: <span className="text-sky-300 font-semibold">{durationStr}</span>
                 </span>
               </HStack>
-              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-                {EFFORT_DURATION_PRESETS.map((p) => (
-                  <button
-                    key={p.minutes}
-                    type="button"
-                    onClick={() =>
-                      setEdited({
-                        ...edited,
-                        effortMinutes: p.minutes,
-                      })
-                    }
-                    className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                      edited.effortMinutes === p.minutes
-                        ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
-                        : "bg-white/[0.03] text-neutral-300 border-white/[0.08] hover:bg-white/[0.08] hover:text-white"
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-              <NumberInput
-                label="Số phút tùy chỉnh (phút)"
-                size="sm"
-                width="100%"
-                min={1}
-                max={4800}
-                step={15}
-                units="phút"
-                value={edited.effortMinutes}
-                onChange={(v) => {
-                  const mins = v ?? 60;
-                  setEdited({
-                    ...edited,
-                    effortMinutes: mins,
-                  });
-                }}
-              />
+              <p className="text-[11px] text-neutral-500 leading-snug">
+                Tổng thời gian devops cần để hoàn thành task này (quy đổi theo 1 ngày làm việc = 8 giờ).
+              </p>
+              <HStack gap={2}>
+                <NumberInput
+                  label="Thời gian"
+                  size="sm"
+                  width="100%"
+                  min={1}
+                  step={effortUnit === "minutes" ? 5 : 1}
+                  value={effortValue}
+                  onChange={(v) => {
+                    const mins = effortUnitToMinutes(v ?? 1, effortUnit);
+                    setEdited({ ...edited, effortMinutes: mins });
+                  }}
+                />
+                <Selector
+                  label="Đơn vị"
+                  size="sm"
+                  width="100%"
+                  options={EFFORT_UNIT_OPTIONS}
+                  value={effortUnit}
+                  onChange={(v) => handleEffortUnitChange(v as EffortUnit)}
+                />
+              </HStack>
             </div>
 
             <Selector

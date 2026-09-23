@@ -14,7 +14,14 @@ import type { ISODateString } from "@astryxdesign/core/Calendar";
 import { updateTask } from "@/services/tasks.service";
 import { syncMemberEffortStatus } from "@/services/members.service";
 import { notifyTaskStatusChanged, notifyTaskReassigned } from "@/services/chatops.service";
-import { formatEffortDuration, EFFORT_DURATION_PRESETS } from "@/lib/effort";
+import {
+  formatEffortDuration,
+  effortUnitToMinutes,
+  minutesToEffortUnit,
+  pickDisplayEffortUnit,
+  EFFORT_UNIT_OPTIONS,
+  type EffortUnit,
+} from "@/lib/effort";
 import { formatDateLocal, parseDateLocal } from "@/lib/date";
 import type { Project } from "@/types/project";
 import type { Member } from "@/types/member";
@@ -58,7 +65,21 @@ function TaskEditForm({
   const [description, setDescription] = useState(task?.description ?? "");
   const [projectId, setProjectId] = useState<string>(task?.projectId ?? "");
   const [memberId, setMemberId] = useState<string>(task?.memberId ?? "");
-  const [effortMinutes, setEffortMinutes] = useState<number>(task?.effortMinutes ?? 60);
+  const [effortUnit, setEffortUnit] = useState<EffortUnit>(
+    pickDisplayEffortUnit(task?.effortMinutes ?? 60)
+  );
+  const [effortValue, setEffortValue] = useState<number>(
+    minutesToEffortUnit(task?.effortMinutes ?? 60, effortUnit)
+  );
+  const effortMinutes = useMemo(
+    () => effortUnitToMinutes(effortValue, effortUnit),
+    [effortValue, effortUnit]
+  );
+
+  function handleEffortUnitChange(unit: EffortUnit): void {
+    setEffortValue(1);
+    setEffortUnit(unit);
+  }
   const [status, setStatus] = useState<TaskStatus>(task?.status ?? "in_progress");
   const [startDate, setStartDate] = useState<string>(toDateInputValue(task?.startDate ?? null));
   const [endDate, setEndDate] = useState<string | null>(task?.endDate ? toDateInputValue(task.endDate) : null);
@@ -93,10 +114,15 @@ function TaskEditForm({
       return;
     }
 
+    const resolvedMinutes = Math.round(effortMinutes);
+    if (resolvedMinutes < 1) {
+      setError("Thời lượng thực hiện phải lớn hơn hoặc bằng 1 phút.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
-    const resolvedMinutes = Math.max(1, Math.round(effortMinutes || 60));
     const previousMemberId = task.memberId;
     const previousStatus = task.status;
 
@@ -192,38 +218,28 @@ function TaskEditForm({
             <div className="flex items-center justify-between">
               <span className="text-xs text-neutral-300 font-medium flex items-center gap-1.5">
                 <Clock size={13} className="text-sky-400" />
-                Thời lượng thực hiện: <span className="text-sky-300 font-semibold">{formatEffortDuration(effortMinutes)}</span>
+                Tổng thời lượng thực hiện: <span className="text-sky-300 font-semibold">{formatEffortDuration(effortMinutes)}</span>
               </span>
             </div>
+            <p className="text-[11px] text-neutral-500 leading-snug">
+              Tổng thời gian devops cần để hoàn thành task này (quy đổi theo 1 ngày làm việc = 8 giờ). Nếu để trống Deadline, hệ thống tự tính dựa trên giá trị này.
+            </p>
 
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              {EFFORT_DURATION_PRESETS.map((p) => (
-                <button
-                  key={p.minutes}
-                  type="button"
-                  onClick={() => setEffortMinutes(p.minutes)}
-                  className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                    effortMinutes === p.minutes
-                      ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
-                      : "bg-white/[0.03] text-neutral-300 border-white/[0.08] hover:bg-white/[0.08] hover:text-white"
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="pt-2">
+            <Grid columns={2} gap={2} className="pt-1">
               <NumberInput
-                label="Số phút tùy chỉnh"
+                label="Thời gian"
                 min={1}
-                max={4800}
-                step={15}
-                units="phút"
-                value={effortMinutes}
-                onChange={(v) => setEffortMinutes(v ?? 60)}
+                step={effortUnit === "minutes" ? 5 : 1}
+                value={effortValue}
+                onChange={(v) => setEffortValue(v ?? 1)}
               />
-            </div>
+              <Selector
+                label="Đơn vị"
+                options={EFFORT_UNIT_OPTIONS}
+                value={effortUnit}
+                onChange={(v) => handleEffortUnitChange(v as EffortUnit)}
+              />
+            </Grid>
           </div>
 
           <Selector

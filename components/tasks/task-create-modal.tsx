@@ -16,7 +16,12 @@ import { createProject } from "@/services/projects.service";
 import { updateMember } from "@/services/members.service";
 import { notifyTaskCreated } from "@/services/chatops.service";
 import { useAuthStore } from "@/store/auth.store";
-import { formatEffortDuration, EFFORT_DURATION_PRESETS } from "@/lib/effort";
+import {
+  formatEffortDuration,
+  effortUnitToMinutes,
+  EFFORT_UNIT_OPTIONS,
+  type EffortUnit,
+} from "@/lib/effort";
 import { PROJECT_COLOR_SWATCHES } from "@/lib/project-colors";
 import type { Project } from "@/types/project";
 import type { Member, MemberStatus } from "@/types/member";
@@ -65,7 +70,17 @@ export function TaskCreateModal({
   const [newProjectName, setNewProjectName] = useState("");
 
   const [memberId, setMemberId] = useState<string>("");
-  const [effortMinutes, setEffortMinutes] = useState<number>(60);
+  const [effortValue, setEffortValue] = useState<number>(1);
+  const [effortUnit, setEffortUnit] = useState<EffortUnit>("hours");
+  const effortMinutes = useMemo(
+    () => effortUnitToMinutes(effortValue, effortUnit),
+    [effortValue, effortUnit]
+  );
+
+  function handleEffortUnitChange(unit: EffortUnit): void {
+    setEffortValue(1);
+    setEffortUnit(unit);
+  }
   const [status, setStatus] = useState<TaskStatus>("in_progress");
   const [startDate, setStartDate] = useState<string>(today);
   const [endDate, setEndDate] = useState<string | null>(null);
@@ -116,7 +131,8 @@ export function TaskCreateModal({
     setNewProjectName("");
     setProjectId("");
     setMemberId("");
-    setEffortMinutes(60);
+    setEffortValue(1);
+    setEffortUnit("hours");
     setStatus("in_progress");
     setStartDate(getTodayString());
     setEndDate(null);
@@ -146,10 +162,14 @@ export function TaskCreateModal({
       return;
     }
 
+    const resolvedMinutes = Math.round(effortMinutes);
+    if (resolvedMinutes < 1) {
+      setError("Thời lượng thực hiện phải lớn hơn hoặc bằng 1 phút.");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
-
-    const resolvedMinutes = Math.max(1, Math.round(effortMinutes || 60));
 
     try {
       if (isCreatingNewProject) {
@@ -187,8 +207,8 @@ export function TaskCreateModal({
           activeCount === 0 || totalEffortMinutes === 0
             ? "available"
             : totalEffortMinutes > 480
-            ? "overloaded"
-            : "busy";
+              ? "overloaded"
+              : "busy";
 
         await updateMember(currentMemberId, {
           currentTaskId: isTaskActive ? taskId : (otherActiveTasks[0]?.id || null),
@@ -242,142 +262,132 @@ export function TaskCreateModal({
       />
 
       <form onSubmit={handleSubmit} className="flex flex-col min-h-0 flex-1">
-      <div className="p-5 flex flex-col gap-4 overflow-y-auto min-h-0">
-        {error && (
-          <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/25 text-sm text-rose-400">
-            {error}
-          </div>
-        )}
+        <div className="p-5 flex flex-col gap-4 overflow-y-auto min-h-0">
+          {error && (
+            <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/25 text-sm text-rose-400">
+              {error}
+            </div>
+          )}
 
-        {/* Task Title */}
-        <TextInput
-          label="Tiêu đề công việc"
-          value={title}
-          onChange={setTitle}
-          placeholder="VD: Nâng cấp cụm EKS lên v1.30, Cấu hình CI/CD GitLab..."
-          isRequired
-          hasAutoFocus
-        />
-
-        {/* Project Selection */}
-        {isCreatingNewProject ? (
-          <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/[0.08]">
-            <HStack justify="between" vAlign="center">
-              <span className="text-xs font-semibold text-sky-300 flex items-center gap-1.5">
-                <FolderPlus size={14} />
-                Tạo dự án mới
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsCreatingNewProject(false)}
-                className="text-xs text-neutral-400 hover:text-white underline"
-              >
-                Chọn từ dự án có sẵn
-              </button>
-            </HStack>
-            <TextInput
-              label="Tên dự án"
-              value={newProjectName}
-              onChange={setNewProjectName}
-              placeholder="VD: Core Platform, EKS Cluster, Mobile App..."
-              isRequired
-            />
-          </div>
-        ) : (
-          <Selector
-            label="Dự án"
-            options={projectOptions}
-            value={currentProjectId}
-            onChange={handleProjectChange}
-          />
-        )}
-
-        {/* Assignee Selection */}
-        <Selector
-          label="Người thực hiện (Assignee)"
-          options={memberOptions}
-          value={currentMemberId}
-          onChange={setMemberId}
-        />
-
-        {/* Effort & Duration Presets */}
-        <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/[0.08]">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-neutral-300 font-medium flex items-center gap-1.5">
-              <Clock size={13} className="text-sky-400" />
-              Thời lượng thực hiện: <span className="text-sky-300 font-semibold">{formatEffortDuration(effortMinutes)}</span>
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            {EFFORT_DURATION_PRESETS.map((p) => (
-              <button
-                key={p.minutes}
-                type="button"
-                onClick={() => setEffortMinutes(p.minutes)}
-                className={`px-2.5 py-1 rounded text-xs font-medium border transition-colors ${
-                  effortMinutes === p.minutes
-                    ? "bg-sky-500/20 text-sky-300 border-sky-500/40"
-                    : "bg-white/[0.03] text-neutral-300 border-white/[0.08] hover:bg-white/[0.08] hover:text-white"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="pt-2">
-            <NumberInput
-              label="Số phút tùy chỉnh"
-              min={1}
-              max={4800}
-              step={15}
-              units="phút"
-              value={effortMinutes}
-              onChange={(v) => setEffortMinutes(v ?? 60)}
-            />
-          </div>
-        </div>
-
-        {/* Status */}
-        <Selector
-          label="Trạng thái"
-          options={STATUS_OPTIONS}
-          value={status}
-          onChange={(v) => setStatus(v as TaskStatus)}
-        />
-
-        {/* Dates */}
-        <Grid columns={2} gap={3}>
-          <DateInput
-            label="Ngày bắt đầu"
-            format="date"
-            width="100%"
+          {/* Task Title */}
+          <TextInput
+            label="Tiêu đề công việc"
+            value={title}
+            onChange={setTitle}
+            placeholder="VD: Nâng cấp cụm EKS lên v1.30, Cấu hình CI/CD GitLab..."
             isRequired
-            value={startDate as ISODateString}
-            onChange={(v) => setStartDate(v ?? getTodayString())}
+            hasAutoFocus
           />
 
-          <DateInput
-            label="Hạn hoàn thành (Deadline)"
-            format="date"
-            width="100%"
-            hasClear
-            placeholder="Tùy chọn"
-            value={(endDate || undefined) as ISODateString | undefined}
-            onChange={(v) => setEndDate(v || null)}
+          {/* Project Selection */}
+          {isCreatingNewProject ? (
+            <div className="flex flex-col gap-2 p-3 rounded-xl bg-white/[0.02] border border-white/[0.08]">
+              <HStack justify="between" vAlign="center">
+                <span className="text-xs font-semibold text-sky-300 flex items-center gap-1.5">
+                  <FolderPlus size={14} />
+                  Tạo dự án mới
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingNewProject(false)}
+                  className="text-xs text-neutral-400 hover:text-white underline"
+                >
+                  Chọn từ dự án có sẵn
+                </button>
+              </HStack>
+              <TextInput
+                label="Tên dự án"
+                value={newProjectName}
+                onChange={setNewProjectName}
+                placeholder="VD: Core Platform, EKS Cluster, Mobile App..."
+                isRequired
+              />
+            </div>
+          ) : (
+            <Selector
+              label="Dự án"
+              options={projectOptions}
+              value={currentProjectId}
+              onChange={handleProjectChange}
+            />
+          )}
+
+          {/* Assignee Selection */}
+          <Selector
+            label="Người thực hiện (Assignee)"
+            options={memberOptions}
+            value={currentMemberId}
+            onChange={setMemberId}
           />
-        </Grid>
 
-        {/* Description / Notes */}
-        <TextInput
-          label="Ghi chú chi tiết (Tùy chọn)"
-          value={description}
-          onChange={setDescription}
-          placeholder="Mô tả tóm tắt bối cảnh hoặc yêu cầu kỹ thuật..."
-        />
+          {/* Effort & Duration Presets */}
+          <div className="flex flex-col gap-1.5 p-3 rounded-xl bg-white/[0.02] border border-white/[0.08]">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-neutral-300 font-medium flex items-center gap-1.5">
+                <Clock size={13} className="text-sky-400" />
+                Tổng thời lượng thực hiện: <span className="text-sky-300 font-semibold">{formatEffortDuration(effortMinutes)}</span>
+              </span>
+            </div>
+            <p className="text-[11px] text-neutral-500 leading-snug">
+              Tổng thời gian devops cần để hoàn thành task này (quy đổi theo 1 ngày làm việc = 8 giờ). Nếu để trống Deadline, hệ thống tự tính dựa trên giá trị này.
+            </p>
 
-      </div>
+            <Grid columns={2} gap={2} className="pt-1">
+              <NumberInput
+                label="Thời gian"
+                min={1}
+                step={effortUnit === "minutes" ? 5 : 1}
+                value={effortValue}
+                onChange={(v) => setEffortValue(v ?? 1)}
+              />
+              <Selector
+                label="Đơn vị"
+                options={EFFORT_UNIT_OPTIONS}
+                value={effortUnit}
+                onChange={(v) => handleEffortUnitChange(v as EffortUnit)}
+              />
+            </Grid>
+          </div>
+
+          {/* Status */}
+          <Selector
+            label="Trạng thái"
+            options={STATUS_OPTIONS}
+            value={status}
+            onChange={(v) => setStatus(v as TaskStatus)}
+          />
+
+          {/* Dates */}
+          <Grid columns={2} gap={3}>
+            <DateInput
+              label="Ngày bắt đầu"
+              format="date"
+              width="100%"
+              isRequired
+              value={startDate as ISODateString}
+              onChange={(v) => setStartDate(v ?? getTodayString())}
+            />
+
+            <DateInput
+              label="Hạn hoàn thành (Deadline)"
+              format="date"
+              width="100%"
+              hasClear
+              placeholder="Tùy chọn"
+              value={(endDate || undefined) as ISODateString | undefined}
+              onChange={(v) => setEndDate(v || null)}
+            />
+          </Grid>
+
+          {/* Description / Notes */}
+          <TextInput
+            label="Ghi chú chi tiết (Tùy chọn)"
+            value={description}
+            onChange={setDescription}
+            placeholder="Mô tả tóm tắt bối cảnh hoặc yêu cầu kỹ thuật..."
+          />
+
+        </div>
 
         {/* Form Actions */}
         <HStack gap={3} justify="end" className="p-5 pt-3 border-t border-white/[0.06]">

@@ -16,7 +16,14 @@ import { Token } from "@astryxdesign/core/Token";
 import { Text } from "@astryxdesign/core/Text";
 import { Icon } from "@astryxdesign/core/Icon";
 import type { TaskChangeProposal } from "@/types/chat";
-import { formatEffortDuration } from "@/lib/effort";
+import {
+  formatEffortDuration,
+  effortUnitToMinutes,
+  minutesToEffortUnit,
+  pickDisplayEffortUnit,
+  EFFORT_UNIT_OPTIONS,
+  type EffortUnit,
+} from "@/lib/effort";
 import { formatDateLocal, parseDateLocal } from "@/lib/date";
 
 // ISSUE-09: DateInput needs plain YYYY-MM-DD, but taskSnapshot/changes store full ISO datetime
@@ -65,9 +72,14 @@ export function ProposalCard({ proposal, confirmed, onConfirm, onCancel }: Propo
   const [editing, setEditing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [cancelled, setCancelled] = useState(false);
+  const [effortUnit, setEffortUnit] = useState<EffortUnit>(
+    pickDisplayEffortUnit(proposal.changes.effortMinutes ?? proposal.taskSnapshot.effortMinutes)
+  );
 
   const { taskSnapshot } = proposal;
   const isDelete = proposal.action === "delete";
+  const currentEffortMinutes = changes.effortMinutes ?? taskSnapshot.effortMinutes;
+  const effortValue = minutesToEffortUnit(currentEffortMinutes, effortUnit);
 
   async function handleConfirm(): Promise<void> {
     setSubmitting(true);
@@ -262,17 +274,35 @@ export function ProposalCard({ proposal, confirmed, onConfirm, onCancel }: Propo
               value={changes.status ?? taskSnapshot.status}
               onChange={(v) => setChanges({ ...changes, status: (v as TaskChangeProposal["taskSnapshot"]["status"]) || taskSnapshot.status })}
             />
-            <NumberInput
-              label="Effort (phút)"
-              size="sm"
-              width="100%"
-              min={1}
-              max={4800}
-              step={15}
-              units="phút"
-              value={changes.effortMinutes ?? taskSnapshot.effortMinutes}
-              onChange={(v) => setChanges({ ...changes, effortMinutes: v ?? taskSnapshot.effortMinutes })}
-            />
+            <p className="text-[11px] text-neutral-500 leading-snug">
+              Tổng thời gian devops cần để hoàn thành task này (quy đổi theo 1 ngày làm việc = 8 giờ).
+            </p>
+            <HStack gap={2}>
+              <NumberInput
+                label="Effort"
+                size="sm"
+                width="100%"
+                min={1}
+                step={effortUnit === "minutes" ? 5 : 1}
+                value={effortValue}
+                onChange={(v) => {
+                  const mins = effortUnitToMinutes(v ?? 1, effortUnit);
+                  setChanges({ ...changes, effortMinutes: mins });
+                }}
+              />
+              <Selector
+                label="Đơn vị"
+                size="sm"
+                width="100%"
+                options={EFFORT_UNIT_OPTIONS}
+                value={effortUnit}
+                onChange={(v) => {
+                  const unit = v as EffortUnit;
+                  setEffortUnit(unit);
+                  setChanges({ ...changes, effortMinutes: effortUnitToMinutes(1, unit) });
+                }}
+              />
+            </HStack>
             <DateInput
               label="Ngày bắt đầu"
               size="sm"

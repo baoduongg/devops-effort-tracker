@@ -1,7 +1,14 @@
-import React from "react";
+import React, { useState } from "react";
 import { ChevronDown, Clock } from "lucide-react";
 import type { SlashCommand } from "@/lib/slash-commands";
 import type { TaskStatus } from "@/types/task";
+import {
+  effortUnitToMinutes,
+  minutesToEffortUnit,
+  pickDisplayEffortUnit,
+  EFFORT_UNIT_OPTIONS,
+  type EffortUnit,
+} from "@/lib/effort";
 
 export const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
   { value: "in_progress", label: "Đang thực hiện (In Progress)" },
@@ -108,20 +115,53 @@ export function DurationPresetPicker({
   onChange,
   durationStr,
 }: DurationPresetPickerProps): React.JSX.Element {
+  const [effortUnit, setEffortUnit] = useState<EffortUnit>(() => pickDisplayEffortUnit(effortMinutes));
+  const effortValue = minutesToEffortUnit(effortMinutes, effortUnit);
+
   return (
     <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.08] space-y-2">
       <div className="flex items-center justify-between">
         <span className="text-xs sm:text-sm text-neutral-200 font-medium flex items-center gap-1.5">
           <Clock size={15} className="text-sky-400" />
-          Thời lượng thực hiện: <span className="text-sky-300 font-bold font-mono">{durationStr}</span>
+          Tổng thời lượng thực hiện: <span className="text-sky-300 font-bold font-mono">{durationStr}</span>
         </span>
       </div>
+      <p className="text-[11px] text-neutral-500 leading-snug">
+        Tổng thời gian devops cần để hoàn thành task này (quy đổi theo 1 ngày làm việc = 8 giờ).
+      </p>
+
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        <input
+          type="number"
+          min={1}
+          step={effortUnit === "minutes" ? 5 : 1}
+          value={effortValue}
+          onChange={(e) => {
+            const raw = e.target.valueAsNumber;
+            onChange(effortUnitToMinutes(Number.isNaN(raw) ? 1 : raw, effortUnit));
+          }}
+          className="w-full p-2.5 rounded-lg bg-black/40 border border-white/[0.1] text-neutral-200 text-sm font-mono focus:outline-none focus:border-sky-500/70"
+        />
+        <SelectField
+          value={effortUnit}
+          options={EFFORT_UNIT_OPTIONS}
+          onChange={(v) => {
+            const unit = v as EffortUnit;
+            setEffortUnit(unit);
+            onChange(effortUnitToMinutes(1, unit));
+          }}
+        />
+      </div>
+
       <div className="flex flex-wrap gap-2 pt-1">
         {DURATION_PRESETS.map((p) => (
           <button
             key={p.minutes}
             type="button"
-            onClick={() => onChange(p.minutes)}
+            onClick={() => {
+              onChange(p.minutes);
+              setEffortUnit(pickDisplayEffortUnit(p.minutes));
+            }}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
               effortMinutes === p.minutes
                 ? "bg-sky-500/25 text-sky-200 border-sky-400/50 shadow-sm shadow-sky-500/20"
