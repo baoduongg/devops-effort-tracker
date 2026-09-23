@@ -64,3 +64,50 @@ export async function callClaudeVision(prompt: string, imageUrl: string): Promis
   if (!content) throw new Error("Claude vision response missing content");
   return content;
 }
+
+export interface ClaudeTool {
+  name: string;
+  description: string;
+  input_schema: {
+    type: "object";
+    properties: Record<string, unknown>;
+    required?: string[];
+  };
+}
+
+export interface ClaudeToolResult {
+  toolUse: { name: string; input: Record<string, unknown> } | null;
+  text: string | null;
+}
+
+interface ClaudeToolMessageResponse {
+  content: Array<
+    | { type: "text"; text: string }
+    | { type: "tool_use"; name: string; input: Record<string, unknown> }
+  >;
+  stop_reason: string;
+}
+
+export async function callClaudeTool(
+  systemPrompt: string,
+  userText: string,
+  tools: ClaudeTool[]
+): Promise<ClaudeToolResult> {
+  const response = await claudeClient.post<ClaudeToolMessageResponse>("/messages", {
+    model: MODEL,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userText }],
+    max_tokens: 1024,
+    temperature: 0.1,
+    tools,
+  });
+
+  const content = response.data?.content ?? [];
+  const toolUseBlock = content.find((b): b is { type: "tool_use"; name: string; input: Record<string, unknown> } => b.type === "tool_use");
+  const textBlock = content.find((b): b is { type: "text"; text: string } => b.type === "text");
+
+  return {
+    toolUse: toolUseBlock ? { name: toolUseBlock.name, input: toolUseBlock.input } : null,
+    text: textBlock ? textBlock.text : null,
+  };
+}
