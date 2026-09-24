@@ -202,6 +202,42 @@ export function buildDeployAlarmMessage(notice: DeployAlarmNotice): string {
   ].join("\n");
 }
 
+interface StandaloneAlarmNotice {
+  content: string;
+  projectName?: string | null;
+  memberName: string;
+  memberEmail?: string;
+  supervisorName?: string;
+  supervisorEmail?: string;
+  timeLabel: string;
+  link: string;
+}
+
+/** Builds a standalone-alarm ChatOps message, formatted like buildDeployAlarmMessage. Exported
+ * (not sendChatOpsMessage-wrapped) so the server-side alarm cron can post via postToChatOps
+ * directly, same as the deploy alarm does. */
+export function buildStandaloneAlarmMessage(notice: StandaloneAlarmNotice): string {
+  const mention = toMention(notice.memberEmail);
+  const supervisorMention = notice.supervisorName ? toMention(notice.supervisorEmail) : null;
+
+  return [
+    `### ⏰ Nhắc Alarm`,
+    ``,
+    `Đến giờ hẹn đã đặt, vui lòng thực hiện:`,
+    ``,
+    `> **📝 Nội dung:** \`${notice.content}\``,
+    ...(notice.projectName ? [`> **📁 Dự án:** **${notice.projectName}**`] : []),
+    `> **👤 Người thực hiện:** **${mention || notice.memberName}**`,
+    ...(notice.supervisorName
+      ? [`> **👁️ Người giám sát:** **${supervisorMention || notice.supervisorName}**`]
+      : []),
+    `> **🕒 Thời gian:** \`${notice.timeLabel}\``,
+    `> **🔗 Chi tiết:** [Xem Alarm](${notice.link})`,
+    ``,
+    `*Nhắc việc tự động từ hệ thống Alarm.*`,
+  ].join("\n");
+}
+
 interface MemberOverloadedNotice {
   memberName: string;
   memberEmail?: string;

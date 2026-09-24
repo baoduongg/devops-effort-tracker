@@ -49,6 +49,7 @@ export function TaskAlarmFields({
       <DateTimeInput
         label="Giờ triển khai"
         hasClear
+        timeOptionInterval={15}
         placeholder="Chưa đặt"
         value={(deployAt ? toLocalDateTimeValue(deployAt) : undefined) as ISODateTimeString | undefined}
         onChange={(v) => onDeployAtChange(v ? new Date(v).toISOString() : null)}
