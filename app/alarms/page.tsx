@@ -20,7 +20,7 @@ import { Button } from "@astryxdesign/core/Button";
 import { AlarmFormModal } from "@/components/alarms/alarm-form-modal";
 import { subscribeAllAlarms, cancelAlarm, deleteAlarm } from "@/services/alarms.service";
 import { subscribeMembers } from "@/services/members.service";
-import { sortByDateDesc } from "@/lib/date";
+import { sortByDateAsc } from "@/lib/date";
 import type { Alarm, AlarmStatus } from "@/types/alarm";
 import type { Member } from "@/types/member";
 
@@ -79,7 +79,7 @@ export default function AlarmsPage(): React.JSX.Element {
         const matchesStatus = statusFilter === "all" || a.status === statusFilter;
         return matchesQuery && matchesStatus;
       })
-      .sort(sortByDateDesc("time"));
+      .sort(sortByDateAsc("time"));
   }, [alarms, query, statusFilter]);
 
   async function handleConfirmCancel(): Promise<void> {

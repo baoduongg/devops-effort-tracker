@@ -42,6 +42,11 @@ function formatDeployAt(iso: string): string {
   });
 }
 
+// If the cron was down/misconfigured for a while, don't let it fire a flood of long-overdue
+// standalone alarms the moment it resumes — anything staler than this is skipped (left active,
+// visible in the alarms list) instead of fired.
+const MAX_ALARM_STALENESS_MS = 24 * 60 * 60_000;
+
 async function runAlarmCheck(): Promise<NextResponse> {
   const [tasks, alarms, members, projects] = await Promise.all([
     getTasksWithPendingAlarm(),
@@ -92,7 +97,7 @@ async function runAlarmCheck(): Promise<NextResponse> {
 
   for (const alarm of alarms) {
     const fireAtMs = new Date(alarm.time).getTime();
-    if (now < fireAtMs) continue;
+    if (now < fireAtMs || now - fireAtMs > MAX_ALARM_STALENESS_MS) continue;
 
     const member = members.find((m) => m.id === alarm.memberId);
     const supervisor = alarm.supervisorId ? members.find((m) => m.id === alarm.supervisorId) : undefined;

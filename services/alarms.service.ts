@@ -80,7 +80,3 @@ export async function getPendingAlarms(): Promise<Alarm[]> {
   const snapshot = await getDocs(q);
   return snapshot.docs.map((d) => toAlarm(d.id, d.data()));
 }
-
-export async function markAlarmFired(id: string): Promise<void> {
-  await updateDoc(doc(db, "alarms", id), { status: "done", firedAt: Timestamp.now() });
-}

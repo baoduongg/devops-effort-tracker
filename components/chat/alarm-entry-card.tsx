@@ -13,6 +13,8 @@ import { Button } from "@astryxdesign/core/Button";
 import { Text } from "@astryxdesign/core/Text";
 import { Icon } from "@astryxdesign/core/Icon";
 import { Token } from "@astryxdesign/core/Token";
+import { Divider } from "@astryxdesign/core/Divider";
+import { toLocalDateTimeValue } from "@/lib/date";
 import type { AlarmProposal } from "@/types/chat";
 import type { Member } from "@/types/member";
 
@@ -21,14 +23,6 @@ interface AlarmEntryCardProps {
   confirmed: boolean;
   members: Member[];
   onConfirm: (proposal: AlarmProposal) => Promise<void>;
-}
-
-// DateTimeInput's value/onChange use local-time "YYYY-MM-DDTHH:MM" (no timezone suffix),
-// while `time` is stored as a UTC ISO string — convert at this component's boundary.
-function toLocalDateTimeValue(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function AlarmEntryCard({ proposal, confirmed, members, onConfirm }: AlarmEntryCardProps): React.JSX.Element {
@@ -185,7 +179,7 @@ export function AlarmEntryCard({ proposal, confirmed, members, onConfirm }: Alar
           </VStack>
         )}
 
-        <div style={{ height: 1, backgroundColor: "var(--color-border)", margin: "2px 0" }} />
+        <Divider />
 
         <HStack gap={2} vAlign="center">
           <Button

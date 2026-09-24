@@ -27,6 +27,21 @@ export function sortByDateDesc<T>(field: keyof T): (a: T, b: T) => number {
   return (a, b) => new Date(b[field] as string).getTime() - new Date(a[field] as string).getTime();
 }
 
+/** Sort comparator: soonest/oldest first, by an ISO-string date field. */
+export function sortByDateAsc<T>(field: keyof T): (a: T, b: T) => number {
+  return (a, b) => new Date(a[field] as string).getTime() - new Date(b[field] as string).getTime();
+}
+
+/**
+ * Converts a UTC ISO string to the local-time "YYYY-MM-DDTHH:MM" value DateTimeInput expects
+ * (its value/onChange carry no timezone suffix).
+ */
+export function toLocalDateTimeValue(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** Formats a date object to YYYY-MM-DD in local time */
 export function formatDateLocal(d: Date): string {
   const year = d.getFullYear();

@@ -11,6 +11,7 @@ import { TextInput } from "@astryxdesign/core/TextInput";
 import { TextArea } from "@astryxdesign/core/TextArea";
 import { Button } from "@astryxdesign/core/Button";
 import { createAlarm, updateAlarm } from "@/services/alarms.service";
+import { toLocalDateTimeValue } from "@/lib/date";
 import type { Alarm } from "@/types/alarm";
 import type { Member } from "@/types/member";
 
@@ -20,14 +21,6 @@ interface AlarmFormModalProps {
   alarm: Alarm | null;
   members: Member[];
   onSaved?: () => void;
-}
-
-// DateTimeInput's value/onChange use local-time "YYYY-MM-DDTHH:MM" (no timezone suffix),
-// while `time` is stored as a UTC ISO string — convert at this component's boundary.
-function toLocalDateTimeValue(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function AlarmFormModal(props: AlarmFormModalProps): React.JSX.Element {
