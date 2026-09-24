@@ -172,6 +172,36 @@ export function notifyTaskOverdue(notice: TaskOverdueNotice): Promise<void> {
   return sendChatOpsMessage(message);
 }
 
+interface DeployAlarmNotice {
+  title: string;
+  memberName: string;
+  memberEmail?: string;
+  projectName: string;
+  deployAtLabel: string;
+  minutesBefore: number;
+  link: string;
+}
+
+/** Builds the deploy-alarm ChatOps message. Exported (not sendChatOpsMessage-wrapped) so the
+ * server-side alarm cron can post via postToChatOps directly, same as daily-digest does. */
+export function buildDeployAlarmMessage(notice: DeployAlarmNotice): string {
+  const mention = toMention(notice.memberEmail);
+
+  return [
+    `### ⏰ Nhắc Lịch Triển Khai Hạ Tầng`,
+    ``,
+    `Task sau sắp tới giờ triển khai đã được approve, vui lòng chuẩn bị sẵn sàng:`,
+    ``,
+    `> **📋 Task:** \`${notice.title}\``,
+    `> **📁 Dự án:** **${notice.projectName}**`,
+    `> **👤 Người thực hiện:** **${mention || notice.memberName}**`,
+    `> **🚀 Giờ triển khai:** \`${notice.deployAtLabel}\` *(còn ${notice.minutesBefore} phút)*`,
+    `> **🔗 Chi tiết:** [Xem Task](${notice.link})`,
+    ``,
+    `*Đảm bảo đã sẵn sàng checklist trước khi triển khai đúng khung giờ đã approve.*`,
+  ].join("\n");
+}
+
 interface MemberOverloadedNotice {
   memberName: string;
   memberEmail?: string;

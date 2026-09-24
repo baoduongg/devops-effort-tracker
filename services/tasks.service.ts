@@ -42,6 +42,9 @@ function toTask(id: string, data: Record<string, unknown>): Task {
     source: (data.source as Task["source"]) ?? "manual",
     createdAt: toIsoString(data.createdAt),
     updatedAt: toIsoString(data.updatedAt),
+    deployAt: data.deployAt ? toIsoString(data.deployAt) : null,
+    reminderMinutesBefore: typeof data.reminderMinutesBefore === "number" ? data.reminderMinutesBefore : null,
+    alarmFiredAt: data.alarmFiredAt ? toIsoString(data.alarmFiredAt) : null,
   };
 }
 
@@ -71,6 +74,8 @@ export async function createTask(input: TaskInput): Promise<string> {
     ...input,
     startDate: Timestamp.fromDate(parseDateLocal(resolvedStartDate)),
     endDate: Timestamp.fromDate(parseDateLocal(resolvedEndDate)),
+    deployAt: input.deployAt ? Timestamp.fromDate(new Date(input.deployAt)) : null,
+    alarmFiredAt: null,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   });
@@ -88,10 +93,26 @@ export async function updateTask(id: string, input: Partial<TaskInput>): Promise
   if (input.endDate !== undefined) {
     payload.endDate = input.endDate ? Timestamp.fromDate(new Date(input.endDate)) : null;
   }
+  if (input.deployAt !== undefined) {
+    payload.deployAt = input.deployAt ? Timestamp.fromDate(new Date(input.deployAt)) : null;
+    // Changing the deploy time re-arms the alarm so the cron can fire again.
+    payload.alarmFiredAt = null;
+  }
   await updateDoc(doc(db, "tasks", id), payload);
 }
 
 export async function deleteTask(id: string): Promise<void> {
   await deleteDoc(doc(db, "tasks", id));
+}
+
+/** Tasks with a deploy alarm armed (deployAt set, not yet fired) — candidates for the alarm cron. */
+export async function getTasksWithPendingAlarm(): Promise<Task[]> {
+  const q = query(tasksCol, where("alarmFiredAt", "==", null));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((d) => toTask(d.id, d.data())).filter((t) => t.deployAt !== null);
+}
+
+export async function markAlarmFired(id: string): Promise<void> {
+  await updateDoc(doc(db, "tasks", id), { alarmFiredAt: Timestamp.now() });
 }
 
