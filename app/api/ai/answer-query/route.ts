@@ -147,7 +147,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const askerContextLine = askerMember
       ? `\n\nNGƯỜI ĐANG HỎI: ${askerMember.name} (khi câu hỏi dùng "tôi"/"mình"/"của tôi", đó là chỉ chính người này).`
       : "";
-    const fullSystemPrompt = `${SYSTEM_PROMPT}${askerContextLine}\n\nDỮ LIỆU THỜI GIAN THỰC (REALTIME DATABASE):\n${JSON.stringify(snapshot, null, 2)}`;
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const nowLocal = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const nowLine = `\n\nTHỜI GIAN HIỆN TẠI: ${nowLocal} (dùng mốc này để quy đổi các biểu đạt thời gian tương đối như "30 phút nữa", "sáng mai", "chiều thứ 6").`;
+    const fullSystemPrompt = `${SYSTEM_PROMPT}${askerContextLine}${nowLine}\n\nDỮ LIỆU THỜI GIAN THỰC (REALTIME DATABASE):\n${JSON.stringify(snapshot, null, 2)}`;
 
     const responsePayload = await runChatToolLoop({
       systemPrompt: fullSystemPrompt,
@@ -160,7 +164,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       currentMemberId,
     });
 
-    const confirmed = !("clarification" in responsePayload) && !("entry" in responsePayload) && !("proposal" in responsePayload);
+    const confirmed =
+      !("clarification" in responsePayload) &&
+      !("entry" in responsePayload) &&
+      !("proposal" in responsePayload) &&
+      !("alarmProposal" in responsePayload);
     return logAndRespond(responsePayload, confirmed);
   } catch (error) {
     console.error("answer-query error:", error);

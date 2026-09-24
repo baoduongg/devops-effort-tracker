@@ -25,6 +25,7 @@ import { getThreadsByMember, createThread, touchThread } from "@/services/chatTh
 import { createTaskChangeLog } from "@/services/taskChangeLogs.service";
 import { submitFormatEntry, submitAnswerQuery } from "@/services/chatAi.service";
 import { confirmTaskEntry, confirmTaskProposal } from "@/services/chat-task-actions.service";
+import { createAlarm } from "@/services/alarms.service";
 import {
   getAvailableSlashCommands,
   resolveSlashCommand,
@@ -38,7 +39,7 @@ import {
   isTaskDeleteIntent,
   looksLikeSelfLogEntry,
 } from "@/lib/intent";
-import type { FormattedEntry, TaskChangeProposal, ChatMessage } from "@/types/chat";
+import type { FormattedEntry, TaskChangeProposal, AlarmProposal, ChatMessage } from "@/types/chat";
 import type { Member } from "@/types/member";
 import type { Project } from "@/types/project";
 
@@ -115,6 +116,7 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
   const appendMessage = useChatStore((state) => state.appendMessage);
   const updateEntryConfirmed = useChatStore((state) => state.updateEntryConfirmed);
   const updateProposalConfirmed = useChatStore((state) => state.updateProposalConfirmed);
+  const updateAlarmConfirmed = useChatStore((state) => state.updateAlarmConfirmed);
   const activeThreadId = useChatStore((state) => state.activeThreadIdByMode[mode]);
   const setThreads = useChatStore((state) => state.setThreads);
   const addThread = useChatStore((state) => state.addThread);
@@ -427,6 +429,7 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
           answer,
           entry,
           proposal,
+          alarmProposal,
           clarification,
           memberAvailability,
           taskList,
@@ -468,6 +471,21 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
             id: generateMessageId("ai-proposal"),
             role: "ai-proposal",
             proposal,
+            chatLogId: chatLogId || generateMessageId("log"),
+            confirmed: false,
+          });
+        } else if (alarmProposal) {
+          if (answer) {
+            appendMessage(mode, {
+              id: generateMessageId("ai-text"),
+              role: "ai-answer",
+              text: answer,
+            });
+          }
+          appendMessage(mode, {
+            id: generateMessageId("ai-alarm-proposal"),
+            role: "ai-alarm-proposal",
+            proposal: alarmProposal,
             chatLogId: chatLogId || generateMessageId("log"),
             confirmed: false,
           });
@@ -600,6 +618,21 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
       throw new Error("assignee not found");
     }
     updateProposalConfirmed(mode, chatLogId, true);
+  }
+
+  async function handleConfirmAlarm(chatLogId: string, proposal: AlarmProposal): Promise<void> {
+    await createAlarm({
+      memberId: proposal.memberId,
+      supervisorId: proposal.supervisorId,
+      content: proposal.content,
+      projectName: proposal.projectName,
+      time: proposal.time,
+      status: "active",
+      firedAt: null,
+    });
+    if (chatLogId) {
+      updateAlarmConfirmed(mode, chatLogId, true);
+    }
   }
 
   async function handleCancelProposal(chatLogId: string, proposal: TaskChangeProposal): Promise<void> {
@@ -832,6 +865,8 @@ export function ChatBox({ compact = false }: { compact?: boolean } = {}): React.
             onConfirmEntry={handleConfirmEntry}
             onConfirmProposal={handleConfirmProposal}
             onCancelProposal={handleCancelProposal}
+            onConfirmAlarm={handleConfirmAlarm}
+            members={allMembers}
             onSelectClarificationCandidate={handleSelectClarificationCandidate}
             onRunSlashCommand={handleRunSlashCommand}
             onSelectPromptSuggestion={(prompt) => handleSubmit(prompt)}

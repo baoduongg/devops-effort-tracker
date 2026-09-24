@@ -27,6 +27,7 @@ interface ChatState {
   appendMessage: (mode: ChatMode, message: ChatMessage) => void;
   updateEntryConfirmed: (mode: ChatMode, chatLogId: string, confirmed: boolean) => void;
   updateProposalConfirmed: (mode: ChatMode, chatLogId: string, confirmed: boolean) => void;
+  updateAlarmConfirmed: (mode: ChatMode, chatLogId: string, confirmed: boolean) => void;
   setThreads: (mode: ChatMode, threads: ChatThread[]) => void;
   addThread: (mode: ChatMode, thread: ChatThread) => void;
   updateThreadTitle: (mode: ChatMode, threadId: string, title: string) => void;
@@ -71,6 +72,15 @@ export const useChatStore = create<ChatState>((set) => ({
         ...state.messagesByMode,
         [mode]: state.messagesByMode[mode].map((m) =>
           m.role === "ai-proposal" && m.chatLogId === chatLogId ? { ...m, confirmed } : m
+        ),
+      },
+    })),
+  updateAlarmConfirmed: (mode, chatLogId, confirmed) =>
+    set((state) => ({
+      messagesByMode: {
+        ...state.messagesByMode,
+        [mode]: state.messagesByMode[mode].map((m) =>
+          m.role === "ai-alarm-proposal" && m.chatLogId === chatLogId ? { ...m, confirmed } : m
         ),
       },
     })),

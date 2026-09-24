@@ -8,6 +8,7 @@ import type {
   FormattedEntry,
   AiResponsePayload,
   TaskChangeProposal,
+  AlarmProposal,
   ClarificationRequest,
   MemberAvailability,
 } from "@/types/chat";
@@ -94,6 +95,21 @@ export function chatLogsToMessages(logs: ChatLog[]): ChatMessage[] {
           id: `${log.id}-ai-proposal`,
           chatLogId: log.id,
           proposal: resp.proposal as TaskChangeProposal,
+          confirmed: log.confirmed,
+        });
+      } else if ("alarmProposal" in resp && resp.alarmProposal) {
+        if ("answer" in resp && typeof resp.answer === "string" && resp.answer) {
+          messages.push({
+            role: "ai-answer",
+            id: `${log.id}-ai-answer`,
+            text: resp.answer,
+          });
+        }
+        messages.push({
+          role: "ai-alarm-proposal",
+          id: `${log.id}-ai-alarm-proposal`,
+          chatLogId: log.id,
+          proposal: resp.alarmProposal as AlarmProposal,
           confirmed: log.confirmed,
         });
       } else if ("clarification" in resp && resp.clarification) {

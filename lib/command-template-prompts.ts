@@ -54,6 +54,17 @@ export function buildCommandPrompt(
         state.timeframe.trim() ? `, hoàn thành ${state.timeframe.trim()}` : ""
       }`;
 
+    case "coord-alarm": {
+      const content = state.taskTitle.trim() || "[Nội dung nhắc]";
+      const time = state.timeframe.trim() || "[Thời gian]";
+      const assignee = members.find((m) => m.id === state.selectedMemberName)?.name || "[Người thực hiện]";
+      const supervisorMember = members.find((m) => m.id === state.newAssigneeName)?.name;
+      const selectedProject = projects.find((p) => p.id === state.selectedProjectName)?.name;
+      const projectPart = selectedProject ? ` thuộc dự án ${selectedProject}` : "";
+      const supervisorPart = supervisorMember ? `, người giám sát ${supervisorMember}` : "";
+      return `Đặt alarm nhắc ${assignee} ${content} vào ${time}${projectPart}${supervisorPart}`;
+    }
+
     case "detail-info":
       return `Tình hình công việc, task đang làm và kế hoạch của ${member} ra sao?`;
 

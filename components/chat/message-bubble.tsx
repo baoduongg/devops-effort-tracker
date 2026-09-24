@@ -4,6 +4,7 @@ import { Token } from "@astryxdesign/core/Token";
 import { Markdown } from "@astryxdesign/core/Markdown";
 import { EntryCard } from "@/components/chat/entry-card";
 import { ProposalCard } from "@/components/chat/proposal-card";
+import { AlarmEntryCard } from "@/components/chat/alarm-entry-card";
 import { ClarificationCard } from "@/components/chat/clarification-card";
 import { MemberAvailabilityCard } from "@/components/chat/member-availability-card";
 import {
@@ -18,13 +19,16 @@ import {
   MemberInfoCard,
 } from "@/components/chat/cards";
 import { TaskListCard } from "@/components/chat/task-list-card";
-import type { ChatMessage as ChatMessageType, FormattedEntry, TaskChangeProposal } from "@/types/chat";
+import type { ChatMessage as ChatMessageType, FormattedEntry, TaskChangeProposal, AlarmProposal } from "@/types/chat";
+import type { Member } from "@/types/member";
 
 interface MessageBubbleProps {
   message: ChatMessageType;
+  members: Member[];
   onConfirmEntry: (chatLogId: string, entry: FormattedEntry) => Promise<void>;
   onConfirmProposal: (chatLogId: string, proposal: TaskChangeProposal, appliedChanges: TaskChangeProposal["changes"]) => Promise<void>;
   onCancelProposal: (chatLogId: string, proposal: TaskChangeProposal) => Promise<void>;
+  onConfirmAlarm: (chatLogId: string, proposal: AlarmProposal) => Promise<void>;
   onSelectClarificationCandidate: (label: string) => void;
   onRunSlashCommand?: (slashCommand: string) => void;
 }
@@ -40,9 +44,11 @@ function cleanAiText(text: string): string {
 
 export function MessageBubble({
   message,
+  members,
   onConfirmEntry,
   onConfirmProposal,
   onCancelProposal,
+  onConfirmAlarm,
   onSelectClarificationCandidate,
   onRunSlashCommand,
 }: MessageBubbleProps): React.JSX.Element {
@@ -198,6 +204,15 @@ export function MessageBubble({
               confirmed={message.confirmed}
               onConfirm={(proposal, appliedChanges) => onConfirmProposal(message.chatLogId, proposal, appliedChanges)}
               onCancel={(proposal) => onCancelProposal(message.chatLogId, proposal)}
+            />
+          </ChatMessageBubble>
+        ) : message.role === "ai-alarm-proposal" ? (
+          <ChatMessageBubble variant="ghost" width="100%" className="p-0">
+            <AlarmEntryCard
+              proposal={message.proposal}
+              confirmed={message.confirmed}
+              members={members}
+              onConfirm={(proposal) => onConfirmAlarm(message.chatLogId, proposal)}
             />
           </ChatMessageBubble>
         ) : (

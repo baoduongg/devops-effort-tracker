@@ -40,6 +40,14 @@ export interface TaskChangeProposal {
   }>;
 }
 
+export interface AlarmProposal {
+  memberId: string;
+  supervisorId: string | null;
+  content: string;
+  projectName: string | null;
+  time: string; // ISO
+}
+
 export interface ClarificationRequest {
   reason: "missing_field" | "ambiguous_match" | "no_match" | "target_is_leader";
   missingFields?: string[]; // vd ["projectName", "effortMinutes"]
@@ -208,6 +216,7 @@ export type AiResponsePayload =
   | { answer: string }
   | { answer?: string; entry: FormattedEntry }
   | { answer?: string; proposal: TaskChangeProposal }
+  | { answer?: string; alarmProposal: AlarmProposal }
   | { answer: string; clarification: ClarificationRequest }
   | { answer: string; memberAvailability: MemberAvailability }
   | { answer: string; taskList: TaskListPayload }
@@ -247,6 +256,7 @@ export type ChatMessage =
   | { role: "ai-answer"; id: string; text: string; latency?: string }
   | { role: "ai-entry"; id: string; chatLogId: string; entry: FormattedEntry; confirmed: boolean }
   | { role: "ai-proposal"; id: string; chatLogId: string; proposal: TaskChangeProposal; confirmed: boolean }
+  | { role: "ai-alarm-proposal"; id: string; chatLogId: string; proposal: AlarmProposal; confirmed: boolean }
   | { role: "ai-clarification"; id: string; text: string; clarification: ClarificationRequest }
   | { role: "ai-member-availability"; id: string; text: string; availability: MemberAvailability }
   | { role: "ai-task-list"; id: string; text: string; taskList: TaskListPayload }

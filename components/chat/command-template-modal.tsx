@@ -9,6 +9,7 @@ import type { Project } from "@/types/project";
 import type { TaskStatus } from "@/types/task";
 import { buildCommandPrompt } from "@/lib/command-template-prompts";
 import { AddForm } from "./command-forms/AddForm";
+import { AlarmForm } from "./command-forms/AlarmForm";
 import { AssignForm } from "./command-forms/AssignForm";
 import { InfoLookupForm, ProjectLookupForm, TaskLookupForm } from "./command-forms/LookupForms";
 import { LogForm } from "./command-forms/LogForm";
@@ -51,14 +52,17 @@ function CommandTemplateForm({
       ? assignableMembers[0]?.id || ""
       : members[0]?.id || "";
 
-  const initialNewAssigneeId = assignableMembers.length > 1 ? assignableMembers[1].id : "";
+  const initialNewAssigneeId =
+    command.id === "coord-alarm" ? "" : assignableMembers.length > 1 ? assignableMembers[1].id : "";
 
   const [taskTitle, setTaskTitle] = useState(
     command.id === "coord-assign" ? "Cấu hình Prometheus & Grafana Dashboard cho K8s Cluster" : ""
   );
   const [selectedMemberName, setSelectedMemberName] = useState(initialMemberId);
   const [newAssigneeName, setNewAssigneeName] = useState(initialNewAssigneeId);
-  const [selectedProjectName, setSelectedProjectName] = useState(projects[0]?.id || "");
+  const [selectedProjectName, setSelectedProjectName] = useState(
+    command.id === "coord-alarm" ? "" : projects[0]?.id || ""
+  );
   const [effortMinutes, setEffortMinutes] = useState<number>(
     command.id === "coord-assign" ? 240 : command.id === "coord-add" ? 120 : 60
   );
@@ -252,6 +256,23 @@ function CommandTemplateForm({
             effortMinutes={effortMinutes}
             durationStr={durationStr}
             onEffortChange={withReset(setEffortMinutes)}
+          />
+        )}
+
+        {command.id === "coord-alarm" && (
+          <AlarmForm
+            content={taskTitle}
+            onContentChange={withReset(setTaskTitle)}
+            timeframe={timeframe}
+            onTimeframeChange={withReset(setTimeframe)}
+            members={members}
+            selectedMemberName={selectedMemberName}
+            onMemberChange={withReset(setSelectedMemberName)}
+            supervisorName={newAssigneeName}
+            onSupervisorChange={withReset(setNewAssigneeName)}
+            projects={projects}
+            selectedProjectName={selectedProjectName}
+            onProjectChange={withReset(setSelectedProjectName)}
           />
         )}
 
