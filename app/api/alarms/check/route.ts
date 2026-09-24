@@ -1,11 +1,26 @@
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-import { getTasksWithPendingAlarm, markAlarmFired } from "@/services/tasks.service";
+import { getTasksWithPendingAlarm } from "@/services/tasks.service";
+import { getPendingAlarms } from "@/services/alarms.service";
 import { getMembers } from "@/services/members.service";
 import { getProjects } from "@/services/projects.service";
-import { buildDeployAlarmMessage } from "@/services/chatops.service";
+import { buildDeployAlarmMessage, buildStandaloneAlarmMessage } from "@/services/chatops.service";
 import { postToChatOps } from "@/lib/chatops-post";
+import { getAdminDb } from "@/lib/firebase-admin";
+import { Timestamp as AdminTimestamp } from "firebase-admin/firestore";
+
+// These two writes run with no signed-in Firebase Auth session (this is a server cron, not a
+// browser request), so they go through the Admin SDK — the only way to satisfy firestore.rules'
+// `allow write: if isSignedIn()` on tasks/alarms from here. Everything else in this route only
+// reads, which firestore.rules already allows unauthenticated.
+async function markTaskAlarmFired(id: string): Promise<void> {
+  await getAdminDb().collection("tasks").doc(id).update({ alarmFiredAt: AdminTimestamp.now() });
+}
+
+async function markStandaloneAlarmFired(id: string): Promise<void> {
+  await getAdminDb().collection("alarms").doc(id).update({ status: "done", firedAt: AdminTimestamp.now() });
+}
 
 function getProvidedSecret(request: Request): string | null {
   const authHeader = request.headers.get("authorization");
@@ -27,9 +42,15 @@ function formatDeployAt(iso: string): string {
   });
 }
 
+// If the cron was down/misconfigured for a while, don't let it fire a flood of long-overdue
+// standalone alarms the moment it resumes — anything staler than this is skipped (left active,
+// visible in the alarms list) instead of fired.
+const MAX_ALARM_STALENESS_MS = 24 * 60 * 60_000;
+
 async function runAlarmCheck(): Promise<NextResponse> {
-  const [tasks, members, projects] = await Promise.all([
+  const [tasks, alarms, members, projects] = await Promise.all([
     getTasksWithPendingAlarm(),
+    getPendingAlarms(),
     getMembers(),
     getProjects(),
   ]);
@@ -63,12 +84,47 @@ async function runAlarmCheck(): Promise<NextResponse> {
 
     const result = await postToChatOps(message);
     if (result.ok) {
-      await markAlarmFired(task.id);
-      fired += 1;
+      try {
+        await markTaskAlarmFired(task.id);
+        fired += 1;
+      } catch (err) {
+        // ChatOps message already sent — don't let a mark-fired failure abort the whole
+        // tick and block every other pending alarm behind it.
+        console.error(`Failed to mark task alarm fired (${task.id}):`, err);
+      }
     }
   }
 
-  return NextResponse.json({ ok: true, checked: tasks.length, fired });
+  for (const alarm of alarms) {
+    const fireAtMs = new Date(alarm.time).getTime();
+    if (now < fireAtMs || now - fireAtMs > MAX_ALARM_STALENESS_MS) continue;
+
+    const member = members.find((m) => m.id === alarm.memberId);
+    const supervisor = alarm.supervisorId ? members.find((m) => m.id === alarm.supervisorId) : undefined;
+
+    const message = buildStandaloneAlarmMessage({
+      content: alarm.content,
+      projectName: alarm.projectName,
+      memberName: member?.name ?? "Unassigned",
+      memberEmail: member?.email,
+      supervisorName: supervisor?.name,
+      supervisorEmail: supervisor?.email,
+      timeLabel: formatDeployAt(alarm.time),
+      link: `${process.env.HOST}/alarms`,
+    });
+
+    const result = await postToChatOps(message);
+    if (result.ok) {
+      try {
+        await markStandaloneAlarmFired(alarm.id);
+        fired += 1;
+      } catch (err) {
+        console.error(`Failed to mark alarm fired (${alarm.id}):`, err);
+      }
+    }
+  }
+
+  return NextResponse.json({ ok: true, checked: tasks.length + alarms.length, fired });
 }
 
 export async function GET(request: Request): Promise<NextResponse> {

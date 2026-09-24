@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Users, Layers, Sparkles, Plus, Send } from "lucide-react";
+import { Users, Layers, Sparkles, Plus, Send, BellRing } from "lucide-react";
 import { VStack, HStack } from "@astryxdesign/core/Stack";
 import { Heading } from "@astryxdesign/core/Heading";
 import { Text } from "@astryxdesign/core/Text";
@@ -13,6 +13,7 @@ import { useMembersStore } from "@/store/members.store";
 import { useAuthStore } from "@/store/auth.store";
 import { DevOpsWorkspace } from "@/components/dashboard/devops-workspace";
 import { TaskCreateModal } from "@/components/tasks/task-create-modal";
+import { AlarmFormModal } from "@/components/alarms/alarm-form-modal";
 import { OverdueTasksList } from "@/components/dashboard/overdue-tasks-list";
 import { PMTeamRoster } from "@/components/dashboard/pm-team-roster";
 import { TeamTimelineChart } from "@/components/dashboard/team-timeline-chart";
@@ -37,6 +38,7 @@ export default function DashboardPage(): React.JSX.Element {
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [capacityFilter, setCapacityFilter] = useState<CapacityFilter>("all");
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
+  const [isCreateAlarmModalOpen, setIsCreateAlarmModalOpen] = useState(false);
   const { trigger: triggerDailyDigest, isSending: isSendingDigest } = useDailyDigestTrigger();
 
   const {
@@ -107,6 +109,12 @@ export default function DashboardPage(): React.JSX.Element {
             <span>Daily Digest</span>
           </button>
           <Button
+            label="Tạo Alarm"
+            icon={<BellRing size={15} />}
+            variant="secondary"
+            onClick={() => setIsCreateAlarmModalOpen(true)}
+          />
+          <Button
             label="Tạo Task mới"
             icon={<Plus size={15} />}
             variant="primary"
@@ -173,6 +181,13 @@ export default function DashboardPage(): React.JSX.Element {
         isOpen={isCreateTaskModalOpen}
         onOpenChange={setIsCreateTaskModalOpen}
         projects={projects}
+        members={members}
+      />
+
+      <AlarmFormModal
+        isOpen={isCreateAlarmModalOpen}
+        onOpenChange={setIsCreateAlarmModalOpen}
+        alarm={null}
         members={members}
       />
     </VStack>

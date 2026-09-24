@@ -58,6 +58,11 @@ export function Sidebar(): React.JSX.Element {
       label: isLeader ? "AI Ask (Leader)" : "AI Log Work",
       icon: MessagesSquare,
     },
+    {
+      href: "/alarms",
+      label: "Quản lý Alarm",
+      icon: Bell,
+    },
     // {
     //   href: "/notifications",
     //   label: "Thông báo",

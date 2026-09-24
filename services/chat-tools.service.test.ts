@@ -11,7 +11,7 @@ import { runChatToolLoop } from "@/services/chat-tools.service";
 import type { GroundingSnapshot } from "@/services/grounding.service";
 
 describe("buildToolsForRole", () => {
-  it("includes all 15 tools for a leader", () => {
+  it("includes all 16 tools for a leader", () => {
     const tools = buildToolsForRole(true);
     expect(tools.map((t) => t.name)).toEqual(
       expect.arrayContaining([
@@ -97,6 +97,91 @@ describe("runChatToolLoop", () => {
     });
 
     expect(result).toEqual({ answer: "Xin chào!" });
+  });
+
+  it("dispatches create_alarm to an unsaved alarmProposal payload, not a direct write", async () => {
+    vi.mocked(callClaudeTool).mockResolvedValueOnce({
+      toolUse: {
+        name: "create_alarm",
+        input: { content: "Review PR hạ tầng", time: "2026-09-25T09:00" },
+      },
+      text: null,
+    });
+
+    const result = await runChatToolLoop({
+      systemPrompt: "system",
+      userQuery: "nhắc tôi 9h mai review PR",
+      effectiveQuery: "nhắc tôi 9h mai review PR",
+      snapshot: emptySnapshot,
+      allMembers: [],
+      isLeader: false,
+      currentAskerRole: "devops",
+      currentMemberId: "member-1",
+    });
+
+    expect(result).toHaveProperty("alarmProposal");
+    const proposal = (result as { alarmProposal: { memberId: string; supervisorId: string | null; content: string; time: string } }).alarmProposal;
+    expect(proposal.memberId).toBe("member-1");
+    expect(proposal.supervisorId).toBeNull();
+    expect(proposal.content).toBe("Review PR hạ tầng");
+    expect(new Date(proposal.time).toISOString()).toBe(proposal.time);
+  });
+
+  it("resolves assigneeName/supervisorName to real member ids for create_alarm", async () => {
+    const allMembers = [
+      { id: "m-nam", name: "Nam", email: "", photoURL: null, skills: [], status: "free", currentTaskId: null, effortMinutes: 0, role: "devops", updatedAt: "" },
+      { id: "m-linh", name: "Linh", email: "", photoURL: null, skills: [], status: "free", currentTaskId: null, effortMinutes: 0, role: "leader", updatedAt: "" },
+    ] as unknown as Parameters<typeof runChatToolLoop>[0]["allMembers"];
+
+    vi.mocked(callClaudeTool).mockResolvedValueOnce({
+      toolUse: {
+        name: "create_alarm",
+        input: {
+          content: "Deploy hotfix",
+          time: "2026-09-25T09:00",
+          assigneeName: "Nam",
+          supervisorName: "Linh",
+        },
+      },
+      text: null,
+    });
+
+    const result = await runChatToolLoop({
+      systemPrompt: "system",
+      userQuery: "leader đặt alarm cho Nam",
+      effectiveQuery: "leader đặt alarm cho Nam",
+      snapshot: emptySnapshot,
+      allMembers,
+      isLeader: true,
+      currentAskerRole: "leader",
+      currentMemberId: "leader",
+    });
+
+    expect(result).toHaveProperty("alarmProposal");
+    const proposal = (result as { alarmProposal: { memberId: string; supervisorId: string | null } }).alarmProposal;
+    expect(proposal.memberId).toBe("m-nam");
+    expect(proposal.supervisorId).toBe("m-linh");
+  });
+
+  it("asks for the missing time instead of guessing when create_alarm input omits it", async () => {
+    vi.mocked(callClaudeTool).mockResolvedValueOnce({
+      toolUse: { name: "create_alarm", input: { content: "Review PR hạ tầng" } },
+      text: null,
+    });
+
+    const result = await runChatToolLoop({
+      systemPrompt: "system",
+      userQuery: "nhắc tôi review PR",
+      effectiveQuery: "nhắc tôi review PR",
+      snapshot: emptySnapshot,
+      allMembers: [],
+      isLeader: false,
+      currentAskerRole: "devops",
+      currentMemberId: "member-1",
+    });
+
+    expect(result).toHaveProperty("clarification");
+    expect(result).not.toHaveProperty("alarmProposal");
   });
 
   it("falls back to raw text when Claude answers without calling any tool", async () => {

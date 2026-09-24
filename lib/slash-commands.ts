@@ -173,6 +173,18 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     isInstantPrompt: false,
   },
   {
+    id: "coord-alarm",
+    command: "/alarm",
+    aliases: ["/nhacviec", "/reminder", "/nhac"],
+    label: "Đặt Alarm nhắc việc",
+    description: "Đặt alarm nhắc việc cho chính mình (Mở form điền mẫu)",
+    category: "coordination",
+    mode: "all",
+    badgeText: "Nhắc việc",
+    template: "Nhắc tôi [Nội dung nhắc] vào [Thời gian]",
+    isInstantPrompt: false,
+  },
+  {
     id: "coord-log",
     command: "/log",
     aliases: ["/work", "/done", "/ghilog"],
@@ -390,6 +402,12 @@ export function resolveSlashCommand(text: string, currentMode: ChatMode): string
     const args = argsPart.normalize("NFC");
     if (/\blog\b/i.test(args) && /\bcông\s+việc\b/i.test(args)) return argsPart;
     return `Log công việc: ${argsPart}`;
+  }
+
+  if (matched.id === "coord-alarm" && argsPart) {
+    const args = argsPart.normalize("NFC");
+    if (/\bnhắc\b/i.test(args)) return argsPart;
+    return `Nhắc tôi ${argsPart}`;
   }
 
   // If matched has an instant prompt and no args were given

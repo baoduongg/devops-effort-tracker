@@ -5,7 +5,7 @@ import { extractTaskEntryFromInput } from "@/services/task-extractor.service";
 import { extractTaskMutationFromInput } from "@/services/task-mutation-extractor.service";
 import { formatEffortDuration } from "@/lib/effort";
 import type { Member } from "@/types/member";
-import type { AiResponsePayload, ClarificationRequest } from "@/types/chat";
+import type { AiResponsePayload, AlarmProposal, ClarificationRequest } from "@/types/chat";
 import {
   renderMemberList,
   renderClarificationAnswer,
@@ -150,6 +150,41 @@ const MUTATION_TOOLS: ClaudeTool[] = [
   },
 ];
 
+const ALARM_TOOLS: ClaudeTool[] = [
+  {
+    name: "create_alarm",
+    description:
+      "Draft a reminder alarm for review (not saved until the user confirms the card). Use when the user asks to set/create a reminder for someone at a specific time (e.g. 'nhắc tôi 30 phút nữa review PR', 'đặt alarm 9h sáng mai nhắc Nam gọi báo cáo tuần'). Can remind the asker themself or a named member (assigneeName) — default to the asker if no one is named.",
+    input_schema: {
+      type: "object",
+      properties: {
+        content: {
+          type: "string",
+          description: "What to be reminded about, in Vietnamese, concise.",
+        },
+        time: {
+          type: "string",
+          description:
+            "The alarm's local date-time, resolved from the request using THỜI GIAN HIỆN TẠI as the reference point, formatted exactly as YYYY-MM-DDTHH:mm (no timezone suffix).",
+        },
+        assigneeName: {
+          type: "string",
+          description: "Name of the person to be reminded (người thực hiện), if mentioned. Omit to default to the asker themself.",
+        },
+        supervisorName: {
+          type: "string",
+          description: "Name of the supervisor overseeing this reminder (người giám sát), if mentioned. Omit if not specified.",
+        },
+        projectName: {
+          type: "string",
+          description: "Related project name, if mentioned. Omit if not mentioned.",
+        },
+      },
+      required: ["content", "time"],
+    },
+  },
+];
+
 const GENERAL_TOOL: ClaudeTool = {
   name: "answer_general_question",
   description:
@@ -166,13 +201,14 @@ const GENERAL_TOOL: ClaudeTool = {
   },
 };
 
-export const CHAT_TOOLS: ClaudeTool[] = [...CARD_TOOLS, ...MUTATION_TOOLS, GENERAL_TOOL];
+export const CHAT_TOOLS: ClaudeTool[] = [...CARD_TOOLS, ...MUTATION_TOOLS, ...ALARM_TOOLS, GENERAL_TOOL];
 
 export function buildToolsForRole(isLeader: boolean): ClaudeTool[] {
   if (isLeader) return CHAT_TOOLS;
   // list_free_members restores old pre-rewrite behavior: leader-only, since a devops asker's
   // grounding snapshot is already scoped to just themself, making the "who's free" card meaningless.
-  return CARD_TOOLS.filter((t) => t.name !== "list_free_members").concat(GENERAL_TOOL);
+  // create_alarm stays available to devops too — it's a self-reminder, not a team mutation.
+  return CARD_TOOLS.filter((t) => t.name !== "list_free_members").concat(ALARM_TOOLS, GENERAL_TOOL);
 }
 
 interface RunChatToolLoopParams {
@@ -345,6 +381,48 @@ export async function runChatToolLoop(params: RunChatToolLoopParams): Promise<Ai
         return { answer, proposal: result.proposal };
       }
       return { answer: "Xin lỗi, tôi không xác định được task nào để xử lý. Vui lòng nêu rõ hơn tên task hoặc người phụ trách." };
+    }
+
+    case "create_alarm": {
+      const content = ((toolUse.input.content as string) || "").trim();
+      const rawTime = (toolUse.input.time as string) || "";
+      const parsedTime = rawTime ? new Date(rawTime) : null;
+
+      if (!content || !parsedTime || Number.isNaN(parsedTime.getTime())) {
+        const clarification: ClarificationRequest = {
+          reason: "missing_field",
+          missingFields: [!content ? "content" : "time"].filter(Boolean) as string[],
+        };
+        return {
+          answer: !content
+            ? "Bạn muốn được nhắc về **nội dung** gì?"
+            : "Bạn muốn được nhắc vào **thời điểm nào**? (vd: 30 phút nữa, 9h sáng mai).",
+          clarification,
+        };
+      }
+
+      const projectName = ((toolUse.input.projectName as string) || "").trim() || null;
+
+      const assigneeNameRaw = ((toolUse.input.assigneeName as string) || "").trim();
+      const matchedAssignee = assigneeNameRaw ? findMemberByName(allMembers, assigneeNameRaw) : null;
+      const memberId = matchedAssignee?.id || currentMemberId || "leader";
+
+      const supervisorNameRaw = ((toolUse.input.supervisorName as string) || "").trim();
+      const matchedSupervisor = supervisorNameRaw ? findMemberByName(allMembers, supervisorNameRaw) : null;
+      const supervisorId = matchedSupervisor?.id || null;
+
+      const alarmProposal: AlarmProposal = {
+        memberId,
+        supervisorId,
+        content,
+        projectName,
+        time: parsedTime.toISOString(),
+      };
+      const timeLabel = parsedTime.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
+      return {
+        answer: `Tôi đã soạn alarm nhắc **${content}** vào **${timeLabel}**.\n\nVui lòng kiểm tra bên dưới và bấm **Xác nhận** để đặt lịch.`,
+        alarmProposal,
+      };
     }
 
     case "answer_general_question":

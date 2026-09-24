@@ -5,16 +5,9 @@ import { NumberInput } from "@astryxdesign/core/NumberInput";
 import { Selector } from "@astryxdesign/core/Selector";
 import type { ISODateTimeString } from "@astryxdesign/core/DateTimeInput";
 import { REMINDER_PRESET_OPTIONS } from "@/types/task";
+import { toLocalDateTimeValue } from "@/lib/date";
 
 const PRESET_MINUTES = new Set(["15", "30", "60"]);
-
-// DateTimeInput's value/onChange use local-time "YYYY-MM-DDTHH:MM" (no timezone suffix),
-// while deployAt is stored as a UTC ISO string — convert at this component's boundary.
-function toLocalDateTimeValue(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 interface TaskAlarmFieldsProps {
   deployAt: string | null;
@@ -49,6 +42,7 @@ export function TaskAlarmFields({
       <DateTimeInput
         label="Giờ triển khai"
         hasClear
+        timeOptionInterval={15}
         placeholder="Chưa đặt"
         value={(deployAt ? toLocalDateTimeValue(deployAt) : undefined) as ISODateTimeString | undefined}
         onChange={(v) => onDeployAtChange(v ? new Date(v).toISOString() : null)}

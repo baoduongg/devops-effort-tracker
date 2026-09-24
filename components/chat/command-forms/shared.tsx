@@ -55,6 +55,8 @@ export function getModalTitle(command: SlashCommand): string {
       return "Lập kế hoạch công việc mới";
     case "coord-log":
       return "Ghi nhận công việc hoàn thành";
+    case "coord-alarm":
+      return "Đặt Alarm nhắc việc";
     case "coord-remove":
       return "Xóa task khỏi hệ thống";
     case "detail-info":

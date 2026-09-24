@@ -16,13 +16,15 @@ import { Spinner } from "@astryxdesign/core/Spinner";
 import { VStack, HStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { MessageBubble } from "@/components/chat/message-bubble";
-import type { ChatMessage as ChatMessageType, ChatMode, FormattedEntry, TaskChangeProposal } from "@/types/chat";
+import type { ChatMessage as ChatMessageType, ChatMode, FormattedEntry, TaskChangeProposal, AlarmProposal } from "@/types/chat";
+import type { Member } from "@/types/member";
 
 interface ChatThreadProps {
   mode: ChatMode;
   messages: ChatMessageType[];
   loading: boolean;
   thinking: boolean;
+  members: Member[];
   onConfirmEntry: (chatLogId: string, entry: FormattedEntry) => Promise<void>;
   onConfirmProposal: (
     chatLogId: string,
@@ -30,6 +32,7 @@ interface ChatThreadProps {
     appliedChanges: TaskChangeProposal["changes"]
   ) => Promise<void>;
   onCancelProposal: (chatLogId: string, proposal: TaskChangeProposal) => Promise<void>;
+  onConfirmAlarm: (chatLogId: string, proposal: AlarmProposal) => Promise<void>;
   onSelectClarificationCandidate: (label: string) => void;
   onRunSlashCommand?: (slashCommand: string) => void;
   onSelectPromptSuggestion?: (prompt: string) => void;
@@ -167,9 +170,11 @@ export function ChatThread({
   messages,
   loading,
   thinking,
+  members,
   onConfirmEntry,
   onConfirmProposal,
   onCancelProposal,
+  onConfirmAlarm,
   onSelectClarificationCandidate,
   onRunSlashCommand,
   onSelectPromptSuggestion,
@@ -198,9 +203,11 @@ export function ChatThread({
         <MessageBubble
           key={message.id}
           message={message}
+          members={members}
           onConfirmEntry={onConfirmEntry}
           onConfirmProposal={onConfirmProposal}
           onCancelProposal={onCancelProposal}
+          onConfirmAlarm={onConfirmAlarm}
           onSelectClarificationCandidate={onSelectClarificationCandidate}
           onRunSlashCommand={onRunSlashCommand}
         />
