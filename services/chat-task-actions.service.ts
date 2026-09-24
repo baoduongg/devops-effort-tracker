@@ -83,6 +83,9 @@ export async function confirmTaskEntry(
     endDate: entry.endDate,
     status: entry.status || "in_progress",
     source: "ai_chat",
+    deployAt: null,
+    reminderMinutesBefore: null,
+    alarmFiredAt: null,
   });
 
   try {

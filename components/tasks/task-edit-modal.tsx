@@ -17,6 +17,7 @@ import type { Project } from "@/types/project";
 import type { Member } from "@/types/member";
 import type { Task, TaskStatus } from "@/types/task";
 import { TaskEffortStatusFields } from "@/components/tasks/task-effort-status-fields";
+import { TaskAlarmFields } from "@/components/tasks/task-alarm-fields";
 
 interface TaskEditModalProps {
   isOpen: boolean;
@@ -58,6 +59,10 @@ function TaskEditForm({
   const [status, setStatus] = useState<TaskStatus>(task?.status ?? "in_progress");
   const [startDate, setStartDate] = useState<string>(toDateInputValue(task?.startDate ?? null));
   const [endDate, setEndDate] = useState<string | null>(task?.endDate ? toDateInputValue(task.endDate) : null);
+  const [deployAt, setDeployAt] = useState<string | null>(task?.deployAt ?? null);
+  const [reminderMinutesBefore, setReminderMinutesBefore] = useState<number | null>(
+    task?.reminderMinutesBefore ?? 30
+  );
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +116,8 @@ function TaskEditForm({
         startDate,
         endDate,
         status,
+        deployAt: deployAt || null,
+        reminderMinutesBefore: deployAt ? reminderMinutesBefore : null,
       });
 
       // Resync both the old and new assignee's aggregate effort/status
@@ -201,6 +208,13 @@ function TaskEditForm({
             onStartDateChange={(v) => setStartDate(v ?? startDate)}
             endDate={endDate}
             onEndDateChange={setEndDate}
+          />
+
+          <TaskAlarmFields
+            deployAt={deployAt}
+            onDeployAtChange={setDeployAt}
+            reminderMinutesBefore={reminderMinutesBefore}
+            onReminderMinutesBeforeChange={setReminderMinutesBefore}
           />
 
           <TextInput

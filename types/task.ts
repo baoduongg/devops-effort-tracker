@@ -20,6 +20,19 @@ export interface Task {
   source: TaskSource;
   createdAt: string;
   updatedAt: string;
+  /** Approved infra deployment datetime (ISO). Alarm is off when null. */
+  deployAt: string | null;
+  /** Minutes before deployAt to fire the alarm. Only meaningful when deployAt is set. */
+  reminderMinutesBefore: number | null;
+  /** ISO timestamp of when the deploy alarm was sent, for dedup by the alarm cron. */
+  alarmFiredAt: string | null;
 }
 
 export type TaskInput = Omit<Task, "id" | "createdAt" | "updatedAt">;
+
+export const REMINDER_PRESET_OPTIONS: { value: string; label: string }[] = [
+  { value: "15", label: "15 phút trước" },
+  { value: "30", label: "30 phút trước" },
+  { value: "60", label: "60 phút trước" },
+  { value: "custom", label: "Tùy chọn..." },
+];

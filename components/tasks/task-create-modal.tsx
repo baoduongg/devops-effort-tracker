@@ -19,6 +19,7 @@ import type { Project } from "@/types/project";
 import type { Member } from "@/types/member";
 import type { TaskStatus } from "@/types/task";
 import { TaskEffortStatusFields } from "@/components/tasks/task-effort-status-fields";
+import { TaskAlarmFields } from "@/components/tasks/task-alarm-fields";
 
 interface TaskCreateModalProps {
   isOpen: boolean;
@@ -62,6 +63,8 @@ export function TaskCreateModal({
   const [status, setStatus] = useState<TaskStatus>("in_progress");
   const [startDate, setStartDate] = useState<string>(today);
   const [endDate, setEndDate] = useState<string | null>(null);
+  const [deployAt, setDeployAt] = useState<string | null>(null);
+  const [reminderMinutesBefore, setReminderMinutesBefore] = useState<number | null>(30);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +116,8 @@ export function TaskCreateModal({
     setStatus("in_progress");
     setStartDate(getTodayString());
     setEndDate(null);
+    setDeployAt(null);
+    setReminderMinutesBefore(30);
     setError(null);
   }
 
@@ -167,6 +172,9 @@ export function TaskCreateModal({
         endDate: endDate || null,
         status,
         source: "manual",
+        deployAt: deployAt || null,
+        reminderMinutesBefore: deployAt ? reminderMinutesBefore : null,
+        alarmFiredAt: null,
       });
 
       // Update assigned member status & effort in Firestore
@@ -290,6 +298,14 @@ export function TaskCreateModal({
             onStartDateChange={(v) => setStartDate(v ?? getTodayString())}
             endDate={endDate}
             onEndDateChange={setEndDate}
+          />
+
+          {/* Deploy Alarm */}
+          <TaskAlarmFields
+            deployAt={deployAt}
+            onDeployAtChange={setDeployAt}
+            reminderMinutesBefore={reminderMinutesBefore}
+            onReminderMinutesBeforeChange={setReminderMinutesBefore}
           />
 
           {/* Description / Notes */}
